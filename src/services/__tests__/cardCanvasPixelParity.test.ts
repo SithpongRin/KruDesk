@@ -233,7 +233,15 @@ function makeDeterministicPhotoRgba(w = 120, h = 160): Uint8ClampedArray {
   return rgba;
 }
 
-describe('CardCanvasRenderer parity with original Student Card app', () => {
+// The original card app only exists on the developer's machine (sibling folder of this repo).
+// On CI (GitHub Actions) it is absent, so these parity checks are skipped there.
+const ORIGINAL_RENDERER_PATH = path.resolve(
+  __dirname,
+  '../../../../កាតសិស្ស System/src/services/CardCanvasRenderer.ts'
+);
+const hasOriginalCardApp = fs.existsSync(ORIGINAL_RENDERER_PATH);
+
+describe.skipIf(!hasOriginalCardApp)('CardCanvasRenderer parity with original Student Card app', () => {
   const origCreateElement = document.createElement.bind(document);
   const OrigImage = globalThis.Image;
 
@@ -282,7 +290,7 @@ describe('CardCanvasRenderer parity with original Student Card app', () => {
   });
 
   it('keeps identical rendering implementation except the Student type import path', () => {
-    const origPath = 'D:\\កាតសិស្ស System\\src\\services\\CardCanvasRenderer.ts';
+    const origPath = ORIGINAL_RENDERER_PATH;
     const copyPath = path.resolve(__dirname, '../CardCanvasRenderer.ts');
 
     const norm = (text: string) =>
@@ -299,7 +307,14 @@ describe('CardCanvasRenderer parity with original Student Card app', () => {
   });
 
   it('renders identical pixels (0 differing pixels) at 300 DPI for Front and Back cards between Original app and KruDesk', async () => {
-    const origModule = await import('../../../../កាតសិស្ស System/src/services/CardCanvasRenderer');
+    // Runtime path so Vite does not try to resolve it when the folder is missing (CI).
+    // import.meta.glob matches nothing (instead of failing) when the folder is missing (CI).
+    const originalLoaders = import.meta.glob<typeof import('../CardCanvasRenderer')>(
+      '../../../../កាតសិស្ស System/src/services/CardCanvasRenderer.ts'
+    );
+    const loadOriginal = Object.values(originalLoaders)[0];
+    expect(loadOriginal).toBeTypeOf('function');
+    const origModule = await loadOriginal();
     const copyModule = await import('../CardCanvasRenderer');
 
     const domainStudent: DomainStudent = {
