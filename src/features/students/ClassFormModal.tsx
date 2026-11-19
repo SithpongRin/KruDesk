@@ -223,7 +223,7 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
                   អនុវិទ្យាល័យ ៧–៩
                 </div>
                 <div className="text-[11px] text-[#86868b] mt-0.5">
-                  តាមក្រដាសប្រឡងប្រចាំខែ (១៩ ជួរ)
+                  តាមក្រដាសប្រឡងប្រចាំខែ (១៥ មុខវិជ្ជា)
                 </div>
               </button>
 
