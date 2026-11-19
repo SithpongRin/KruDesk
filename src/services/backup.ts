@@ -19,7 +19,7 @@ import type {
 } from '../types/domain';
 import type { CardTemplate } from '../types/template';
 
-export const BACKUP_SCHEMA_VERSION = 2 as const;
+export const BACKUP_SCHEMA_VERSION = 3 as const;
 
 const SubjectSchema = z.object({
   id: z.string().min(1),
@@ -122,7 +122,7 @@ const AppSettingBackupSchema = z
 
 export const KruDeskBackupSchema = z.object({
   appName: z.literal('KruDesk'),
-  schemaVersion: z.union([z.literal(1), z.literal(2)]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   exportedAt: z.number().int().positive(),
   data: z.object({
     settings: z.array(AppSettingBackupSchema),
@@ -422,7 +422,9 @@ export async function restoreBackupPayload(
         }));
         if (semesterRows.length > 0) await db.semesterExams.bulkPut(semesterRows);
 
-        await normalizeRestoredClassSubjects(classIdMap.values());
+        if (validated.schemaVersion < 3) {
+          await normalizeRestoredClassSubjects(classIdMap.values());
+        }
 
         const settingRows: AppSetting[] = data.settings.map((s) => {
           if (s.key === 'selectedClassId' && typeof s.value === 'number') {
@@ -510,7 +512,9 @@ export async function restoreBackupPayload(
         }));
         if (semesterRows.length > 0) await db.semesterExams.bulkPut(semesterRows);
 
-        await normalizeRestoredClassSubjects(classIdMap.values());
+        if (validated.schemaVersion < 3) {
+          await normalizeRestoredClassSubjects(classIdMap.values());
+        }
 
         for (const s of data.settings) {
           const existing = await db.settings.get(s.key);

@@ -77,7 +77,7 @@ describe('Backup validation & helpers', () => {
   it('accepts a valid KruDesk backup JSON with schemaVersion and exportedAt', () => {
     const payload = makeValidBackup();
     const parsed = parseAndValidateBackup(JSON.stringify(payload));
-    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.schemaVersion).toBe(3);
     expect(parsed.exportedAt).toBe(1731900000000);
     expect(summarizeBackup(parsed)).toEqual({
       classesCount: 1,
@@ -222,8 +222,8 @@ describe('Backup validation & helpers', () => {
     expect(unique?.migrated).toBeUndefined();
   });
 
-  it('normalizes old preset subjects when restoring an older backup', async () => {
-    const payload = makeValidBackup();
+  it('normalizes old preset subjects when restoring a v2 backup (< v3)', async () => {
+    const payload = { ...makeValidBackup(), schemaVersion: 2 as const };
     payload.data.classes[0].subjects = [
       { id: 'subj_4', name: 'មុខវិជ្ជាទី 4 (កែឈ្មោះ)', maxScore: 50, order: 1 },
       { id: 'home_econ', name: 'គេហវិទ្យា', maxScore: 50, order: 2 },
@@ -241,5 +241,27 @@ describe('Backup validation & helpers', () => {
     expect(byId.get('subj_4')?.name).toBe('អប់រំកាយ កីឡា និងសុខភាព');
     expect(byId.get('home_econ')?.isActive).toBeUndefined(); // had score -> stays active
     expect(byId.get('extra_1')?.isActive).toBe(false); // no score -> deactivated
+  });
+
+  it('keeps home_econ active (no scores) when restoring a v3 backup in replace and merge modes', async () => {
+    const payload = makeValidBackup();
+    payload.data.classes[0].subjects = [
+      { id: 'math', name: 'គណិតវិទ្យា', maxScore: 100, order: 1 },
+      { id: 'home_econ', name: 'គេហវិទ្យា', maxScore: 50, order: 2 },
+    ];
+    payload.data.monthlyScores = [];
+
+    const parsed = parseAndValidateBackup(JSON.stringify(payload));
+
+    // Replace mode
+    await restoreBackupPayload(parsed, 'replace');
+    let classes = await db.classes.toArray();
+    expect(classes[0].subjects.find((s) => s.id === 'home_econ')?.isActive).toBeUndefined();
+
+    // Merge mode (into empty DB so class is added from backup)
+    await clearAllAppData();
+    await restoreBackupPayload(parsed, 'merge');
+    classes = await db.classes.toArray();
+    expect(classes[0].subjects.find((s) => s.id === 'home_econ')?.isActive).toBeUndefined();
   });
 });

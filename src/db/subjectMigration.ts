@@ -23,10 +23,24 @@ const OLD_PRESET_RENAME_MAP: Record<string, { oldName: string; newName: string }
   },
 };
 
-const DEFAULT_INACTIVE_OLD_IDS = new Set(['home_econ', 'subj_13', 'subj_14', 'life_skills']);
+const DEFAULT_INACTIVE_NAMES_BY_ID: Record<string, string[]> = {
+  home_econ: ['គេហវិទ្យា'],
+  subj_13: ['មុខវិជ្ជាទី 13 (កែឈ្មោះ)', 'ការងារកសិកម្ម (ដាំដុះ ចិញ្ចឹមសត្វ)'],
+  subj_14: ['មុខវិជ្ជាទី 14 (កែឈ្មោះ)', 'គំនូរ របាំ តន្ត្រី ចម្រៀង'],
+  life_skills: ['បំណិនជីវិត', 'បំណិនជីវិតតាមមូលដ្ឋាន'],
+};
 
-function isDefaultInactiveOldSubjectId(id: string): boolean {
-  return DEFAULT_INACTIVE_OLD_IDS.has(id) || id.startsWith('extra_');
+function hasDefaultOptionalSubjectName(id: string, name: string): boolean {
+  const trimmed = name.trim();
+  const knownDefaults = DEFAULT_INACTIVE_NAMES_BY_ID[id];
+  if (knownDefaults) {
+    return knownDefaults.includes(trimmed);
+  }
+  if (id.startsWith('extra_')) {
+    const suffix = id.slice('extra_'.length);
+    return trimmed === `មុខវិជ្ជាបន្ថែម ${suffix}`;
+  }
+  return false;
 }
 
 function collectScoredSubjectIds(
@@ -76,7 +90,7 @@ export function normalizeMigratedClassSubjects(
 
     if (
       subj.isActive === undefined &&
-      isDefaultInactiveOldSubjectId(subj.id) &&
+      hasDefaultOptionalSubjectName(subj.id, subj.name) &&
       !scoredIds.has(subj.id)
     ) {
       next = { ...next, isActive: false };

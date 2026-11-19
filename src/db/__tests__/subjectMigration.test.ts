@@ -53,14 +53,14 @@ describe('Dexie v4 subject migration', () => {
     expect(byId.get('life_skills')?.name).toBe('បំណិនជីវិតតាមមូលដ្ឋាន');
     expect(byId.get('civics')?.name).toBe('សីលធម៌-ពលរដ្ឋវិជ្ជា');
 
-    // Custom teacher-renamed subject kept untouched
+    // Custom teacher-renamed subject kept untouched AND stays active even without scores
     expect(byId.get('subj_14')?.name).toBe('កុំព្យូទ័រ');
+    expect(byId.get('subj_14')?.isActive).toBeUndefined();
 
-    // Unscored optional subjects deactivated; scored ones stay active
+    // Unscored default-named optional subjects deactivated; scored ones stay active
     expect(byId.get('home_econ')?.isActive).toBeUndefined();
     expect(byId.get('extra_2')?.isActive).toBeUndefined();
     expect(byId.get('subj_13')?.isActive).toBe(false);
-    expect(byId.get('subj_14')?.isActive).toBe(false);
     expect(byId.get('life_skills')?.isActive).toBe(false);
     expect(byId.get('extra_1')?.isActive).toBe(false);
     expect(byId.get('subj_4')?.isActive).toBeUndefined();

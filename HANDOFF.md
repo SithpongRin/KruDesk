@@ -20,7 +20,7 @@ daily roll call (បញ្ជីហៅឈ្មោះ), monthly/semester/annual 
 
 ## 2. Stack & layout
 
-React 19 · Vite 6 · TypeScript strict · Tailwind 3 · Dexie 4 (DB version 4) · Zustand · ExcelJS ·
+React 19 · Vite 6 · TypeScript strict · Tailwind 3 · Dexie 4 (DB version 4, backup schema v3) · Zustand · ExcelJS ·
 pdf-lib + html-to-image · vite-plugin-pwa (`registerType: 'prompt'`) · Vitest.
 
 ```
@@ -78,7 +78,7 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 - [x] **Roll call blocked days (done in `da602a5`):** Sundays/future/holiday dates now show only the blocking banner without draft badges or draft subtitle.
 - [x] **Migrated attendance display (done in `da602a5`, backup fix in `ba487c0`):** migrated sessions show «បានរក្សាទុក (ពីទិន្នន័យចាស់)» without a timestamp; Dexie v3 + backup restore flag shared `savedAt` sessions.
 - [x] **Stale chunk after deploy (done in `ba487c0`):** `vite:preloadError` and `ErrorBoundary` reload once via `krudesk-chunk-reload` in `sessionStorage`, cleared after healthy app start.
-- [x] **Subject names & lower-secondary scorebook (done in `c738653`):** cols 4, 13, 14 named, `isActive`/`isBonus` added, Dexie v4 + backup restore normalize old preset classes.
+- [x] **Subject names & lower-secondary scorebook (done in `c738653`, refined):** cols 4, 13, 14 named, `isActive`/`isBonus` added, Dexie v4 + backup restore (`< v3` only) normalize default-named preset subjects while leaving teacher-renamed subjects active.
 - [ ] Not yet tested by a human: Excel import from a real file, restore from a `.json` file,
       printing on real paper (attendance, scores, cards duplex alignment).
 - [ ] Browser storage is not "persisted" on a normal visit → teachers should install the app and back up weekly.
