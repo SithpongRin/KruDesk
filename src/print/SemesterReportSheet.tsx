@@ -7,7 +7,7 @@ import {
   type SemesterResultRow,
 } from '../lib/monthlyResults';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
-import { DocumentHeader } from './DocumentHeader';
+import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
 
 interface SemesterReportSheetProps {
@@ -58,7 +58,6 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
               pageBreakAfter: !isLast ? 'always' : 'auto',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
             }}
           >
             <div>
@@ -71,20 +70,18 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                 >
                   លទ្ធផលនៃការសិក្សាប្រចាំឆមាសលើកទី {fmtHdr(semester)}
                 </h2>
-                <div className="text-[9pt] mt-0.5">
-                  ឆ្នាំសិក្សា {fmtHdr(cls.academicYear)}
-                </div>
+                <AcademicYearLine academicYear={cls.academicYear} />
               </div>
 
               <div className="flex flex-wrap items-center justify-between text-[9pt] mb-1.5 px-1">
                 <div>
-                  ឈ្មោះសិស្ស: <strong className="font-bold">{row.student.nameKm}</strong>
+                  ឈ្មោះសិស្ស: {row.student.nameKm}
                 </div>
                 <div>
-                  ថ្នាក់: <strong className="font-bold">{cls.name}</strong>
+                  ថ្នាក់៖ {cls.name}
                 </div>
                 <div>
-                  ភេទ: <strong className="font-bold">{row.student.gender}</strong>
+                  ភេទ៖ {row.student.gender}
                 </div>
               </div>
 
@@ -111,7 +108,7 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                       <td className="border border-black px-1.5 py-0.5 text-center">
                         {fmt(sr.maxScore)}
                       </td>
-                      <td className="border border-black px-1.5 py-0.5 text-center font-semibold">
+                      <td className="border border-black px-1.5 py-0.5 text-center">
                         {sr.score !== null
                           ? fmt(Number.isInteger(sr.score) ? sr.score : sr.score.toFixed(1))
                           : ''}
@@ -133,7 +130,7 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
               <table className="w-full border-collapse text-[8.5pt] -mt-[1px] mb-1.5">
                 <tbody>
                   <tr>
-                    <td className="border border-black px-2 py-0.5 w-[28%]">សរុបពិន្ទុប្រលងឆមាស</td>
+                    <td className="border border-black px-2 py-0.5 w-[28%]">សរុបពិន្ទុប្រលងឆមាស៖</td>
                     <td className="border border-black px-2 py-0.5 text-center font-bold w-[14%]">
                       {row.examTotal !== null
                         ? fmt(
@@ -144,7 +141,7 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                         : '—'}
                     </td>
                     <td colSpan={2} className="border border-black px-2 py-0.5 w-[34%]">
-                      និទ្ទេស
+                      និទ្ទេស៖
                     </td>
                     <td
                       className="border border-black px-2 py-0.5 text-center font-bold w-[24%]"
@@ -154,42 +151,42 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                     </td>
                   </tr>
                   <tr>
-                    <td className="border border-black px-2 py-0.5">មធ្យមភាគប្រលងឆមាស</td>
+                    <td className="border border-black px-2 py-0.5">មធ្យមភាគប្រលងឆមាស៖</td>
                     <td className="border border-black px-2 py-0.5 text-center font-bold">
                       {row.examAvg !== null
                         ? fmt(formatAverage(row.examAvg, scoreConfig.averageDecimalMode))
                         : '—'}
                     </td>
                     <td colSpan={2} className="border border-black px-2 py-0.5">
-                      ក្នុងចំណោមសិស្ស
+                      ក្នុងចំណោមសិស្ស៖
                     </td>
                     <td className="border border-black px-2 py-0.5 text-center font-bold">
                       {fmt(totalStudents)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="border border-black px-2 py-0.5">សរុបពិន្ទុខែប្រចាំឆមាស</td>
+                    <td className="border border-black px-2 py-0.5">សរុបពិន្ទុខែប្រចាំឆមាស៖</td>
                     <td className="border border-black px-2 py-0.5 text-center font-bold">
                       {row.monthlySum !== null
                         ? fmt(formatAverage(row.monthlySum, scoreConfig.averageDecimalMode))
                         : '—'}
                     </td>
                     <td colSpan={2} className="border border-black px-2 py-0.5">
-                      ឈប់មានច្បាប់
+                      ឈប់មានច្បាប់៖
                     </td>
                     <td className="border border-black px-2 py-0.5 text-center font-bold">
                       {fmt(row.attendance.excused)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="border border-black px-2 py-0.5">មធ្យមភាគខែប្រចាំឆមាស</td>
+                    <td className="border border-black px-2 py-0.5">មធ្យមភាគខែប្រចាំឆមាស៖</td>
                     <td className="border border-black px-2 py-0.5 text-center font-bold">
                       {row.monthlyAvg !== null
                         ? fmt(formatAverage(row.monthlyAvg, scoreConfig.averageDecimalMode))
                         : '—'}
                     </td>
                     <td colSpan={2} className="border border-black px-2 py-0.5">
-                      ឈប់ឥតច្បាប់
+                      ឈប់ឥតច្បាប់៖
                     </td>
                     <td className="border border-black px-2 py-0.5 text-center font-bold">
                       {fmt(row.attendance.unexcused)}
@@ -197,7 +194,7 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                   </tr>
                   <tr>
                     <td rowSpan={2} className="border border-black px-2 py-0.5 align-middle">
-                      មធ្យមភាគឆមាស
+                      មធ្យមភាគឆមាស៖
                     </td>
                     <td
                       rowSpan={2}
@@ -224,7 +221,7 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                   </tr>
                   <tr>
                     <td rowSpan={2} className="border border-black px-2 py-0.5 align-middle">
-                      ចំណាត់ថ្នាក់
+                      ចំណាត់ថ្នាក់៖
                     </td>
                     <td
                       rowSpan={2}
@@ -255,13 +252,18 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
             </div>
 
             <div>
-              <DocumentSignature profile={profile} signOptions={signOptions} gapMm={10} />
+              <DocumentSignature
+                profile={profile}
+                signOptions={signOptions}
+                gapMm={10}
+                approverStyle="simple"
+              />
 
               <div className="mt-2.5 text-[8.5pt]">
-                <div className="font-bold text-center mb-1">
+                <div className="text-center mb-1">
                   មតិរបស់មាតាបិតា-អាណាព្យាបាលសិស្ស
                 </div>
-                <div className="space-y-2.5 pt-1">
+                <div className="space-y-2.5 pt-1 mx-[14mm]">
                   <div className="border-b border-dotted border-slate-700 h-3" />
                   <div className="border-b border-dotted border-slate-700 h-3" />
                   <div className="border-b border-dotted border-slate-700 h-3" />

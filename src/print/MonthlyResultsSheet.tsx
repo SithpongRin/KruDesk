@@ -9,7 +9,7 @@ import {
   type MonthlyResultsSummary,
 } from '../lib/monthlyResults';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
-import { DocumentHeader } from './DocumentHeader';
+import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
 
 interface MonthlyResultsSheetProps {
@@ -91,9 +91,7 @@ export const MonthlyResultsSheet: React.FC<MonthlyResultsSheetProps> = ({
                     >
                       តារាងលទ្ធផលពិន្ទុសិស្សថ្នាក់ទី {cls.name} ប្រចាំខែ{monthName}
                     </h2>
-                    <div className="text-[9pt] mt-0.5">
-                      ឆ្នាំសិក្សា {fmtHdr(cls.academicYear)}
-                    </div>
+                    <AcademicYearLine academicYear={cls.academicYear} />
                   </div>
                 </>
               )}

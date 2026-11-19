@@ -8,7 +8,7 @@ import {
   type MonthlyResultRow,
 } from '../lib/monthlyResults';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
-import { DocumentHeader } from './DocumentHeader';
+import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
 
 export interface StudentReportEntry {
@@ -41,7 +41,6 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
 }) => {
   const fmt = (val: number | string) =>
     useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
-  const fmtHdr = (val: number | string) => toKhmerNumerals(val);
 
   const { month: monthNum } = parseYearMonth(month);
   const monthName = getKhmerMonthName(monthNum);
@@ -68,7 +67,6 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
               pageBreakAfter: !isLast ? 'always' : 'auto',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
             }}
           >
             <div>
@@ -81,20 +79,18 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
                 >
                   លទ្ធផលនៃការសិក្សាប្រចាំខែ {monthName}
                 </h2>
-                <div className="text-[9.5pt] mt-0.5">
-                  ឆ្នាំសិក្សា {fmtHdr(cls.academicYear)}
-                </div>
+                <AcademicYearLine academicYear={cls.academicYear} />
               </div>
 
               <div className="flex flex-wrap items-center justify-between text-[9.5pt] mb-2 px-1">
                 <div>
-                  ឈ្មោះសិស្ស: <strong className="font-bold">{row.student.nameKm}</strong>
+                  ឈ្មោះសិស្ស: {row.student.nameKm}
                 </div>
                 <div>
-                  ថ្នាក់: <strong className="font-bold">{cls.name}</strong>
+                  ថ្នាក់៖ {cls.name}
                 </div>
                 <div>
-                  ភេទ: <strong className="font-bold">{row.student.gender}</strong>
+                  ភេទ៖ {row.student.gender}
                 </div>
               </div>
 
@@ -118,7 +114,7 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
                       <td className="border border-black px-2 py-0.5 text-center">
                         {fmt(sr.maxScore)}
                       </td>
-                      <td className="border border-black px-2 py-0.5 text-center font-semibold">
+                      <td className="border border-black px-2 py-0.5 text-center">
                         {sr.score !== null
                           ? fmt(Number.isInteger(sr.score) ? sr.score : sr.score.toFixed(1))
                           : ''}
@@ -194,13 +190,18 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
             </div>
 
             <div>
-              <DocumentSignature profile={profile} signOptions={signOptions} gapMm={12} />
+              <DocumentSignature
+                profile={profile}
+                signOptions={signOptions}
+                gapMm={12}
+                approverStyle="simple"
+              />
 
               <div className="mt-3 text-[9pt]">
-                <div className="font-bold text-center mb-1.5">
+                <div className="text-center mb-1.5">
                   មតិរបស់មាតាបិតា-អាណាព្យាបាលសិស្ស
                 </div>
-                <div className="space-y-3 pt-1">
+                <div className="space-y-3 pt-1 mx-[14mm]">
                   <div className="border-b border-dotted border-slate-700 h-3" />
                   <div className="border-b border-dotted border-slate-700 h-3" />
                   <div className="border-b border-dotted border-slate-700 h-3" />

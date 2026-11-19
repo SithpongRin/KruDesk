@@ -5,7 +5,7 @@ import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
 import { getGradeWord, type MonthlyResultRow } from '../lib/monthlyResults';
 import { toKhmerNumerals } from '../utils/khmerNumerals';
 import { getAssetUrl } from '../utils/assets';
-import { DocumentHeader } from './DocumentHeader';
+import { DocumentHeader, formatAcademicYearKm } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
 
 interface CertificateSheetProps {
@@ -94,7 +94,7 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
               pageBreakAfter: !isLast ? 'always' : 'auto',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
+              justifyContent: 'center',
             }}
           >
             <OrnateCertificateBorder />
@@ -118,15 +118,15 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
                 </div>
                 <div
                   style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
-                  className="text-[11.5pt] text-[#1d4ed8] mt-1.5"
+                  className="text-[15pt] text-[#1d4ed8] mt-1"
                 >
                   នាយក{profile.schoolName}
                 </div>
               </div>
 
-              <div className="text-center text-[11.5pt] leading-[2] max-w-[200mm] mx-auto mt-3">
+              <div className="text-center text-[14pt] leading-[1.9] max-w-[205mm] mx-auto mt-3">
                 សរសើរចំពោះសិស្សឈ្មោះ{' '}
-                <strong className="font-bold text-[12pt]">{item.student.nameKm}</strong>{' '}
+                <strong className="font-bold text-[14.5pt]">{item.student.nameKm}</strong>{' '}
                 រៀនថ្នាក់ទី <strong className="font-bold">{cls.name}</strong>{' '}
                 ដែលបានយកចិត្តទុកដាក់ ខិតខំសិក្សារៀនសូត្រ ទទួលបានចំណាត់ថ្នាក់លេខ{' '}
                 <strong className="font-bold text-[#dc2626] text-[12.5pt]">
@@ -138,13 +138,15 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
                 </strong>
               </div>
 
-              <div className="text-center text-[10.5pt] font-bold mt-2">
-                ប្រចាំខែ {monthName}&nbsp;&nbsp;&nbsp;&nbsp;ឆ្នាំសិក្សា{' '}
-                {toKhmerNumerals(cls.academicYear)}
+              <div
+                className="text-center text-[13pt] mt-1"
+                style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
+              >
+                ប្រចាំខែ {monthName}&nbsp;&nbsp;ឆ្នាំសិក្សា {formatAcademicYearKm(cls.academicYear)}
               </div>
             </div>
 
-            <div className="relative z-10">
+            <div className="relative z-10 mt-1">
               <DocumentSignature
                 profile={profile}
                 signOptions={signOptions}
@@ -152,6 +154,7 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
                 showApprovedBy={false}
                 align="right"
                 gapMm={13}
+                fontSizePt={12}
               />
             </div>
           </div>

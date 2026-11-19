@@ -8,7 +8,7 @@ import {
   type SemesterResultsSummary,
 } from '../lib/monthlyResults';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
-import { DocumentHeader } from './DocumentHeader';
+import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
 
 interface SemesterResultsSheetProps {
@@ -85,9 +85,7 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                       តារាងលទ្ធផលពិន្ទុសិស្សថ្នាក់ទី {cls.name} ប្រចាំឆមាសទី{' '}
                       {fmtHdr(summary.semester)}
                     </h2>
-                    <div className="text-[9pt] mt-0.5">
-                      ឆ្នាំសិក្សា {fmtHdr(cls.academicYear)}
-                    </div>
+                    <AcademicYearLine academicYear={cls.academicYear} />
                   </div>
                 </>
               )}

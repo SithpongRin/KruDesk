@@ -6,7 +6,7 @@ import {
   type MonthlyResultRow,
 } from '../lib/monthlyResults';
 import { toKhmerNumerals } from '../utils/khmerNumerals';
-import { DocumentHeader } from './DocumentHeader';
+import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
 
 interface HonorRollSheetProps {
@@ -163,12 +163,13 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
               តារាងកិត្តិយសប្រចាំខែ {monthName}
               {semester ? ` - ឆមាសទី ${toKhmerNumerals(semester)}` : ''}
             </h2>
-            <div className="text-[10pt] font-bold text-[#1e3a8a] mt-0.5">
+            <div
+              className="text-[10pt] text-[#1e3a8a] mt-0.5"
+              style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
+            >
               ថ្នាក់ទី {cls.name}
             </div>
-            <div className="text-[9.5pt] font-bold text-[#1e3a8a]">
-              ឆ្នាំសិក្សា {toKhmerNumerals(cls.academicYear)}
-            </div>
+            <AcademicYearLine academicYear={cls.academicYear} className="text-[10pt] text-[#1e3a8a]" />
           </div>
 
           <div className="space-y-3 mt-1">
