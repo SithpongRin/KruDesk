@@ -221,4 +221,25 @@ describe('Backup validation & helpers', () => {
     const unique = sessions.find((s) => s.date === '2026-11-15');
     expect(unique?.migrated).toBeUndefined();
   });
+
+  it('normalizes old preset subjects when restoring an older backup', async () => {
+    const payload = makeValidBackup();
+    payload.data.classes[0].subjects = [
+      { id: 'subj_4', name: 'មុខវិជ្ជាទី 4 (កែឈ្មោះ)', maxScore: 50, order: 1 },
+      { id: 'home_econ', name: 'គេហវិទ្យា', maxScore: 50, order: 2 },
+      { id: 'extra_1', name: 'មុខវិជ្ជាបន្ថែម 1', maxScore: 50, order: 3 },
+    ];
+    payload.data.monthlyScores = [
+      { classId: 1, studentRef: 10, month: '2026-11', scores: { home_econ: 44 } },
+    ];
+
+    const parsed = parseAndValidateBackup(JSON.stringify(payload));
+    await restoreBackupPayload(parsed, 'replace');
+
+    const classes = await db.classes.toArray();
+    const byId = new Map(classes[0].subjects.map((s) => [s.id, s]));
+    expect(byId.get('subj_4')?.name).toBe('អប់រំកាយ កីឡា និងសុខភាព');
+    expect(byId.get('home_econ')?.isActive).toBeUndefined(); // had score -> stays active
+    expect(byId.get('extra_1')?.isActive).toBe(false); // no score -> deactivated
+  });
 });

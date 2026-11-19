@@ -8,6 +8,26 @@ import type {
 import { resolveAcademicMonthKey } from './khmerDate';
 import { toArabicNumerals } from '../utils/khmerNumerals';
 
+export type ScoreGrade = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+
+export function isSubjectActive(subject: Pick<Subject, 'isActive'>): boolean {
+  return subject.isActive !== false;
+}
+
+export function isSubjectBonus(subject: Pick<Subject, 'isBonus'>): boolean {
+  return subject.isBonus === true;
+}
+
+export function gradeFor(average: number | null): ScoreGrade | null {
+  if (average === null || !Number.isFinite(average)) return null;
+  if (average >= 45) return 'A';
+  if (average >= 40) return 'B';
+  if (average >= 35) return 'C';
+  if (average >= 30) return 'D';
+  if (average >= 25) return 'E';
+  return 'F';
+}
+
 export interface ScoreParseResult {
   valid: boolean;
   value: number | null;
@@ -18,6 +38,7 @@ export interface ComputedScoreRow {
   maxScoreUsed: number;
   average: number | null;
   passed: boolean | null;
+  grade: ScoreGrade | null;
 }
 
 export interface RankedScoreRow extends ComputedScoreRow {
@@ -53,6 +74,7 @@ export interface SemesterStudentSummary {
   sem1ExamAvg: number | null;
   sem1Avg: number | null;
   sem1Rank: number | null;
+  sem1Grade: ScoreGrade | null;
 
   sem2ExamScores: Record<string, number | null>;
   sem2SubjectRanks: Record<string, number | null>;
@@ -61,10 +83,12 @@ export interface SemesterStudentSummary {
   sem2ExamAvg: number | null;
   sem2Avg: number | null;
   sem2Rank: number | null;
+  sem2Grade: ScoreGrade | null;
 
   annualAvg: number | null;
   annualRank: number | null;
   annualPassed: boolean | null;
+  annualGrade: ScoreGrade | null;
 }
 
 /**
@@ -176,6 +200,7 @@ export function computeCollapsedSubjectScore(
   let hasAnyScore = false;
 
   for (const part of subject.parts) {
+    if (!isSubjectActive(part)) continue;
     const raw = scores?.[part.id];
     if (typeof raw === 'number' && Number.isFinite(raw)) {
       hasAnyScore = true;
@@ -258,28 +283,38 @@ export function computeScoreRow(
   subjects: Subject[],
   config: Pick<ScoreConfig, 'scale' | 'countBlankAsZero'>
 ): ComputedScoreRow {
-  const ordered = sortSubjects(subjects);
+  const ordered = sortSubjects(subjects).filter(isSubjectActive);
   let total = 0;
   let maxSum = 0;
-  let hasAnyScore = false;
+  let hasStandardScore = false;
 
   for (const sub of ordered) {
     const raw = scores?.[sub.id];
-    if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const hasNumeric = typeof raw === 'number' && Number.isFinite(raw);
+
+    if (isSubjectBonus(sub)) {
+      if (hasNumeric) {
+        total += Math.max(0, raw - sub.maxScore / 2);
+      }
+      continue;
+    }
+
+    if (hasNumeric) {
       total += raw;
       maxSum += sub.maxScore;
-      hasAnyScore = true;
+      hasStandardScore = true;
     } else if (config.countBlankAsZero) {
       maxSum += sub.maxScore;
     }
   }
 
-  if (!hasAnyScore || maxSum <= 0) {
+  if (!hasStandardScore || maxSum <= 0) {
     return {
       total: null,
       maxScoreUsed: 0,
       average: null,
       passed: null,
+      grade: null,
     };
   }
 
@@ -289,6 +324,7 @@ export function computeScoreRow(
     maxScoreUsed: maxSum,
     average,
     passed: average >= config.scale / 2,
+    grade: gradeFor(average),
   };
 }
 
@@ -355,7 +391,7 @@ export function computeSemesterAnnualSummary(params: {
   config: ScoreConfig;
 }): SemesterStudentSummary[] {
   const { students, subjects, academicYear, monthlyRecords, semesterExams, config } = params;
-  const orderedSubjects = sortSubjects(subjects);
+  const orderedSubjects = sortSubjects(subjects).filter(isSubjectActive);
   const collapsedSubjects = collapseGroupedSubjects(orderedSubjects);
 
   const sem1MonthKeys = config.sem1Months.map((m) => resolveAcademicMonthKey(academicYear, m));
@@ -429,13 +465,16 @@ export function computeSemesterAnnualSummary(params: {
       sem1MonthlyAvg,
       sem1ExamAvg: ex1Row.average,
       sem1Avg,
+      sem1Grade: gradeFor(sem1Avg),
       sem2ExamScores,
       sem2ExamTotal: ex2Row.total,
       sem2MonthlyAvg,
       sem2ExamAvg: ex2Row.average,
       sem2Avg,
+      sem2Grade: gradeFor(sem2Avg),
       annualAvg,
       annualPassed: annualAvg !== null ? annualAvg >= config.scale / 2 : null,
+      annualGrade: gradeFor(annualAvg),
     };
   });
 

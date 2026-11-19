@@ -6,6 +6,7 @@ import {
   computeCompetitionRanks,
   computeScoreRow,
   formatScoreDecimal,
+  isSubjectActive,
   sortSubjects,
 } from '../lib/grading';
 import { getActiveStudentsOrdered } from '../lib/attendance';
@@ -359,7 +360,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                           </td>
 
                           {sortedSubjects.map((subj) => {
-                            const val = scoreRecord[subj.id];
+                            const val = isSubjectActive(subj) ? scoreRecord[subj.id] : undefined;
                             return (
                               <td
                                 key={`${student.id}-${subj.id}`}

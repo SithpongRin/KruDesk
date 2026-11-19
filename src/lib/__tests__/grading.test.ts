@@ -8,6 +8,9 @@ import {
   computeScoreRow,
   computeSemesterAnnualSummary,
   formatScoreDecimal,
+  gradeFor,
+  isSubjectActive,
+  isSubjectBonus,
   parseScoreInput,
 } from '../grading';
 import { createLowerSecondarySubjects } from '../../db/presets';
@@ -330,5 +333,78 @@ describe('Grading formulas & competition ranking', () => {
     expect(summary[1].sem1SubjectRanks[khCol.id]).toBe(1);
     expect(summary[0].sem1ExamTotal).toBe(185);
     expect(summary[0].sem1ExamAvg).toBeCloseTo(37.0, 10);
+  });
+
+  it('computes lower-secondary preset full marks (divisor 13, avg 50), bonus subject, inactive ignore, and gradeFor', () => {
+    const preset = createLowerSecondarySubjects();
+    const activeStandardFull: Record<string, number> = {};
+    for (const s of preset) {
+      if (isSubjectActive(s)) {
+        activeStandardFull[s.id] = s.maxScore;
+      }
+    }
+
+    // 1. Cols 1-11 all full marks, all standard -> maxSum 650 (divisor 13), avg 50
+    const allStd = computeScoreRow(activeStandardFull, preset, {
+      scale: 50,
+      countBlankAsZero: false,
+    });
+    expect(allStd.maxScoreUsed).toBe(650);
+    expect(allStd.maxScoreUsed / 50).toBe(13);
+    expect(allStd.total).toBe(650);
+    expect(allStd.average).toBeCloseTo(50, 10);
+    expect(allStd.grade).toBe('A');
+
+    // 2. Col 3 (foreign_lang) is bonus with score 40 -> total 600 + 15 = 615, divisor 12, avg 51.25 (unclamped)
+    const withBonusPreset = preset.map((s) =>
+      s.id === 'foreign_lang' ? { ...s, isBonus: true } : s
+    );
+    const bonusScores = { ...activeStandardFull, foreign_lang: 40 };
+    const withBonus = computeScoreRow(bonusScores, withBonusPreset, {
+      scale: 50,
+      countBlankAsZero: false,
+    });
+    expect(withBonus.maxScoreUsed).toBe(600);
+    expect(withBonus.maxScoreUsed / 50).toBe(12);
+    expect(withBonus.total).toBe(615);
+    expect(withBonus.average).toBeCloseTo(51.25, 10);
+    expect(withBonus.grade).toBe('A');
+
+    // 3. Bonus score 20 (below half of 50) -> contributes 0
+    const lowBonus = computeScoreRow(
+      { ...activeStandardFull, foreign_lang: 20 },
+      withBonusPreset,
+      { scale: 50, countBlankAsZero: false }
+    );
+    expect(lowBonus.total).toBe(600);
+    expect(lowBonus.average).toBeCloseTo(50, 10);
+
+    // 4. Row with ONLY bonus score and no standard score -> average null
+    const onlyBonus = computeScoreRow({ foreign_lang: 45 }, withBonusPreset, {
+      scale: 50,
+      countBlankAsZero: true,
+    });
+    expect(onlyBonus.average).toBeNull();
+    expect(onlyBonus.total).toBeNull();
+
+    // 5. Inactive subject with a score -> ignored
+    const withInactiveScore = computeScoreRow(
+      { ...activeStandardFull, home_econ: 50, extra_1: 45 },
+      preset,
+      { scale: 50, countBlankAsZero: false }
+    );
+    expect(withInactiveScore.total).toBe(650);
+    expect(withInactiveScore.maxScoreUsed).toBe(650);
+
+    // 6. gradeFor boundaries
+    expect(gradeFor(44.99)).toBe('B');
+    expect(gradeFor(45)).toBe('A');
+    expect(gradeFor(24.99)).toBe('F');
+    expect(gradeFor(25)).toBe('E');
+    expect(gradeFor(null)).toBeNull();
+
+    // 7. isSubjectBonus helper default
+    expect(isSubjectBonus({ isBonus: undefined })).toBe(false);
+    expect(isSubjectBonus({ isBonus: true })).toBe(true);
   });
 });

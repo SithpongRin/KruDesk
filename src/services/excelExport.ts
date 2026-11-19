@@ -21,6 +21,7 @@ import {
   computeCompetitionRanks,
   computeScoreRow,
   formatScoreDecimal,
+  isSubjectActive,
   sortSubjects,
   type SemesterStudentSummary,
 } from '../lib/grading';
@@ -521,7 +522,7 @@ export async function exportMonthlyScoreExcel(params: {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'KruDesk';
 
-  const sortedSubjects = sortSubjects(cls.subjects);
+  const sortedSubjects = sortSubjects(cls.subjects).filter(isSubjectActive);
   const headerSpans = buildSubjectHeaderSpans(sortedSubjects);
   const columnNumbers = buildSubjectColumnNumbers(headerSpans);
 
@@ -845,7 +846,9 @@ export async function exportSemesterSummaryExcel(params: {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'KruDesk';
 
-  const summarySubjects = collapseGroupedSubjects(cls.subjects);
+  const summarySubjects = collapseGroupedSubjects(
+    sortSubjects(cls.subjects).filter(isSubjectActive)
+  );
   const subjCount = summarySubjects.length;
   const semBlockWidth = subjCount * 2 + 5;
   const totalCols = 3 + semBlockWidth * 2 + 3;

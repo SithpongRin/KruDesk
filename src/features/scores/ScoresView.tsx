@@ -37,8 +37,11 @@ import {
   computeScoreRow,
   computeSemesterAnnualSummary,
   formatScoreDecimal,
+  isSubjectActive,
+  isSubjectBonus,
   parseScoreInput,
   sortSubjects,
+  type ScoreGrade,
   type SemesterStudentSummary,
 } from '../../lib/grading';
 import {
@@ -91,6 +94,7 @@ interface ScoreGridRowProps {
   average: number | null;
   passed: boolean | null;
   rank: number | null;
+  grade: ScoreGrade | null;
   noteVal: string;
   useKhmerNumerals: boolean;
   onCellChange: (studentRef: number, subj: Subject, rawText: string) => void;
@@ -120,6 +124,7 @@ const ScoreGridRow = memo<ScoreGridRowProps>(
     average,
     passed,
     rank,
+    grade,
     noteVal,
     useKhmerNumerals,
     onCellChange,
@@ -201,6 +206,9 @@ const ScoreGridRow = memo<ScoreGridRowProps>(
         </td>
         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1 text-center font-bold text-[#0071e3] bg-[#f7faff] dark:bg-blue-500/[0.04]">
           {rank !== null ? fmt(rank) : '—'}
+        </td>
+        <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1 text-center font-bold bg-[#f7faff] dark:bg-blue-500/[0.04]">
+          {grade ?? '—'}
         </td>
         <td className="p-0.5">
           <input
@@ -298,10 +306,25 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
     [currentClass?.subjects]
   );
 
-  const collapsedSubjects = useMemo(
-    () => collapseGroupedSubjects(sortedSubjects),
+  const activeSubjects = useMemo(
+    () => sortedSubjects.filter(isSubjectActive),
     [sortedSubjects]
   );
+
+  const collapsedSubjects = useMemo(
+    () => collapseGroupedSubjects(activeSubjects),
+    [activeSubjects]
+  );
+
+  const liveCoefficientInfo = useMemo(() => {
+    const standardMaxSum = activeSubjects
+      .filter((s) => !isSubjectBonus(s))
+      .reduce((acc, s) => acc + s.maxScore, 0);
+    return {
+      standardMaxSum,
+      coefficient: standardMaxSum / 50,
+    };
+  }, [activeSubjects]);
 
   const groupMaxTotals = useMemo(() => {
     const totals = new Map<string, number>();
@@ -345,7 +368,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
   draftsRef.current = draftCells;
   invalidsRef.current = invalidCells;
   activeStudentsRef.current = activeStudents;
-  sortedSubjectsRef.current = sortedSubjects;
+  sortedSubjectsRef.current = activeSubjects;
 
   const dirtyStudentsRef = useRef<Set<number>>(new Set());
   const debounceTimerRef = useRef<number | null>(null);
@@ -751,7 +774,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
   const rankedByStudent = useMemo(() => {
     const computed = activeStudents.map((st) => {
       const rec = (st.id !== undefined && scoresByStudent.get(st.id)) || {};
-      const row = computeScoreRow(rec, sortedSubjects, scoreConfig);
+      const row = computeScoreRow(rec, activeSubjects, scoreConfig);
       return {
         studentRef: st.id ?? -1,
         status: st.status,
@@ -773,11 +796,12 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
           maxScoreUsed: r.maxScoreUsed,
           average: r.average,
           passed: r.passed,
+          grade: r.grade,
           rank: r.status === 'active' ? rankLookup.get(r.studentRef) ?? null : null,
         },
       ])
     );
-  }, [activeStudents, scoresByStudent, sortedSubjects, scoreConfig]);
+  }, [activeStudents, scoresByStudent, activeSubjects, scoreConfig]);
 
   const gridStats = useMemo(() => {
     const avgs = Array.from(rankedByStudent.values())
@@ -865,15 +889,38 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
     addToast({ type: 'success', title: 'បានបន្ថែមមុខវិជ្ជាថ្មី' });
   };
 
+  const [deactivateWarning, setDeactivateWarning] = useState<{
+    subjectId: string;
+    message: string;
+  } | null>(null);
+
   const handleUpdateSubjectField = async (
     subjId: string,
-    patch: Partial<Pick<Subject, 'name' | 'group' | 'maxScore'>>
+    patch: Partial<Pick<Subject, 'name' | 'group' | 'maxScore' | 'isActive' | 'isBonus'>>
   ) => {
     if (!currentClass?.id) return;
     const next = sortedSubjects.map((s) =>
       s.id === subjId ? { ...s, ...patch } : s
     );
     await saveClassSubjects(currentClass.id, next);
+  };
+
+  const handleToggleSubjectActive = async (subj: Subject, nextActive: boolean) => {
+    if (!currentClass?.id) return;
+    await handleUpdateSubjectField(subj.id, { isActive: nextActive ? undefined : false });
+    if (!nextActive) {
+      const usage = await countSubjectScoreEntries(currentClass.id, subj.id);
+      if (usage.totalCount > 0) {
+        setDeactivateWarning({
+          subjectId: subj.id,
+          message: `មុខវិជ្ជា «${subj.name}» មានពិន្ទុ ${fmtNum(
+            usage.totalCount
+          )} កំណត់ត្រា — ពិន្ទុត្រូវបានរក្សាទុក ប៉ុន្តែមិនរាប់បញ្ចូលក្នុងការគណនាទេ។`,
+        });
+      }
+    } else if (deactivateWarning?.subjectId === subj.id) {
+      setDeactivateWarning(null);
+    }
   };
 
   const handleMoveSubject = async (idx: number, dir: -1 | 1) => {
@@ -1270,9 +1317,9 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
             <div className="py-10 text-center text-sm text-[#86868b]">
               មិនទាន់មានសិស្សសកម្មក្នុងថ្នាក់នេះទេ។
             </div>
-          ) : sortedSubjects.length === 0 ? (
+          ) : activeSubjects.length === 0 ? (
             <div className="py-10 text-center space-y-2">
-              <p className="text-sm text-[#86868b]">មិនទាន់មានមុខវិជ្ជាសម្រាប់ថ្នាក់នេះទេ។</p>
+              <p className="text-sm text-[#86868b]">មិនទាន់មានមុខវិជ្ជាសកម្មសម្រាប់ថ្នាក់នេះទេ។</p>
               <AppleButton
                 size="sm"
                 variant="secondary"
@@ -1296,7 +1343,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                       ភេទ
                     </th>
 
-                    {sortedSubjects.map((subj) => (
+                    {activeSubjects.map((subj) => (
                       <th
                         key={subj.id}
                         className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-1.5 py-2 text-center min-w-[78px] max-w-[100px]"
@@ -1307,6 +1354,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                         </div>
                         <div className="text-[10px] text-[#86868b] font-normal mt-0.5">
                           /{fmtNum(subj.maxScore)}
+                          {isSubjectBonus(subj) ? ' (បន្ថែម)' : ''}
                         </div>
                       </th>
                     ))}
@@ -1319,6 +1367,9 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                     </th>
                     <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center min-w-[62px] bg-[#eef5ff] dark:bg-blue-500/10">
                       ចំណាត់
+                    </th>
+                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center min-w-[56px] bg-[#eef5ff] dark:bg-blue-500/10">
+                      និទ្ទេស
                     </th>
                     <th className="border-b border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-left min-w-[110px]">
                       ផ្សេងៗ
@@ -1335,7 +1386,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                         key={studentRef}
                         student={student}
                         rowIdx={rowIdx}
-                        sortedSubjects={sortedSubjects}
+                        sortedSubjects={activeSubjects}
                         rowScores={scoresByStudent.get(studentRef) ?? EMPTY_NUM_RECORD}
                         rowDrafts={draftCells.get(studentRef) ?? EMPTY_STR_RECORD}
                         rowInvalids={invalidCells.get(studentRef) ?? EMPTY_STR_RECORD}
@@ -1343,6 +1394,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                         average={summary?.average ?? null}
                         passed={summary?.passed ?? null}
                         rank={summary?.rank ?? null}
+                        grade={summary?.grade ?? null}
                         noteVal={notesByStudent.get(studentRef) ?? ''}
                         useKhmerNumerals={useKhmerNumerals}
                         onCellChange={handleCellChange}
@@ -1464,7 +1516,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                         ឆមាសទី {fmtNum(2)}
                       </th>
                       <th
-                        colSpan={3}
+                        colSpan={4}
                         className="border-b border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center font-bold bg-[#fff8ec] dark:bg-amber-500/10"
                       >
                         លទ្ធផលប្រចាំឆ្នាំ
@@ -1513,6 +1565,9 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                       </th>
                       <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1.5 text-center whitespace-nowrap font-bold">
                         ចំណាត់ថ្នាក់
+                      </th>
+                      <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1.5 text-center whitespace-nowrap font-bold">
+                        និទ្ទេស
                       </th>
                       <th className="border-b border-black/[0.08] dark:border-white/[0.1] px-2 py-1.5 text-center whitespace-nowrap font-bold">
                         លទ្ធផល
@@ -1647,6 +1702,9 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center font-bold text-[#0071e3]">
                           {row.annualRank !== null ? fmtNum(row.annualRank) : '—'}
                         </td>
+                        <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center font-bold">
+                          {row.annualGrade ?? '—'}
+                        </td>
                         <td className="px-2 py-1.5 text-center">
                           {row.annualPassed === true ? (
                             <AppleBadge variant="green" size="sm">
@@ -1770,6 +1828,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                   <thead>
                     <tr className="bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7]">
                       <th className="px-3 py-2.5 text-center w-12">ល.រ</th>
+                      <th className="px-3 py-2.5 text-center w-16">ប្រើ</th>
                       <th className="px-3 py-2.5 text-left">ឈ្មោះមុខវិជ្ជា</th>
                       <th className="px-3 py-2.5 text-left w-48">ក្រុមមុខវិជ្ជា</th>
                       <th className="px-3 py-2.5 text-center w-28">ពិន្ទុអតិបរមា</th>
@@ -1778,13 +1837,28 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedSubjects.map((subj, idx) => (
+                    {sortedSubjects.map((subj, idx) => {
+                      const active = isSubjectActive(subj);
+                      return (
                       <tr
                         key={subj.id}
-                        className="border-t border-black/[0.06] dark:border-white/[0.08]"
+                        className={`border-t border-black/[0.06] dark:border-white/[0.08] ${
+                          active ? '' : 'opacity-60'
+                        }`}
                       >
                         <td className="px-3 py-2 text-center font-medium text-[#86868b]">
                           {fmtNum(idx + 1)}
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`ប្រើ ${subj.name}`}
+                            checked={active}
+                            onChange={(e) =>
+                              void handleToggleSubjectActive(subj, e.target.checked)
+                            }
+                            className="h-4 w-4 accent-[#0071e3] cursor-pointer"
+                          />
                         </td>
                         <td className="px-2 py-1.5">
                           <input
@@ -1799,6 +1873,21 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                             }}
                             className="w-full px-2.5 py-1.5 rounded-xl text-xs bg-[#f5f5f7]/70 dark:bg-white/[0.05] text-[#1d1d1f] dark:text-[#f5f5f7] border border-transparent focus:border-[#0071e3] focus:outline-none"
                           />
+                          {subj.id === 'foreign_lang' && (
+                            <label className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-[#6e6e73] dark:text-[#98989d] cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={isSubjectBonus(subj)}
+                                onChange={(e) =>
+                                  void handleUpdateSubjectField(subj.id, {
+                                    isBonus: e.target.checked ? true : undefined,
+                                  })
+                                }
+                                className="h-3.5 w-3.5 accent-[#0071e3]"
+                              />
+                              <span>ពិន្ទុបន្ថែម (យកតែលើសពាក់កណ្ដាល)</span>
+                            </label>
+                          )}
                         </td>
                         <td className="px-2 py-1.5">
                           <input
@@ -1868,9 +1957,37 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
+              </div>
+
+              {deactivateWarning && (
+                <div
+                  data-testid="deactivate-subject-warning"
+                  className="px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300/60 dark:border-amber-500/30 text-xs text-amber-800 dark:text-amber-300"
+                >
+                  {deactivateWarning.message}
+                </div>
+              )}
+
+              <div
+                data-testid="live-subject-coefficient"
+                className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#f5f5f7] dark:bg-white/[0.04] text-xs text-[#1d1d1f] dark:text-[#f5f5f7]"
+              >
+                <span className="font-semibold">
+                  មេគុណ៖{' '}
+                  {fmtNum(
+                    Number.isInteger(liveCoefficientInfo.coefficient)
+                      ? liveCoefficientInfo.coefficient
+                      : liveCoefficientInfo.coefficient.toFixed(2)
+                  )}
+                </span>
+                <span className="text-[#86868b]">
+                  សរុបពិន្ទុមុខវិជ្ជាគោល {fmtNum(liveCoefficientInfo.standardMaxSum)} ÷{' '}
+                  {fmtNum(50)}
+                </span>
               </div>
             </div>
           </AppleCard>

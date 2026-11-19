@@ -12,6 +12,8 @@ export interface Subject {
   group?: string;
   maxScore: number;
   order: number;
+  isActive?: boolean;
+  isBonus?: boolean;
 }
 
 export interface SchoolClass {

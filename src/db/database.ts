@@ -12,6 +12,7 @@ import type {
   ThemeMode,
 } from '../types/domain';
 import type { CardTemplate } from '../types/template';
+import { normalizeMigratedClassSubjects } from './subjectMigration';
 
 /**
  * Derives one AttendanceSession per unique (classId, date) from existing absence rows.
@@ -110,6 +111,44 @@ export class KruDeskDatabase extends Dexie {
         const toUpdate = markMigratedSessionsInBatch(existingSessions);
         if (toUpdate.length > 0) {
           await tx.table('attendanceSessions').bulkPut(toUpdate);
+        }
+      });
+
+    this.version(4)
+      .stores({
+        settings: '&key',
+        classes: '++id, name, academicYear',
+        students: '++id, classId, [classId+order], studentId',
+        attendance: '[classId+date+studentRef], [classId+date], classId',
+        attendanceSessions: '[classId+date], classId',
+        holidays: '++id, &date',
+        monthlyScores: '[classId+month+studentRef], [classId+month]',
+        semesterExams: '[classId+semester+studentRef], [classId+semester]',
+        templates: '&id, name, isDefault, isReference, updatedAt',
+      })
+      .upgrade(async (tx) => {
+        const [classes, monthlyRows, examRows] = await Promise.all([
+          tx.table('classes').toArray() as Promise<SchoolClass[]>,
+          tx.table('monthlyScores').toArray() as Promise<MonthlyScore[]>,
+          tx.table('semesterExams').toArray() as Promise<SemesterExam[]>,
+        ]);
+
+        const updatedClasses: SchoolClass[] = [];
+        for (const cls of classes) {
+          if (cls.id === undefined) continue;
+          const clsMonthly = monthlyRows.filter((r) => r.classId === cls.id);
+          const clsExams = examRows.filter((r) => r.classId === cls.id);
+          const { subjects, changed } = normalizeMigratedClassSubjects(
+            cls.subjects ?? [],
+            clsMonthly,
+            clsExams
+          );
+          if (changed) {
+            updatedClasses.push({ ...cls, subjects });
+          }
+        }
+        if (updatedClasses.length > 0) {
+          await tx.table('classes').bulkPut(updatedClasses);
         }
       });
   }

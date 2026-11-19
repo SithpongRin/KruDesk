@@ -1,5 +1,6 @@
 import Dexie from 'dexie';
 import { db } from './database';
+import { isSubjectActive, isSubjectBonus } from '../lib/grading';
 import type { Subject } from '../types/domain';
 
 /**
@@ -68,6 +69,8 @@ export async function saveClassSubjects(classId: number, subjects: Subject[]): P
     ...(s.group?.trim() ? { group: s.group.trim() } : {}),
     maxScore: Number(s.maxScore) > 0 ? Number(s.maxScore) : 50,
     order: idx + 1,
+    ...(isSubjectActive(s) ? {} : { isActive: false }),
+    ...(isSubjectBonus(s) ? { isBonus: true } : {}),
   }));
 
   await db.classes.update(classId, { subjects: normalized });

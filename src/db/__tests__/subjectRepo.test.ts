@@ -130,4 +130,32 @@ describe('subjectRepo', () => {
     const rowB = await db.monthlyScores.get([classB, '2026-11', 10]);
     expect(rowB?.scores[subjId]).toBe(50);
   });
+
+  it('persists isActive=false and isBonus=true when saving subjects and omits defaults', async () => {
+    const preset = createLowerSecondarySubjects();
+    const classId = await db.classes.add({
+      name: '៨ក',
+      gradeLevel: 8,
+      academicYear: '2026-2027',
+      color: '#0071e3',
+      subjects: preset,
+      createdAt: Date.now(),
+    });
+
+    const modified = preset.map((s) => {
+      if (s.id === 'foreign_lang') return { ...s, isBonus: true };
+      if (s.id === 'physics') return { ...s, isActive: false };
+      return s;
+    });
+    await saveClassSubjects(classId, modified);
+
+    const reloaded = await db.classes.get(classId);
+    const foreign = reloaded?.subjects.find((s) => s.id === 'foreign_lang');
+    const physics = reloaded?.subjects.find((s) => s.id === 'physics');
+    const math = reloaded?.subjects.find((s) => s.id === 'math');
+    expect(foreign?.isBonus).toBe(true);
+    expect(physics?.isActive).toBe(false);
+    expect(math?.isActive).toBeUndefined();
+    expect(math?.isBonus).toBeUndefined();
+  });
 });

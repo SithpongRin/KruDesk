@@ -5,6 +5,7 @@ import {
   markMigratedSessionsInBatch,
   setSetting,
 } from '../db/database';
+import { normalizeMigratedClassSubjects } from '../db/subjectMigration';
 import { toLocalDateKey } from '../lib/khmerDate';
 import type {
   AppSetting,
@@ -26,6 +27,8 @@ const SubjectSchema = z.object({
   group: z.string().optional(),
   maxScore: z.number().nonnegative(),
   order: z.number().int().nonnegative(),
+  isActive: z.boolean().optional(),
+  isBonus: z.boolean().optional(),
 });
 
 const SchoolClassBackupSchema = z
@@ -154,6 +157,27 @@ function applyMigratedFlagToRestoredSessions(sessions: AttendanceSession[]): Att
   return sessions.map((s) =>
     toFlag.has(`${s.classId}|${s.date}`) ? { ...s, migrated: true } : s
   );
+}
+
+async function normalizeRestoredClassSubjects(classIds: Iterable<number>): Promise<void> {
+  const uniqueIds = new Set(classIds);
+  if (uniqueIds.size === 0) return;
+  const [allMonthly, allExams] = await Promise.all([
+    db.monthlyScores.toArray(),
+    db.semesterExams.toArray(),
+  ]);
+  for (const cid of uniqueIds) {
+    const cls = await db.classes.get(cid);
+    if (!cls) continue;
+    const { subjects, changed } = normalizeMigratedClassSubjects(
+      cls.subjects ?? [],
+      allMonthly.filter((m) => m.classId === cid),
+      allExams.filter((s) => s.classId === cid)
+    );
+    if (changed) {
+      await db.classes.update(cid, { subjects });
+    }
+  }
 }
 
 export async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -398,6 +422,8 @@ export async function restoreBackupPayload(
         }));
         if (semesterRows.length > 0) await db.semesterExams.bulkPut(semesterRows);
 
+        await normalizeRestoredClassSubjects(classIdMap.values());
+
         const settingRows: AppSetting[] = data.settings.map((s) => {
           if (s.key === 'selectedClassId' && typeof s.value === 'number') {
             return { key: s.key, value: classIdMap.get(s.value) ?? s.value };
@@ -483,6 +509,8 @@ export async function restoreBackupPayload(
           studentRef: studentIdMap.get(s.studentRef) ?? s.studentRef,
         }));
         if (semesterRows.length > 0) await db.semesterExams.bulkPut(semesterRows);
+
+        await normalizeRestoredClassSubjects(classIdMap.values());
 
         for (const s of data.settings) {
           const existing = await db.settings.get(s.key);
