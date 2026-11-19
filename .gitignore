@@ -35,3 +35,13 @@ output
 
 # Agent temp
 .gemini
+
+# Exported files and backups may contain real student data — never commit them
+*.pdf
+*.xlsx
+*.xls
+*.csv
+KruDesk_Backup_*.json
+downloads/
+# ...except the empty Excel import template that the tests and the app use
+!/គម្រូទិន្នន័យសិស្សក្នុងការបញ្ជូលសិស្សតាម Excel.xlsx
