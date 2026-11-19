@@ -11,7 +11,7 @@ import {
   selectHonorRollStudents,
   selectTopRankStudents,
 } from '../monthlyResults';
-import { formatAverage } from '../grading';
+import { computeCompetitionRanks, displayedAverage, formatAverage } from '../grading';
 import { DEFAULT_SCORE_CONFIG, type AbsenceCode, type Student, type Subject } from '../../types/domain';
 
 function makeStudent(id: number, nameKm: string, gender: 'ប្រុស' | 'ស្រី'): Student {
@@ -245,6 +245,7 @@ describe('monthlyResults & formatAverage', () => {
 
     expect(formatAverage(r1.examAvg)).toBe('32.93');
     expect(formatAverage(r1.monthlyAvg)).toBe('33.37');
+    expect(formatAverage(r1.semesterTotal)).toBe('66.30');
     expect(formatAverage(r1.semesterAvg)).toBe('33.15');
     expect(r1.grade).toBe('D');
     expect(r1.attendance.excused).toBe(1);
@@ -252,12 +253,14 @@ describe('monthlyResults & formatAverage', () => {
 
     expect(formatAverage(r2.examAvg)).toBe('38.00');
     expect(formatAverage(r2.monthlyAvg)).toBe('32.50');
+    expect(formatAverage(r2.semesterTotal)).toBe('70.50');
     expect(formatAverage(r2.semesterAvg)).toBe('35.25');
     expect(r2.grade).toBe('C');
 
     expect(formatAverage(r3.examAvg)).toBe('41.31');
     expect(formatAverage(r3.monthlyAvg)).toBe('38.96');
-    expect(formatAverage(r3.semesterAvg)).toBe('40.14');
+    expect(formatAverage(r3.semesterTotal)).toBe('80.27');
+    expect(formatAverage(r3.semesterAvg)).toBe('40.13');
     expect(r3.grade).toBe('B');
 
     // Sorted by rank: r3 (1) -> r2 (2) -> r1 (3)
@@ -367,5 +370,88 @@ describe('monthlyResults & formatAverage', () => {
     const s2 = annual.rows.find((r) => r.student.id === 2)!;
     expect(s2.passed).toBe(false);
     expect(s2.note).toBe('អវត្តមានលើសកំណត់');
+  });
+
+  it('ranks on displayed 2-decimal averages (equal printed averages share rank)', () => {
+    const a1 = displayedAverage(44.5712, 'truncate');
+    const a2 = displayedAverage(44.5790, 'truncate');
+    const a3 = displayedAverage(44.5699, 'truncate');
+    expect(a1).toBe(44.57);
+    expect(a2).toBe(44.57);
+    expect(a3).toBe(44.56);
+
+    const ranks = computeCompetitionRanks([
+      { id: 1, value: a1 },
+      { id: 2, value: a2 },
+      { id: 3, value: a3 },
+    ]);
+    expect(ranks.get(1)).toBe(1);
+    expect(ranks.get(2)).toBe(1);
+    expect(ranks.get(3)).toBe(3);
+
+    // Also verify computeMonthlyResults ranks two students with same truncated 2-decimal avg as tied
+    const students = [
+      makeStudent(1, 'សិស្ស ១', 'ប្រុស'),
+      makeStudent(2, 'សិស្ស ២', 'ស្រី'),
+      makeStudent(3, 'សិស្ស ៣', 'ប្រុស'),
+    ];
+    // 1 subject with maxScore 10000: avg = (score / 10000) * 50 = score / 200
+    // 8914.24 / 200 = 44.5712 -> 44.57; 8915.80 / 200 = 44.5790 -> 44.57; 8912.00 / 200 = 44.56
+    const subjects: Subject[] = [
+      { id: 'math', name: 'គណិត', maxScore: 10000, order: 1, isActive: true },
+    ];
+    const scoresByStudent = new Map<number, Record<string, number | null>>([
+      [1, { math: 8914.24 }],
+      [2, { math: 8915.8 }],
+      [3, { math: 8912 }],
+    ]);
+    const monthly = computeMonthlyResults({
+      students,
+      subjects,
+      month: '2027-01',
+      scoresByStudent,
+      attendanceLookup: new Map<string, AbsenceCode>(),
+      takenDates: new Set<string>(),
+      scoreConfig: { ...DEFAULT_SCORE_CONFIG, averageDecimalMode: 'truncate' },
+    });
+    const mById = new Map(monthly.rows.map((r) => [r.student.id, r]));
+    expect(mById.get(1)!.rank).toBe(1);
+    expect(mById.get(2)!.rank).toBe(1);
+    expect(mById.get(3)!.rank).toBe(3);
+  });
+
+  it('computes semester total from displayed monthly+exam averages and semesterAvg = total / 2', () => {
+    // 33.37 + 32.93 = 66.30 -> avg 33.15
+    // 44.40 + 44.75 = 89.15 -> avg 44.57 (truncate)
+    const students = [
+      makeStudent(1, 'កុលកែវ សុខហេង', 'ប្រុស'),
+      makeStudent(2, 'ម៉ាច រីណា', 'ស្រី'),
+    ];
+    // 1 subject maxScore 50 -> score equals average directly!
+    const subjects: Subject[] = [
+      { id: 's1', name: 'មុខវិជ្ជា ១', maxScore: 50, order: 1, isActive: true },
+    ];
+    const sem = computeSemesterResults({
+      students,
+      subjects,
+      academicYear: '2026-2027',
+      semester: 1,
+      monthlyRecords: [
+        { classId: 1, studentRef: 1, month: '2027-01', scores: { s1: 33.37 } },
+        { classId: 1, studentRef: 2, month: '2027-01', scores: { s1: 44.4 } },
+      ],
+      semesterExams: [
+        { classId: 1, studentRef: 1, semester: 1, scores: { s1: 32.93 } },
+        { classId: 1, studentRef: 2, semester: 1, scores: { s1: 44.75 } },
+      ],
+      attendanceRows: [],
+      attendanceSessions: [],
+      scoreConfig: { ...DEFAULT_SCORE_CONFIG, sem1Months: [1], averageDecimalMode: 'truncate' },
+    });
+    const byId = new Map(sem.rows.map((r) => [r.student.id, r]));
+    expect(formatAverage(byId.get(1)!.semesterTotal)).toBe('66.30');
+    expect(formatAverage(byId.get(1)!.semesterAvg)).toBe('33.15');
+    expect(formatAverage(byId.get(2)!.semesterTotal)).toBe('89.15');
+    expect(formatAverage(byId.get(2)!.semesterAvg)).toBe('44.57');
   });
 });

@@ -19,6 +19,7 @@ import {
   computeCompetitionRanks,
   computeScoreRow,
   computeSemesterAnnualSummary,
+  displayedAverageOrNull,
   gradeFor,
   isSubjectActive,
   sortSubjects,
@@ -82,7 +83,8 @@ export function computeMonthlyResults(params: {
   notesByStudent?: Map<number, string>;
   attendanceLookup: Map<string, AbsenceCode>;
   takenDates: Set<string>;
-  scoreConfig: Pick<ScoreConfig, 'scale' | 'countBlankAsZero'>;
+  scoreConfig: Pick<ScoreConfig, 'scale' | 'countBlankAsZero'> &
+    Partial<Pick<ScoreConfig, 'averageDecimalMode'>>;
 }): MonthlyResultsSummary {
   const {
     students,
@@ -95,6 +97,7 @@ export function computeMonthlyResults(params: {
     scoreConfig,
   } = params;
 
+  const mode = scoreConfig.averageDecimalMode ?? 'truncate';
   const activeStudents = getActiveStudentsOrdered(students, month);
   const orderedSubjects = sortSubjects(subjects);
   const countableDays: MonthDayInfo[] = Array.from(takenDates).map((dateKey) => ({
@@ -113,15 +116,16 @@ export function computeMonthlyResults(params: {
     const sid = student.id ?? -1;
     const scoreRec = (student.id !== undefined && scoresByStudent.get(student.id)) || {};
     const row = computeScoreRow(scoreRec, orderedSubjects, scoreConfig);
-    const grade = gradeFor(row.average);
-    const passed = row.average !== null ? row.average >= 25 : null;
+    const dispAvg = displayedAverageOrNull(row.average, mode);
+    const grade = gradeFor(dispAvg);
+    const passed = dispAvg !== null ? dispAvg >= 25 : null;
     const attendance = computeStudentMonthlyAttendance(sid, attendanceLookup, countableDays);
     const note = (student.id !== undefined && notesByStudent?.get(student.id)) || '';
 
     return {
       student,
       total: row.total,
-      average: row.average,
+      average: dispAvg,
       grade,
       passed,
       attendance,
@@ -285,6 +289,7 @@ export interface SemesterResultRow {
   examAvg: number | null;
   monthlySum: number | null;
   monthlyAvg: number | null;
+  semesterTotal: number | null;
   semesterAvg: number | null;
   rank: number | null;
   grade: ScoreGrade | null;
@@ -344,6 +349,7 @@ export function computeSemesterResults(params: {
   });
 
   // Count how many months in this semester each student placed rank <= 3
+  const mode = scoreConfig.averageDecimalMode ?? 'truncate';
   const certCounts = new Map<number, number>();
   for (const mk of semMonthKeys) {
     const monthScoresMap = new Map<number, Record<string, number | null>>();
@@ -353,7 +359,7 @@ export function computeSemesterResults(params: {
     const avgs = activeStudents.map((st) => {
       const sid = st.id ?? -1;
       const row = computeScoreRow(monthScoresMap.get(sid), orderedSubjects, scoreConfig);
-      return { id: sid, value: row.average };
+      return { id: sid, value: displayedAverageOrNull(row.average, mode) };
     });
     const mRanks = computeCompetitionRanks(avgs);
     for (const [sid, r] of mRanks.entries()) {
@@ -393,6 +399,7 @@ export function computeSemesterResults(params: {
       const examAvg = semester === 1 ? sum.sem1ExamAvg : sum.sem2ExamAvg;
       const monthlySum = semester === 1 ? sum.sem1MonthlySum : sum.sem2MonthlySum;
       const monthlyAvg = semester === 1 ? sum.sem1MonthlyAvg : sum.sem2MonthlyAvg;
+      const semesterTotal = semester === 1 ? sum.sem1Total : sum.sem2Total;
       const semesterAvg = semester === 1 ? sum.sem1Avg : sum.sem2Avg;
       const rank = semester === 1 ? sum.sem1Rank : sum.sem2Rank;
       const grade = semester === 1 ? sum.sem1Grade : sum.sem2Grade;
@@ -406,6 +413,7 @@ export function computeSemesterResults(params: {
         examAvg,
         monthlySum,
         monthlyAvg,
+        semesterTotal,
         semesterAvg,
         rank,
         grade,

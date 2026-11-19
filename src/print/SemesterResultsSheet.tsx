@@ -95,7 +95,7 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
               <table className="w-full border-collapse text-[8pt]">
                 <thead>
                   <tr className="bg-slate-100">
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-7">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-6">
                       ល.រ
                     </th>
                     <th rowSpan={2} className="border border-black px-1.5 py-1 text-left">
@@ -104,14 +104,21 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                     <th rowSpan={2} className="border border-black px-1 py-1 text-center w-7">
                       ភេទ
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-12">
-                      មធ្យមប្រលង
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-12 leading-tight">
+                      ខែប្រចាំ
+                      <br />
+                      ឆមាស
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-12">
-                      មធ្យមខែ
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-12 leading-tight">
+                      ប្រឡង
+                      <br />
+                      ឆមាស
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-12">
-                      មធ្យមឆមាស
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-11">
+                      ពិន្ទុសរុប
+                    </th>
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-11">
+                      មធ្យម
                     </th>
                     <th rowSpan={2} className="border border-black px-1 py-1 text-center w-11">
                       ចំណាត់ថ្នាក់
@@ -119,13 +126,13 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                     <th rowSpan={2} className="border border-black px-1 py-1 text-center w-9">
                       និទ្ទេស
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-10">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-9">
                       លទ្ធផល
                     </th>
                     <th colSpan={3} className="border border-black px-1 py-0.5 text-center">
-                      អវត្តមាន
+                      ចំនួនអវត្តមាន
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-left w-14">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-left w-13">
                       ផ្សេងៗ
                     </th>
                   </tr>
@@ -141,11 +148,16 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                       <td className="border border-black px-1 py-0.5 text-center">
                         {fmt(page.startIndex + idx + 1)}
                       </td>
-                      <td className="border border-black px-1.5 py-0.5 font-medium truncate max-w-[38mm]">
+                      <td className="border border-black px-1.5 py-0.5 font-medium truncate max-w-[34mm]">
                         {r.student.nameKm}
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center">
                         {r.student.gender === 'ប្រុស' ? 'ប' : 'ស'}
+                      </td>
+                      <td className="border border-black px-1 py-0.5 text-center">
+                        {r.monthlyAvg !== null
+                          ? fmt(formatAverage(r.monthlyAvg, scoreConfig.averageDecimalMode))
+                          : ''}
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center">
                         {r.examAvg !== null
@@ -153,8 +165,8 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                           : ''}
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center">
-                        {r.monthlyAvg !== null
-                          ? fmt(formatAverage(r.monthlyAvg, scoreConfig.averageDecimalMode))
+                        {r.semesterTotal !== null
+                          ? fmt(formatAverage(r.semesterTotal, scoreConfig.averageDecimalMode))
                           : ''}
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center font-semibold">
@@ -186,7 +198,7 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                       <td className="border border-black px-1 py-0.5 text-center font-medium">
                         {fmt(r.attendance.total)}
                       </td>
-                      <td className="border border-black px-1 py-0.5 truncate max-w-[16mm]">
+                      <td className="border border-black px-1 py-0.5 truncate max-w-[14mm]">
                         {r.note}
                       </td>
                     </tr>
@@ -198,16 +210,26 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                 <div className="mt-2.5">
                   <div className="text-[8.5pt] leading-relaxed">
                     <div className="font-bold">
-                      ចំនួនសិស្សសរុប: {fmt(summary.totalStudents)} នាក់, ស្រី:{' '}
+                      បញ្ឈប់បញ្ជីចំនួនសិស្សសរុប: {fmt(summary.totalStudents)} នាក់, ស្រី:{' '}
                       {fmt(summary.femaleStudents)} នាក់
                     </div>
                     <div className="grid grid-cols-2 gap-x-8 mt-1 max-w-[130mm]">
-                      {GRADE_ORDER.map((g) => (
-                        <div key={g}>
-                          -និទ្ទេស {g}: {fmt(summary.gradeCounts[g].total)} នាក់, ស្រី{' '}
-                          {fmt(summary.gradeCounts[g].female)} នាក់
-                        </div>
-                      ))}
+                      <div className="space-y-0.5">
+                        {GRADE_ORDER.slice(0, 3).map((g) => (
+                          <div key={g}>
+                            -និទ្ទេស {g}: {fmt(summary.gradeCounts[g].total)} នាក់, ស្រី{' '}
+                            {fmt(summary.gradeCounts[g].female)} នាក់
+                          </div>
+                        ))}
+                      </div>
+                      <div className="space-y-0.5">
+                        {GRADE_ORDER.slice(3, 6).map((g) => (
+                          <div key={g}>
+                            -និទ្ទេស {g}: {fmt(summary.gradeCounts[g].total)} នាក់, ស្រី{' '}
+                            {fmt(summary.gradeCounts[g].female)} នាក់
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <div className="mt-1">
                       សិស្សមិនមករៀនសោះក្នុងឆមាស: {fmt(summary.absentAllSemester.total)} នាក់, ស្រី{' '}

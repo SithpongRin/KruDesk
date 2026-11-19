@@ -20,6 +20,7 @@ import {
   collapseGroupedSubjects,
   computeCompetitionRanks,
   computeScoreRow,
+  displayedAverageOrNull,
   formatAverage,
   isSubjectActive,
   sortSubjects,
@@ -736,10 +737,16 @@ export async function exportMonthlyScoreExcel(params: {
     const maleCount = activeStudents.filter((s) => s.gender === 'ប្រុស').length;
     const femaleCount = activeStudents.filter((s) => s.gender === 'ស្រី').length;
 
+    const mode = scoreConfig.averageDecimalMode ?? 'truncate';
     const computed = activeStudents.map((st) => {
       const scoreRecord = (st.id !== undefined && shData.scoresByStudent.get(st.id)) || {};
       const row = computeScoreRow(scoreRecord, sortedSubjects, scoreConfig);
-      return { studentRef: st.id ?? -1, status: st.status, ...row };
+      return {
+        studentRef: st.id ?? -1,
+        status: st.status,
+        ...row,
+        average: displayedAverageOrNull(row.average, mode),
+      };
     });
     const rankMap = computeCompetitionRanks(
       computed
@@ -1548,12 +1555,12 @@ export async function exportSemesterResultsExcel(params: {
   sheet.getCell('A1').font = { ...fontBold, size: 11 };
   sheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
 
-  sheet.mergeCells('A2:M2');
+  sheet.mergeCells('A2:N2');
   sheet.getCell('A2').value = `មន្ទីរអប់រំ យុវជន និងកីឡា ${formatMinistryProvince(profile.province)} | ${profile.schoolName}`;
   sheet.getCell('A2').font = fontBase;
   sheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
 
-  sheet.mergeCells('A3:M3');
+  sheet.mergeCells('A3:N3');
   sheet.getCell('A3').value = `តារាងលទ្ធផលពិន្ទុសិស្សថ្នាក់ទី ${cls.name} ប្រចាំឆមាសទី ${toKhmerNumerals(summary.semester)} (ឆ្នាំសិក្សា ${toKhmerNumerals(cls.academicYear)})`;
   sheet.getCell('A3').font = { ...fontBold, size: 11 };
   sheet.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1566,26 +1573,27 @@ export async function exportSemesterResultsExcel(params: {
     { col: 1, label: 'ល.រ' },
     { col: 2, label: 'គោត្តនាម-នាម' },
     { col: 3, label: 'ភេទ' },
-    { col: 4, label: 'មធ្យមប្រលង' },
-    { col: 5, label: 'មធ្យមខែ' },
-    { col: 6, label: 'មធ្យមឆមាស' },
-    { col: 7, label: 'ចំណាត់ថ្នាក់' },
-    { col: 8, label: 'និទ្ទេស' },
-    { col: 9, label: 'លទ្ធផល' },
-    { col: 13, label: 'ផ្សេងៗ' },
+    { col: 4, label: 'ខែប្រចាំ\nឆមាស' },
+    { col: 5, label: 'ប្រឡង\nឆមាស' },
+    { col: 6, label: 'ពិន្ទុសរុប' },
+    { col: 7, label: 'មធ្យម' },
+    { col: 8, label: 'ចំណាត់ថ្នាក់' },
+    { col: 9, label: 'និទ្ទេស' },
+    { col: 10, label: 'លទ្ធផល' },
+    { col: 14, label: 'ផ្សេងៗ' },
   ];
   for (const h of singleHeaders) {
     sheet.mergeCells(rH1, h.col, rH2, h.col);
     sheet.getCell(rH1, h.col).value = h.label;
   }
-  sheet.mergeCells(rH1, 10, rH1, 12);
-  sheet.getCell(rH1, 10).value = 'ចំនួនអវត្តមាន';
-  sheet.getCell(rH2, 10).value = 'ច្ប';
-  sheet.getCell(rH2, 11).value = 'អ.ច្ប';
-  sheet.getCell(rH2, 12).value = 'សរុប';
+  sheet.mergeCells(rH1, 11, rH1, 13);
+  sheet.getCell(rH1, 11).value = 'ចំនួនអវត្តមាន';
+  sheet.getCell(rH2, 11).value = 'ច្ប';
+  sheet.getCell(rH2, 12).value = 'អ.ច្ប';
+  sheet.getCell(rH2, 13).value = 'សរុប';
 
   for (let r = rH1; r <= rH2; r++) {
-    for (let c = 1; c <= 13; c++) {
+    for (let c = 1; c <= 14; c++) {
       const cell = sheet.getCell(r, c);
       cell.font = fontBold;
       cell.border = thinBorder;
@@ -1605,8 +1613,9 @@ export async function exportSemesterResultsExcel(params: {
       fmt(idx + 1),
       row.student.nameKm,
       row.student.gender === 'ប្រុស' ? 'ប' : 'ស',
-      fmtAvgCell(row.examAvg),
       fmtAvgCell(row.monthlyAvg),
+      fmtAvgCell(row.examAvg),
+      fmtAvgCell(row.semesterTotal),
       fmtAvgCell(row.semesterAvg),
       row.rank !== null ? (useKhmerDigits ? fmt(row.rank) : row.rank) : '',
       row.grade ?? '',
@@ -1617,22 +1626,22 @@ export async function exportSemesterResultsExcel(params: {
       row.note,
     ]);
     r.eachCell((cell, colNum) => {
-      cell.font = colNum === 7 ? { ...fontBold, color: { argb: 'FFDC2626' } } : fontBase;
+      cell.font = colNum === 8 ? { ...fontBold, color: { argb: 'FFDC2626' } } : fontBase;
       cell.border = thinBorder;
       cell.alignment = {
         vertical: 'middle',
-        horizontal: colNum === 2 || colNum === 13 ? 'left' : 'center',
+        horizontal: colNum === 2 || colNum === 14 ? 'left' : 'center',
       };
     });
   });
 
   sheet.addRow([]);
   sheet.addRow([
-    `ចំនួនសិស្សសរុប: ${fmt(summary.totalStudents)} នាក់, ស្រី: ${fmt(summary.femaleStudents)} នាក់`,
+    `បញ្ឈប់បញ្ជីចំនួនសិស្សសរុប: ${fmt(summary.totalStudents)} នាក់, ស្រី: ${fmt(summary.femaleStudents)} នាក់`,
   ]);
-  for (let i = 0; i < GRADE_ORDER.length; i += 2) {
+  for (let i = 0; i < 3; i++) {
     const g1 = GRADE_ORDER[i];
-    const g2 = GRADE_ORDER[i + 1];
+    const g2 = GRADE_ORDER[i + 3];
     sheet.addRow([
       `-និទ្ទេស ${g1}: ${fmt(summary.gradeCounts[g1].total)} នាក់, ស្រី ${fmt(summary.gradeCounts[g1].female)} នាក់`,
       '',
@@ -1657,7 +1666,7 @@ export async function exportSemesterResultsExcel(params: {
   sheet.addRow([]);
   sheet.addRow(['', profile.directorName, '', '', '', '', '', '', profile.teacherName]);
 
-  [5, 22, 6, 11, 11, 11, 10, 8, 9, 6, 7, 7, 14].forEach((w, i) => {
+  [5, 22, 6, 11, 11, 10, 10, 10, 8, 9, 6, 7, 7, 14].forEach((w, i) => {
     sheet.getColumn(i + 1).width = w;
   });
 

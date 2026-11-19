@@ -74,6 +74,7 @@ export interface SemesterStudentSummary {
   sem1MonthlySum: number | null;
   sem1MonthlyAvg: number | null;
   sem1ExamAvg: number | null;
+  sem1Total: number | null;
   sem1Avg: number | null;
   sem1Rank: number | null;
   sem1Grade: ScoreGrade | null;
@@ -84,6 +85,7 @@ export interface SemesterStudentSummary {
   sem2MonthlySum: number | null;
   sem2MonthlyAvg: number | null;
   sem2ExamAvg: number | null;
+  sem2Total: number | null;
   sem2Avg: number | null;
   sem2Rank: number | null;
   sem2Grade: ScoreGrade | null;
@@ -388,6 +390,26 @@ export function formatAverage(
   return truncated.toFixed(2);
 }
 
+/**
+ * Returns the 2-decimal number as displayed/printed on paper for the given rounding mode.
+ * Used for ranking, grading, and pass/fail so equal printed averages share a rank.
+ */
+export function displayedAverage(
+  value: number,
+  mode: AverageDecimalMode = 'truncate'
+): number {
+  const s = formatAverage(value, mode);
+  return s === '' ? NaN : Number(s);
+}
+
+export function displayedAverageOrNull(
+  value: number | null,
+  mode: AverageDecimalMode = 'truncate'
+): number | null {
+  if (value === null || !Number.isFinite(value)) return null;
+  return displayedAverage(value, mode);
+}
+
 export function formatScoreDecimal(
   value: number | null,
   mode: AverageDecimalMode = 'truncate'
@@ -431,6 +453,8 @@ export function computeSemesterAnnualSummary(params: {
   const meanOf = (vals: number[]): number | null =>
     vals.length === 0 ? null : vals.reduce((acc, v) => acc + v, 0) / vals.length;
 
+  const mode: AverageDecimalMode = config.averageDecimalMode ?? 'truncate';
+
   const drafts = students.map((student) => {
     const sid = student.id!;
     const sem1Avgs: number[] = [];
@@ -455,22 +479,32 @@ export function computeSemesterAnnualSummary(params: {
 
     const sem1MonthlySum = sumOf(sem1Avgs);
     const sem2MonthlySum = sumOf(sem2Avgs);
-    const sem1MonthlyAvg = meanOf(sem1Avgs);
-    const sem2MonthlyAvg = meanOf(sem2Avgs);
+    const sem1MonthlyAvg = displayedAverageOrNull(meanOf(sem1Avgs), mode);
+    const sem2MonthlyAvg = displayedAverageOrNull(meanOf(sem2Avgs), mode);
+    const sem1ExamAvg = displayedAverageOrNull(ex1Row.average, mode);
+    const sem2ExamAvg = displayedAverageOrNull(ex2Row.average, mode);
 
-    const sem1Avg = computeWeightedAverage(
-      sem1MonthlyAvg,
-      config.wMonthly,
-      ex1Row.average,
-      config.wExam
+    const sem1Total =
+      sem1MonthlyAvg !== null && sem1ExamAvg !== null
+        ? Number((sem1MonthlyAvg + sem1ExamAvg).toFixed(2))
+        : null;
+    const sem2Total =
+      sem2MonthlyAvg !== null && sem2ExamAvg !== null
+        ? Number((sem2MonthlyAvg + sem2ExamAvg).toFixed(2))
+        : null;
+
+    const sem1Avg = displayedAverageOrNull(
+      computeWeightedAverage(sem1MonthlyAvg, config.wMonthly, sem1ExamAvg, config.wExam),
+      mode
     );
-    const sem2Avg = computeWeightedAverage(
-      sem2MonthlyAvg,
-      config.wMonthly,
-      ex2Row.average,
-      config.wExam
+    const sem2Avg = displayedAverageOrNull(
+      computeWeightedAverage(sem2MonthlyAvg, config.wMonthly, sem2ExamAvg, config.wExam),
+      mode
     );
-    const annualAvg = computeWeightedAverage(sem1Avg, config.wSem1, sem2Avg, config.wSem2);
+    const annualAvg = displayedAverageOrNull(
+      computeWeightedAverage(sem1Avg, config.wSem1, sem2Avg, config.wSem2),
+      mode
+    );
 
     const sem1ExamScores: Record<string, number | null> = {};
     const sem2ExamScores: Record<string, number | null> = {};
@@ -485,14 +519,16 @@ export function computeSemesterAnnualSummary(params: {
       sem1ExamTotal: ex1Row.total,
       sem1MonthlySum,
       sem1MonthlyAvg,
-      sem1ExamAvg: ex1Row.average,
+      sem1ExamAvg,
+      sem1Total,
       sem1Avg,
       sem1Grade: gradeFor(sem1Avg),
       sem2ExamScores,
       sem2ExamTotal: ex2Row.total,
       sem2MonthlySum,
       sem2MonthlyAvg,
-      sem2ExamAvg: ex2Row.average,
+      sem2ExamAvg,
+      sem2Total,
       sem2Avg,
       sem2Grade: gradeFor(sem2Avg),
       annualAvg,

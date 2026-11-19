@@ -781,14 +781,21 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                     <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center">
                       ភេទ
                     </th>
-                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
-                      មធ្យមប្រលង
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center leading-tight">
+                      ខែប្រចាំ
+                      <br />
+                      ឆមាស
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center leading-tight">
+                      ប្រឡង
+                      <br />
+                      ឆមាស
                     </th>
                     <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
-                      មធ្យមខែ
+                      ពិន្ទុសរុប
                     </th>
                     <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
-                      មធ្យមឆមាស
+                      មធ្យម
                     </th>
                     <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
                       ចំណាត់ថ្នាក់
@@ -801,6 +808,9 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                     </th>
                     <th colSpan={3} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1 text-center">
                       ចំនួនអវត្តមាន
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-left">
+                      ផ្សេងៗ
                     </th>
                     <th rowSpan={2} className="border-b border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
                       សិក្សាប័ត្រ
@@ -828,10 +838,13 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                         {r.student.gender === 'ប្រុស' ? 'ប' : 'ស'}
                       </td>
                       <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center">
+                        {r.monthlyAvg !== null ? fmt(formatAverage(r.monthlyAvg, scoreConfig.averageDecimalMode)) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center">
                         {r.examAvg !== null ? fmt(formatAverage(r.examAvg, scoreConfig.averageDecimalMode)) : '—'}
                       </td>
                       <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center">
-                        {r.monthlyAvg !== null ? fmt(formatAverage(r.monthlyAvg, scoreConfig.averageDecimalMode)) : '—'}
+                        {r.semesterTotal !== null ? fmt(formatAverage(r.semesterTotal, scoreConfig.averageDecimalMode)) : '—'}
                       </td>
                       <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center font-semibold">
                         {r.semesterAvg !== null ? fmt(formatAverage(r.semesterAvg, scoreConfig.averageDecimalMode)) : '—'}
@@ -863,6 +876,9 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                       </td>
                       <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-2 text-center font-medium">
                         {r.attendance.total > 0 ? fmt(r.attendance.total) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-left text-[12px] text-[#86868b]">
+                        {r.note || '—'}
                       </td>
                       <td className="px-2 py-1.5 text-center">
                         <AppleButton

@@ -5,6 +5,7 @@ import {
   buildSubjectHeaderSpans,
   computeCompetitionRanks,
   computeScoreRow,
+  displayedAverageOrNull,
   formatAverage,
   isSubjectActive,
   sortSubjects,
@@ -56,6 +57,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
         const maleCount = activeStudents.filter((s) => s.gender === 'ប្រុស').length;
         const femaleCount = activeStudents.filter((s) => s.gender === 'ស្រី').length;
 
+        const mode = scoreConfig.averageDecimalMode ?? 'truncate';
         const computed = activeStudents.map((st) => {
           const scoreRecord = (st.id !== undefined && sheet.scoresByStudent.get(st.id)) || {};
           const row = computeScoreRow(scoreRecord, sortedSubjects, scoreConfig);
@@ -63,6 +65,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
             studentRef: st.id ?? -1,
             status: st.status,
             ...row,
+            average: displayedAverageOrNull(row.average, mode),
           };
         });
         const rankMap = computeCompetitionRanks(

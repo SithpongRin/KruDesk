@@ -36,7 +36,9 @@ import {
   computeCompetitionRanks,
   computeScoreRow,
   computeSemesterAnnualSummary,
+  displayedAverageOrNull,
   formatAverage,
+  gradeFor,
   isSubjectActive,
   isSubjectBonus,
   parseScoreInput,
@@ -774,13 +776,18 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
 
   // Live computed totals, averages & competition ranks (active students only)
   const rankedByStudent = useMemo(() => {
+    const mode = scoreConfig.averageDecimalMode ?? 'truncate';
     const computed = activeStudents.map((st) => {
       const rec = (st.id !== undefined && scoresByStudent.get(st.id)) || {};
       const row = computeScoreRow(rec, activeSubjects, scoreConfig);
+      const dispAvg = displayedAverageOrNull(row.average, mode);
       return {
         studentRef: st.id ?? -1,
         status: st.status,
         ...row,
+        average: dispAvg,
+        passed: dispAvg !== null ? dispAvg >= scoreConfig.scale / 2 : null,
+        grade: gradeFor(dispAvg),
       };
     });
     // Only rank students whose status === 'active'
