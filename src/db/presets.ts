@@ -93,6 +93,20 @@ export function getPresetSubjects(preset: PresetKey): Subject[] {
 }
 
 /**
+ * True when a class's ACTIVE subjects (names, max scores, order) differ from the preset's
+ * active subjects — used to remind the teacher to apply the school preset.
+ */
+export function subjectsDifferFromPreset(subjects: Subject[], preset: Subject[]): boolean {
+  const sig = (list: Subject[]) =>
+    [...list]
+      .filter((s) => s.isActive !== false)
+      .sort((a, b) => a.order - b.order)
+      .map((s) => `${s.name.trim()}|${s.maxScore}|${s.group ?? ''}`)
+      .join('\n');
+  return sig(subjects) !== sig(preset);
+}
+
+/**
  * Subject ids used by older presets that now correspond to a newer preset id, with the
  * default names they may still carry. A legacy subject the teacher renamed is treated as
  * the teacher's own subject and is left untouched.
@@ -109,6 +123,14 @@ const LEGACY_PRESET_IDS: Record<string, { target: string; defaultNames: string[]
   },
   extra_1: { target: 'ict', defaultNames: ['មុខវិជ្ជាបន្ថែម 1'] },
 };
+
+/** Name comparison that ignores spaces, hyphens and any «(…)» note. */
+function normalizeSubjectName(name: string): string {
+  return name
+    .replace(/\(.*?\)/g, '')
+    .replace(/[\s\-–—]/g, '')
+    .trim();
+}
 
 export interface KeptMaxScore {
   subjectId: string;
@@ -141,7 +163,9 @@ export function mergeSubjectsWithPreset(
   const used = new Set<string>();
   const keptMaxScores: KeptMaxScore[] = [];
 
-  const findExisting = (presetId: string): Subject | undefined => {
+  const presetIds = new Set(preset.map((p) => p.id));
+
+  const findExisting = (presetId: string, presetName: string): Subject | undefined => {
     const direct = byId.get(presetId);
     if (direct) return direct;
     for (const [legacyId, rule] of Object.entries(LEGACY_PRESET_IDS)) {
@@ -155,11 +179,19 @@ export function mergeSubjectsWithPreset(
         return legacy;
       }
     }
-    return undefined;
+    // A subject the teacher typed in by hand (random id) with the same name as a preset row
+    // is the same subject — reuse it instead of adding a duplicate.
+    const target = normalizeSubjectName(presetName);
+    return existing.find(
+      (s) =>
+        !used.has(s.id) &&
+        !presetIds.has(s.id) &&
+        normalizeSubjectName(s.name) === target
+    );
   };
 
   const merged: Subject[] = preset.map((p) => {
-    const ex = findExisting(p.id);
+    const ex = findExisting(p.id, p.name);
     if (!ex) return { ...p };
     used.add(ex.id);
 

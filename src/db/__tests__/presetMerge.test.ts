@@ -109,3 +109,36 @@ describe('mergeSubjectsWithPreset', () => {
     expect(byId.get('foreign_lang')?.isBonus).toBe(true);
   });
 });
+
+describe('subjectsDifferFromPreset', () => {
+  it('is false for the preset itself and true for an old 11/12-subject list', async () => {
+    const { subjectsDifferFromPreset, getPresetSubjects } = await import('../presets');
+    const preset = getPresetSubjects('lower-secondary');
+    expect(subjectsDifferFromPreset(preset, preset)).toBe(false);
+    expect(preset.filter((s) => s.isActive !== false)).toHaveLength(15);
+
+    const old = preset
+      .filter((s) => !['home_econ', 'arts', 'ict', 'pe'].includes(s.id))
+      .map((s) => (s.id === 'math' ? { ...s, maxScore: 50 } : s));
+    expect(subjectsDifferFromPreset(old, preset)).toBe(true);
+  });
+});
+
+describe('mergeSubjectsWithPreset — hand-typed subjects', () => {
+  it('reuses subjects with the same name instead of duplicating them', () => {
+    const names = ['សរសេរតាមអាន', 'តែងសេចក្ដី', 'គណិតវិទ្យា', 'ភាសាបរទេស (អង់គ្លេស)', 'សីលធម៌ - ពលរដ្ឋវិជ្ជា'];
+    const existing: Subject[] = names.map((name, i) => ({
+      id: `subj_hand_${i}`,
+      name,
+      maxScore: 50,
+      order: i + 1,
+    }));
+    const { subjects } = mergeSubjectsWithPreset(existing, createLowerSecondarySubjects());
+    const active = subjects.filter((s) => s.isActive !== false);
+    expect(active).toHaveLength(15);
+    expect(subjects.filter((s) => s.id.startsWith('subj_hand_'))).toHaveLength(5);
+    expect(subjects.find((s) => s.id === 'subj_hand_2')).toMatchObject({ name: 'គណិតវិទ្យា', maxScore: 100, order: 3 });
+    expect(subjects.find((s) => s.id === 'subj_hand_0')).toMatchObject({ maxScore: 40, order: 1 });
+    expect(new Set(subjects.map((s) => s.name)).size).toBe(subjects.length);
+  });
+});

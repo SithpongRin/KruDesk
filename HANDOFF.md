@@ -85,3 +85,14 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 - [ ] Not yet tested by a human: Excel import from a real file, restore from a `.json` file,
       printing on real paper (attendance, scores, cards duplex alignment).
 - [ ] Browser storage is not "persisted" on a normal visit → teachers should install the app and back up weekly.
+- [x] **App updates (done in `82d7218`):** the installed app also checks for a new version when the
+      window regains focus / becomes visible (max once a minute). Settings → «អំពីកម្មវិធី» shows
+      version + commit + build time and has «ពិនិត្យរកកំណែថ្មី». Compare the commit there with `git log`.
+- [x] **School-preset reminder:** on «បញ្ជីពិន្ទុ», a grade 7–9 class whose active subjects differ
+      from the school preset shows an orange banner «ប្ដូរតាមគំរូសាលា» (one click → merge) with
+      «កុំបង្ហាញទៀត» (per class, `localStorage['krudesk.presetHintDismissed']`). The merge also
+      matches hand-typed subjects **by name** (ignores spaces, hyphens, «(…)»), so no duplicates.
+- [ ] **Teacher's 8A still has the old 11 subjects (math /50, Khmer 50+50)** until they click
+      «ប្ដូរតាមគំរូសាលា». Math scores already typed on /50 then count on /100 — teacher must re-check them.
+- [ ] Real PWA update flow not yet verified on the live site (the browser pane cannot register a
+      service worker on localhost).

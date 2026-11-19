@@ -14,7 +14,12 @@ import {
 } from 'lucide-react';
 import Dexie from 'dexie';
 import { db } from '../../db/database';
-import { getPresetSubjects, mergeSubjectsWithPreset, type PresetKey } from '../../db/presets';
+import {
+  getPresetSubjects,
+  mergeSubjectsWithPreset,
+  subjectsDifferFromPreset,
+  type PresetKey,
+} from '../../db/presets';
 import {
   countSubjectScoreEntries,
   createPermanentSubjectId,
@@ -889,6 +894,34 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
   const [newSubjMax, setNewSubjMax] = useState('50');
   const [deleteSubjPrompt, setDeleteSubjPrompt] = useState<DeleteSubjectPromptState | null>(null);
   const [presetReplaceConfirm, setPresetReplaceConfirm] = useState<PresetKey | null>(null);
+  const [presetHintDismissed, setPresetHintDismissed] = useState<Record<number, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('krudesk.presetHintDismissed') ?? '{}') as Record<
+        number,
+        boolean
+      >;
+    } catch {
+      return {};
+    }
+  });
+  const showPresetHint = useMemo(() => {
+    if (!currentClass?.id || presetHintDismissed[currentClass.id]) return false;
+    if (currentClass.gradeLevel < 7 || currentClass.gradeLevel > 9) return false;
+    return subjectsDifferFromPreset(
+      currentClass.subjects ?? [],
+      getPresetSubjects('lower-secondary')
+    );
+  }, [currentClass, presetHintDismissed]);
+  const dismissPresetHint = () => {
+    if (!currentClass?.id) return;
+    const next = { ...presetHintDismissed, [currentClass.id]: true };
+    setPresetHintDismissed(next);
+    try {
+      localStorage.setItem('krudesk.presetHintDismissed', JSON.stringify(next));
+    } catch {
+      /* storage unavailable — hint simply shows again next time */
+    }
+  };
 
   const handleAddSubject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1282,6 +1315,35 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
           )}
         </div>
       </div>
+
+      {showPresetHint && (
+        <div
+          role="status"
+          data-testid="preset-hint"
+          className="p-4 rounded-2xl border bg-orange-50/80 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/25 flex flex-col md:flex-row md:items-center gap-3"
+        >
+          <div className="flex items-start gap-2.5 flex-1 text-sm text-[#1d1d1f] dark:text-orange-100">
+            <Sparkles size={18} className="text-[#ff9500] shrink-0 mt-0.5" />
+            <p className="leading-relaxed">
+              មុខវិជ្ជារបស់ថ្នាក់នេះមិនទាន់ត្រូវតាមគំរូសាលាទេ (១៥ មុខវិជ្ជា៖ សរសេរតាមអាន ៤០ ·
+              តែងសេចក្ដី ៦០ · គណិតវិទ្យា ១០០ · មុខវិជ្ជាផ្សេង ៥០)។ ពិន្ទុដែលបានបញ្ចូលរួចនៅដដែល។
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <AppleButton
+              size="sm"
+              variant="primary"
+              icon={<Sparkles size={14} />}
+              onClick={() => setPresetReplaceConfirm('lower-secondary')}
+            >
+              ប្ដូរតាមគំរូសាលា
+            </AppleButton>
+            <AppleButton size="sm" variant="secondary" onClick={dismissPresetHint}>
+              កុំបង្ហាញទៀត
+            </AppleButton>
+          </div>
+        </div>
+      )}
 
       {/* Period Selector & Stats Bar (Monthly / Exam) */}
       {(activeTab === 'monthly' || activeTab === 'exam') && (
@@ -2124,7 +2186,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
         title="កែបញ្ជីមុខវិជ្ជាតាមគំរូ?"
         variant="primary"
         confirmLabel="យល់ព្រមប្រើគំរូ"
-        message="ឈ្មោះ ពិន្ទុអតិបរមា និងលំដាប់មុខវិជ្ជានឹងត្រូវកែតាមគំរូ សម្រាប់តែថ្នាក់នេះ។ ពិន្ទុដែលបានបញ្ចូលរួចមិនបាត់ទេ ហើយមុខវិជ្ជាដែលអ្នកបន្ថែមខ្លួនឯងនៅដដែល។"
+        message="ឈ្មោះ ពិន្ទុអតិបរមា និងលំដាប់មុខវិជ្ជានឹងត្រូវកែតាមគំរូ សម្រាប់តែថ្នាក់នេះ។ ពិន្ទុដែលបានបញ្ចូលរួចមិនបាត់ទេ ហើយមុខវិជ្ជាដែលអ្នកបន្ថែមខ្លួនឯងនៅដដែល។ ចំណាំ៖ ពិន្ទុដែលបានបញ្ចូលរួច (ឧ. គណិតវិទ្យាលើ ៥០) នឹងត្រូវគិតលើពិន្ទុអតិបរមាថ្មី — សូមពិនិត្យពិន្ទុទាំងនោះឡើងវិញ។"
       />
 
       {/* Export Dialog */}
