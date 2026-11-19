@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HardDriveUpload, CheckCircle2, Layers, RefreshCw } from 'lucide-react';
 import { AppleModal } from '../common/AppleModal';
 import { AppleButton } from '../common/AppleButton';
@@ -29,8 +29,16 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
   onConfirmRestore,
   allowMerge = true,
 }) => {
-  const [mode, setMode] = useState<RestoreMode>('replace');
+  // When the app already has data (merge allowed), default to the safe «បញ្ចូលបន្ថែម» so a
+  // teacher who just presses «ស្ដារ» never wipes their classes by accident.
+  const defaultMode: RestoreMode = allowMerge ? 'merge' : 'replace';
+  const [mode, setMode] = useState<RestoreMode>(defaultMode);
   const [isRestoring, setIsRestoring] = useState(false);
+
+  // Reset to the safe default every time a new backup file is opened.
+  useEffect(() => {
+    setMode(defaultMode);
+  }, [payload, defaultMode]);
   const useKhmerNumerals = useAppStore((s) => s.useKhmerNumerals);
   const fmtNum = (v: number | string) => (useKhmerNumerals ? toKhmerNumerals(v) : String(v));
 
