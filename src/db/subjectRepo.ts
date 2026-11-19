@@ -60,6 +60,33 @@ export async function countSubjectScoreEntries(
 }
 
 /**
+ * Highest numeric score entered per subject id across all monthly and semester-exam
+ * records of a class. Subjects with no score are absent from the map.
+ */
+export async function getHighestScoresBySubject(classId: number): Promise<Map<string, number>> {
+  const [monthlyRows, examRows] = await Promise.all([
+    db.monthlyScores
+      .where('[classId+month]')
+      .between([classId, Dexie.minKey], [classId, Dexie.maxKey])
+      .toArray(),
+    db.semesterExams
+      .where('[classId+semester]')
+      .between([classId, Dexie.minKey], [classId, Dexie.maxKey])
+      .toArray(),
+  ]);
+
+  const highest = new Map<string, number>();
+  for (const row of [...monthlyRows, ...examRows]) {
+    for (const [subjectId, val] of Object.entries(row.scores)) {
+      if (typeof val === 'number' && Number.isFinite(val)) {
+        highest.set(subjectId, Math.max(highest.get(subjectId) ?? -Infinity, val));
+      }
+    }
+  }
+  return highest;
+}
+
+/**
  * Persists a class's subject list, renumbering `order` 1..n while keeping permanent IDs intact.
  */
 export async function saveClassSubjects(classId: number, subjects: Subject[]): Promise<void> {

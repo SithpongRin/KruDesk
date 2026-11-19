@@ -203,7 +203,7 @@ describe('Grading formulas & competition ranking', () => {
     expect(row.average).toBeCloseTo(35, 10);
   });
 
-  it('numbers lower-secondary preset as 1..15 with អក្សរសាស្ត្រខ្មែរ spanning 2 subcolumns + blank extras', () => {
+  it('numbers lower-secondary preset 1..15 like the scorebook, ICT as 16, blank extras unnumbered', () => {
     const preset = createLowerSecondarySubjects();
     const spans = buildSubjectHeaderSpans(preset);
     const colNums = buildSubjectColumnNumbers(spans);
@@ -213,20 +213,20 @@ describe('Grading formulas & competition ranking', () => {
     // First column spans 2 subcolumns and has columnNumber 1
     expect(colNums[0].colSpan).toBe(2);
     expect(colNums[0].columnNumber).toBe(1);
-    // Columns 1..14 map to numbers 2..15
-    expect(colNums.slice(0, 15).map((c) => c.columnNumber)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    // Official scorebook columns keep numbers 1..15; the school's ICT subject is 16
+    expect(colNums.slice(0, 16).map((c) => c.columnNumber)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
     ]);
-    // Last 3 extra columns remain unnumbered (null)
-    expect(colNums.slice(15).map((c) => c.columnNumber)).toEqual([null, null, null]);
+    // Last 2 extra columns remain unnumbered (null)
+    expect(colNums.slice(16).map((c) => c.columnNumber)).toEqual([null, null]);
   });
 
-  it('sets lower-secondary preset Khmer parts to 50+50=100, math to 100, and others to 50', () => {
+  it('sets lower-secondary preset like the school documents: Khmer 40+60=100, math 100, others 50', () => {
     const preset = createLowerSecondarySubjects();
     const byId = new Map(preset.map((s) => [s.id, s]));
 
-    expect(byId.get('kh_dictation')?.maxScore).toBe(50);
-    expect(byId.get('kh_essay')?.maxScore).toBe(50);
+    expect(byId.get('kh_dictation')?.maxScore).toBe(40);
+    expect(byId.get('kh_essay')?.maxScore).toBe(60);
     expect(byId.get('math')?.maxScore).toBe(100);
     expect(byId.get('physics')?.maxScore).toBe(50);
     expect(byId.get('foreign_lang')?.maxScore).toBe(50);
@@ -335,7 +335,7 @@ describe('Grading formulas & competition ranking', () => {
     expect(summary[0].sem1ExamAvg).toBeCloseTo(37.0, 10);
   });
 
-  it('computes lower-secondary preset full marks (divisor 13, avg 50), bonus subject, inactive ignore, and gradeFor', () => {
+  it('computes lower-secondary preset full marks (divisor 16, avg 50), bonus subject, inactive ignore, and gradeFor', () => {
     const preset = createLowerSecondarySubjects();
     const activeStandardFull: Record<string, number> = {};
     for (const s of preset) {
@@ -344,18 +344,18 @@ describe('Grading formulas & competition ranking', () => {
       }
     }
 
-    // 1. Cols 1-11 all full marks, all standard -> maxSum 650 (divisor 13), avg 50
+    // 1. 15 active subjects all full marks, all standard -> maxSum 800 (divisor 16), avg 50
     const allStd = computeScoreRow(activeStandardFull, preset, {
       scale: 50,
       countBlankAsZero: false,
     });
-    expect(allStd.maxScoreUsed).toBe(650);
-    expect(allStd.maxScoreUsed / 50).toBe(13);
-    expect(allStd.total).toBe(650);
+    expect(allStd.maxScoreUsed).toBe(800);
+    expect(allStd.maxScoreUsed / 50).toBe(16);
+    expect(allStd.total).toBe(800);
     expect(allStd.average).toBeCloseTo(50, 10);
     expect(allStd.grade).toBe('A');
 
-    // 2. Col 3 (foreign_lang) is bonus with score 40 -> total 600 + 15 = 615, divisor 12, avg 51.25 (unclamped)
+    // 2. foreign_lang is bonus with score 40 -> total 750 + 15 = 765, divisor 15, avg 51 (unclamped)
     const withBonusPreset = preset.map((s) =>
       s.id === 'foreign_lang' ? { ...s, isBonus: true } : s
     );
@@ -364,10 +364,10 @@ describe('Grading formulas & competition ranking', () => {
       scale: 50,
       countBlankAsZero: false,
     });
-    expect(withBonus.maxScoreUsed).toBe(600);
-    expect(withBonus.maxScoreUsed / 50).toBe(12);
-    expect(withBonus.total).toBe(615);
-    expect(withBonus.average).toBeCloseTo(51.25, 10);
+    expect(withBonus.maxScoreUsed).toBe(750);
+    expect(withBonus.maxScoreUsed / 50).toBe(15);
+    expect(withBonus.total).toBe(765);
+    expect(withBonus.average).toBeCloseTo(51, 10);
     expect(withBonus.grade).toBe('A');
 
     // 3. Bonus score 20 (below half of 50) -> contributes 0
@@ -376,7 +376,7 @@ describe('Grading formulas & competition ranking', () => {
       withBonusPreset,
       { scale: 50, countBlankAsZero: false }
     );
-    expect(lowBonus.total).toBe(600);
+    expect(lowBonus.total).toBe(750);
     expect(lowBonus.average).toBeCloseTo(50, 10);
 
     // 4. Row with ONLY bonus score and no standard score -> average null
@@ -389,12 +389,12 @@ describe('Grading formulas & competition ranking', () => {
 
     // 5. Inactive subject with a score -> ignored
     const withInactiveScore = computeScoreRow(
-      { ...activeStandardFull, home_econ: 50, extra_1: 45 },
+      { ...activeStandardFull, agriculture: 50, extra_2: 45 },
       preset,
       { scale: 50, countBlankAsZero: false }
     );
-    expect(withInactiveScore.total).toBe(650);
-    expect(withInactiveScore.maxScoreUsed).toBe(650);
+    expect(withInactiveScore.total).toBe(800);
+    expect(withInactiveScore.maxScoreUsed).toBe(800);
 
     // 6. gradeFor boundaries
     expect(gradeFor(44.99)).toBe('B');

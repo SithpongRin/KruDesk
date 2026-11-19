@@ -14,11 +14,12 @@ import {
 } from 'lucide-react';
 import Dexie from 'dexie';
 import { db } from '../../db/database';
-import { getPresetSubjects, type PresetKey } from '../../db/presets';
+import { getPresetSubjects, mergeSubjectsWithPreset, type PresetKey } from '../../db/presets';
 import {
   countSubjectScoreEntries,
   createPermanentSubjectId,
   deleteSubjectWithScores,
+  getHighestScoresBySubject,
   saveClassSubjects,
 } from '../../db/subjectRepo';
 import { useAppStore } from '../../store/useAppStore';
@@ -964,14 +965,30 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
 
   const handleApplyPreset = async (presetKey: PresetKey) => {
     if (!currentClass?.id) return;
-    const fresh = getPresetSubjects(presetKey);
-    await saveClassSubjects(currentClass.id, fresh);
-    setPresetReplaceConfirm(null);
-    addToast({
-      type: 'success',
-      title: 'បានអនុវត្តគំរូមុខវិជ្ជា',
-      message: 'កំណែទម្រង់នេះអនុវត្តសម្រាប់តែថ្នាក់នេះប៉ុណ្ណោះ។',
-    });
+    try {
+      const highest = await getHighestScoresBySubject(currentClass.id);
+      const { subjects: merged, keptMaxScores } = mergeSubjectsWithPreset(
+        currentClass.subjects ?? [],
+        getPresetSubjects(presetKey),
+        highest
+      );
+      await saveClassSubjects(currentClass.id, merged);
+      addToast({
+        type: 'success',
+        title: 'បានអនុវត្តគំរូមុខវិជ្ជា',
+        message:
+          keptMaxScores.length > 0
+            ? `ពិន្ទុដែលបានបញ្ចូលនៅដដែល។ មិនបានបន្ថយពិន្ទុអតិបរមារបស់៖ ${keptMaxScores
+                .map((k) => `${k.name} (មានពិន្ទុ ${k.highestScore})`)
+                .join(', ')} — សូមពិនិត្យពិន្ទុទាំងនោះ។`
+            : 'ពិន្ទុដែលបានបញ្ចូលនៅដដែល។ កំណែនេះអនុវត្តសម្រាប់តែថ្នាក់នេះប៉ុណ្ណោះ។',
+      });
+    } catch (err) {
+      console.error('Apply subject preset failed', err);
+      addToast({ type: 'error', title: 'មិនអាចអនុវត្តគំរូមុខវិជ្ជាបានទេ' });
+    } finally {
+      setPresetReplaceConfirm(null);
+    }
   };
 
   // Export state
@@ -1358,20 +1375,20 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                     <th className="sticky left-10 z-20 bg-[#f5f5f7] dark:bg-[#242426] border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2.5 text-left min-w-[155px]">
                       គោត្តនាម និងនាម
                     </th>
-                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2.5 text-center w-10">
+                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2.5 text-center min-w-[44px] whitespace-nowrap">
                       ភេទ
                     </th>
 
                     {activeSubjects.map((subj) => (
                       <th
                         key={subj.id}
-                        className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-1.5 py-2 text-center min-w-[78px] max-w-[100px]"
+                        className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center min-w-[78px] whitespace-nowrap"
                         title={`${subj.name} (អតិបរមា ${subj.maxScore})`}
                       >
-                        <div className="font-semibold leading-tight line-clamp-2">
+                        <div className="font-semibold leading-tight whitespace-nowrap">
                           {subj.name}
                         </div>
-                        <div className="text-[10px] text-[#86868b] font-normal mt-0.5">
+                        <div className="text-[10px] text-[#86868b] font-normal mt-0.5 whitespace-nowrap">
                           /{fmtNum(subj.maxScore)}
                           {isSubjectBonus(subj) ? ' (បន្ថែម)' : ''}
                         </div>
@@ -1550,7 +1567,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                             collapsedSubjects.flatMap((s) => [
                               <th
                                 key={`h-${sem}-${s.id}-p`}
-                                className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-1.5 py-1.5 text-center whitespace-nowrap max-w-[96px] truncate"
+                                className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1.5 text-center whitespace-nowrap"
                                 title={`${s.name} (${fmtNum(s.maxScore)})`}
                               >
                                 {s.name} (ព)
@@ -2040,10 +2057,10 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
         isOpen={Boolean(presetReplaceConfirm)}
         onClose={() => setPresetReplaceConfirm(null)}
         onConfirm={() => presetReplaceConfirm && void handleApplyPreset(presetReplaceConfirm)}
-        title="ជំនួសបញ្ជីមុខវិជ្ជាដោយគំរូ?"
+        title="កែបញ្ជីមុខវិជ្ជាតាមគំរូ?"
         variant="primary"
         confirmLabel="យល់ព្រមប្រើគំរូ"
-        message="ការប្រើគំរូថ្មីនឹងកំណត់បញ្ជីមុខវិជ្ជាឡើងវិញសម្រាប់តែថ្នាក់បច្ចុប្បន្ននេះប៉ុណ្ណោះ។"
+        message="ឈ្មោះ ពិន្ទុអតិបរមា និងលំដាប់មុខវិជ្ជានឹងត្រូវកែតាមគំរូ សម្រាប់តែថ្នាក់នេះ។ ពិន្ទុដែលបានបញ្ចូលរួចមិនបាត់ទេ ហើយមុខវិជ្ជាដែលអ្នកបន្ថែមខ្លួនឯងនៅដដែល។"
       />
 
       {/* Export Dialog */}

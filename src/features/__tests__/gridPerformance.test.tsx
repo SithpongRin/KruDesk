@@ -102,17 +102,17 @@ describe('Grid interaction performance at full 45-student scale', () => {
 
     const cell = await waitFor(() => {
       const cells = container.querySelectorAll<HTMLInputElement>('[data-score-cell]');
-      // Lower-secondary preset has 12 active subjects (cols 1-11) out of 19
-      expect(cells.length).toBe(45 * 12);
+      // Lower-secondary preset has 15 active subjects (school documents) out of 19
+      expect(cells.length).toBe(45 * 15);
       return cells[0];
     });
 
     const t0 = performance.now();
-    fireEvent.change(cell, { target: { value: '42.5' } });
+    fireEvent.change(cell, { target: { value: '32.5' } });
     const t1 = performance.now();
     const latencyMs = t1 - t0;
 
-    expect(cell.value).toBe('42.5');
+    expect(cell.value).toBe('32.5');
     expect(latencyMs).toBeLessThan(250);
     console.info(`[PERF] 45x19 Score single-cell input latency: ${latencyMs.toFixed(2)} ms`);
   });
