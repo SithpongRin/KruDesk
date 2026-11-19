@@ -16,6 +16,7 @@ import { formatAverage } from '../../lib/grading';
 import { formatKhmerMonthYear, resolveAcademicMonthKey } from '../../lib/khmerDate';
 import { buildExportFileName } from '../../lib/exportFilename';
 import {
+  computeAnnualResults,
   computeMonthlyResults,
   computeSemesterResults,
   GRADE_COLOR_CLASSES,
@@ -41,7 +42,9 @@ import {
 } from '../../print/StudentReportSheet';
 import { SemesterResultsSheet } from '../../print/SemesterResultsSheet';
 import { SemesterReportSheet } from '../../print/SemesterReportSheet';
+import { AnnualResultsSheet } from '../../print/AnnualResultsSheet';
 import {
+  exportAnnualResultsExcel,
   exportMonthlyResultsExcel,
   exportSemesterResultsExcel,
 } from '../../services/excelExport';
@@ -51,7 +54,7 @@ interface MonthlyResultsViewProps {
   profile: Profile;
 }
 
-type PeriodMode = 'monthly' | 'sem1' | 'sem2';
+type PeriodMode = 'monthly' | 'sem1' | 'sem2' | 'annual';
 
 export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile }) => {
   const [periodMode, setPeriodMode] = useState<PeriodMode>('monthly');
@@ -188,12 +191,28 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
   }, [currentClass?.id, periodMode]);
 
   const semesterSummary = useMemo(() => {
-    if (!currentClass || !semesterData || periodMode === 'monthly') return null;
+    if (!currentClass || !semesterData || (periodMode !== 'sem1' && periodMode !== 'sem2')) {
+      return null;
+    }
     return computeSemesterResults({
       students: semesterData.students,
       subjects: currentClass.subjects,
       academicYear: currentClass.academicYear,
       semester: periodMode === 'sem1' ? 1 : 2,
+      monthlyRecords: semesterData.monthlyRecords,
+      semesterExams: semesterData.semesterExams,
+      attendanceRows: semesterData.attendanceRows,
+      attendanceSessions: semesterData.attendanceSessions,
+      scoreConfig,
+    });
+  }, [currentClass, semesterData, periodMode, scoreConfig]);
+
+  const annualSummary = useMemo(() => {
+    if (!currentClass || !semesterData || periodMode !== 'annual') return null;
+    return computeAnnualResults({
+      students: semesterData.students,
+      subjects: currentClass.subjects,
+      academicYear: currentClass.academicYear,
       monthlyRecords: semesterData.monthlyRecords,
       semesterExams: semesterData.semesterExams,
       attendanceRows: semesterData.attendanceRows,
@@ -211,6 +230,8 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
     | 'sem-excel'
     | 'sem-report-all'
     | 'sem-report-one'
+    | 'annual-pdf'
+    | 'annual-excel'
     | null
   >(null);
   const [targetReportRow, setTargetReportRow] = useState<MonthlyResultRow | null>(null);
@@ -226,10 +247,14 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
     rows: SemesterResultRow[];
     signOptions: DocumentSignOptions;
   } | null>(null);
+  const [printAnnualSignOptions, setPrintAnnualSignOptions] = useState<DocumentSignOptions | null>(
+    null
+  );
   const pdfStageRef = useRef<HTMLDivElement>(null);
   const reportStageRef = useRef<HTMLDivElement>(null);
   const semStageRef = useRef<HTMLDivElement>(null);
   const semReportStageRef = useRef<HTMLDivElement>(null);
+  const annualStageRef = useRef<HTMLDivElement>(null);
 
   const handleConfirmExport = async (signOptions: DocumentSignOptions) => {
     if (!currentClass) return;
@@ -242,6 +267,43 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
     if (!mode) return;
 
     try {
+      if (mode === 'annual-excel' && annualSummary) {
+        const fileName = await exportAnnualResultsExcel({
+          cls: currentClass,
+          profile,
+          summary: annualSummary,
+          scoreConfig,
+          signOptions,
+          useKhmerDigits: useKhmerNumerals,
+        });
+        addToast({ type: 'success', title: 'នាំចេញ Excel ជោគជ័យ!', message: fileName });
+        return;
+      }
+
+      if (mode === 'annual-pdf' && annualSummary) {
+        setPrintAnnualSignOptions(signOptions);
+        await new Promise((r) => setTimeout(r, 80));
+        await nextPaint();
+        await ensurePrintFontsReady();
+        const stage = annualStageRef.current;
+        if (!stage) return;
+        const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
+        const fileName = buildExportFileName({
+          document: 'លទ្ធផលប្រចាំឆ្នាំ',
+          className: currentClass.name,
+          year: currentClass.academicYear,
+          ext: 'pdf',
+          useKhmerDigits: useKhmerNumerals,
+        });
+        await exportPrintNodesToPdf(pageNodes, {
+          fileName,
+          orientation: 'portrait',
+          pixelRatio: 3,
+        });
+        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+        return;
+      }
+
       if (mode === 'sem-excel' && semesterSummary) {
         const fileName = await exportSemesterResultsExcel({
           cls: currentClass,
@@ -422,6 +484,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
       setPrintReportData(null);
       setPrintSemSignOptions(null);
       setPrintSemReportData(null);
+      setPrintAnnualSignOptions(null);
     }
   };
 
@@ -474,6 +537,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
               { value: 'monthly', label: 'ប្រចាំខែ' },
               { value: 'sem1', label: `ឆមាសទី ${fmt(1)}` },
               { value: 'sem2', label: `ឆមាសទី ${fmt(2)}` },
+              { value: 'annual', label: 'ប្រចាំឆ្នាំ' },
             ]}
           />
 
@@ -510,21 +574,23 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
             </select>
           )}
 
-          <AppleButton
-            variant="secondary"
-            size="sm"
-            icon={<Download size={14} />}
-            disabled={
-              periodMode === 'monthly'
-                ? !summary || summary.rows.every((r) => r.rank === null)
-                : !semesterSummary || semesterSummary.rows.every((r) => r.rank === null)
-            }
-            onClick={() =>
-              setPendingExportType(periodMode === 'monthly' ? 'report-all' : 'sem-report-all')
-            }
-          >
-            ទាញយកទាំងអស់
-          </AppleButton>
+          {periodMode !== 'annual' && (
+            <AppleButton
+              variant="secondary"
+              size="sm"
+              icon={<Download size={14} />}
+              disabled={
+                periodMode === 'monthly'
+                  ? !summary || summary.rows.every((r) => r.rank === null)
+                  : !semesterSummary || semesterSummary.rows.every((r) => r.rank === null)
+              }
+              onClick={() =>
+                setPendingExportType(periodMode === 'monthly' ? 'report-all' : 'sem-report-all')
+              }
+            >
+              ទាញយកទាំងអស់
+            </AppleButton>
+          )}
           <AppleButton
             variant="secondary"
             size="sm"
@@ -532,10 +598,18 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
             disabled={
               periodMode === 'monthly'
                 ? !summary || summary.rows.length === 0
-                : !semesterSummary || semesterSummary.rows.length === 0
+                : periodMode === 'annual'
+                  ? !annualSummary || annualSummary.rows.length === 0
+                  : !semesterSummary || semesterSummary.rows.length === 0
             }
             onClick={() =>
-              setPendingExportType(periodMode === 'monthly' ? 'excel' : 'sem-excel')
+              setPendingExportType(
+                periodMode === 'monthly'
+                  ? 'excel'
+                  : periodMode === 'annual'
+                    ? 'annual-excel'
+                    : 'sem-excel'
+              )
             }
           >
             Excel
@@ -547,16 +621,143 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
             disabled={
               periodMode === 'monthly'
                 ? !summary || summary.rows.length === 0
-                : !semesterSummary || semesterSummary.rows.length === 0
+                : periodMode === 'annual'
+                  ? !annualSummary || annualSummary.rows.length === 0
+                  : !semesterSummary || semesterSummary.rows.length === 0
             }
-            onClick={() => setPendingExportType(periodMode === 'monthly' ? 'pdf' : 'sem-pdf')}
+            onClick={() =>
+              setPendingExportType(
+                periodMode === 'monthly'
+                  ? 'pdf'
+                  : periodMode === 'annual'
+                    ? 'annual-pdf'
+                    : 'sem-pdf'
+              )
+            }
           >
             PDF
           </AppleButton>
         </div>
       </div>
 
-      {periodMode !== 'monthly' ? (
+      {periodMode === 'annual' ? (
+        !annualSummary || annualSummary.rows.length === 0 ? (
+          <EmptyState
+            icon={<BarChart3 size={28} />}
+            title="មិនទាន់មានសិស្សសកម្មសម្រាប់ប្រចាំឆ្នាំទេ"
+            hint="សូមពិនិត្យបញ្ជីសិស្ស ឬបញ្ចូលពិន្ទុឆមាសជាមុនសិន។"
+            actionLabel="ទៅកាន់ បញ្ជីពិន្ទុ"
+            onAction={() => setActiveView('scores')}
+          />
+        ) : (
+          <AppleCard noPadding>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7]">
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center w-10">
+                      ល.រ
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-3 py-2 text-left min-w-[160px]">
+                      គោត្តនាម-នាម
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center">
+                      ភេទ
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      ឆមាសទី ១
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      ឆមាសទី ២
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      មធ្យមឆ្នាំ
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      ចំណាត់ថ្នាក់
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      និទ្ទេស
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      លទ្ធផល
+                    </th>
+                    <th colSpan={3} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1 text-center">
+                      ចំនួនអវត្តមាន
+                    </th>
+                    <th rowSpan={2} className="border-b border-black/[0.08] dark:border-white/[0.1] px-3 py-2 text-left">
+                      ផ្សេងៗ
+                    </th>
+                  </tr>
+                  <tr className="bg-[#fafafa] dark:bg-white/[0.04] text-[11px]">
+                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1 text-center">ច្ប</th>
+                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1 text-center">អ.ច្ប</th>
+                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1 text-center">សរុប</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {annualSummary.rows.map((r, idx) => (
+                    <tr
+                      key={r.student.id ?? idx}
+                      className="border-b border-black/[0.06] dark:border-white/[0.06] last:border-b-0 hover:bg-[#f5f5f7]/60 dark:hover:bg-white/[0.03]"
+                    >
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center text-[#86868b]">
+                        {fmt(idx + 1)}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-3 py-2 font-medium whitespace-nowrap">
+                        {r.student.nameKm}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-2 text-center">
+                        {r.student.gender === 'ប្រុស' ? 'ប' : 'ស'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center">
+                        {r.sem1Avg !== null ? fmt(formatAverage(r.sem1Avg, scoreConfig.averageDecimalMode)) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center">
+                        {r.sem2Avg !== null ? fmt(formatAverage(r.sem2Avg, scoreConfig.averageDecimalMode)) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center font-semibold">
+                        {r.annualAvg !== null ? fmt(formatAverage(r.annualAvg, scoreConfig.averageDecimalMode)) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center font-bold text-[#ff3b30]">
+                        {r.rank !== null ? fmt(r.rank) : '—'}
+                      </td>
+                      <td
+                        className={`border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center font-bold ${
+                          r.grade ? GRADE_COLOR_CLASSES[r.grade] : ''
+                        }`}
+                      >
+                        {r.grade ?? '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center">
+                        {r.passed === true ? (
+                          <AppleBadge variant="green" size="sm">ជាប់</AppleBadge>
+                        ) : r.passed === false ? (
+                          <AppleBadge variant="red" size="sm">ធ្លាក់</AppleBadge>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-2 text-center">
+                        {r.attendance.excused > 0 ? fmt(r.attendance.excused) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-2 text-center">
+                        {r.attendance.unexcused > 0 ? fmt(r.attendance.unexcused) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-2 text-center font-medium">
+                        {r.attendance.total > 0 ? fmt(r.attendance.total) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-[#6e6e73] dark:text-[#98989d]">
+                        {r.note || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </AppleCard>
+        )
+      ) : periodMode !== 'monthly' ? (
         !semesterSummary || semesterSummary.rows.length === 0 ? (
           <EmptyState
             icon={<BarChart3 size={28} />}
@@ -849,7 +1050,9 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
           setTargetSemReportRow(null);
         }}
         title={
-          pendingExportType === 'excel' || pendingExportType === 'sem-excel'
+          pendingExportType === 'excel' ||
+          pendingExportType === 'sem-excel' ||
+          pendingExportType === 'annual-excel'
             ? 'នាំចេញលទ្ធផល (Excel)'
             : pendingExportType === 'report-one'
               ? `លទ្ធផលសិក្សា — ${targetReportRow?.student.nameKm ?? ''}`
@@ -957,6 +1160,23 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
             totalStudents={summary.totalStudents}
             scoreConfig={scoreConfig}
             signOptions={printReportData.signOptions}
+            useKhmerDigits={useKhmerNumerals}
+          />
+        </div>
+      )}
+
+      {printAnnualSignOptions && annualSummary && (
+        <div
+          ref={annualStageRef}
+          aria-hidden="true"
+          style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}
+        >
+          <AnnualResultsSheet
+            cls={currentClass}
+            profile={profile}
+            summary={annualSummary}
+            scoreConfig={scoreConfig}
+            signOptions={printAnnualSignOptions}
             useKhmerDigits={useKhmerNumerals}
           />
         </div>

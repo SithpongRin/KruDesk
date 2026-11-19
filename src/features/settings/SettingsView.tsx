@@ -23,6 +23,7 @@ import { useAppStore } from '../../store/useAppStore';
 import {
   DEFAULT_ATTENDANCE_CONFIG,
   DEFAULT_SCORE_CONFIG,
+  type AbsenceFailCountType,
   type AttendanceConfig,
   type AverageDecimalMode,
   type Profile,
@@ -730,6 +731,58 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
                 បង្គត់
               </option>
             </select>
+          </div>
+
+          <div className="pt-3 border-t border-black/[0.06] dark:border-white/[0.08] grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label
+                htmlFor="score-absence-fail-limit"
+                className="block text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
+              >
+                ចំនួនអវត្តមានអតិបរមាក្នុងមួយឆ្នាំ
+              </label>
+              <input
+                id="score-absence-fail-limit"
+                type="number"
+                min={0}
+                value={scoreConfig.absenceFailLimit ?? 30}
+                onChange={(e) => {
+                  const raw = e.target.value.trim();
+                  const val = raw === '' ? 0 : Math.max(0, Math.floor(Number(raw) || 0));
+                  updateScoreConfig({ absenceFailLimit: val });
+                }}
+                className="w-full px-3 py-2 rounded-xl text-xs bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7] border border-black/[0.08] dark:border-white/[0.1] focus:outline-none focus:ring-2 focus:ring-[#0071e3]"
+              />
+              <span className="block text-[11px] text-[#86868b] mt-1">
+                កំណត់ ០ ឬទទេ ដើម្បីបិទលក្ខខណ្ឌធ្លាក់ដោយសារអវត្តមាន
+              </span>
+            </div>
+
+            <div>
+              <label
+                htmlFor="score-absence-fail-type"
+                className="block text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
+              >
+                របៀបរាប់អវត្តមានប្រចាំឆ្នាំ
+              </label>
+              <select
+                id="score-absence-fail-type"
+                value={scoreConfig.absenceFailCountType ?? 'unexcused'}
+                onChange={(e) =>
+                  updateScoreConfig({
+                    absenceFailCountType: e.target.value as AbsenceFailCountType,
+                  })
+                }
+                className="w-full px-3 py-2 rounded-xl text-xs font-medium bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7] border border-black/[0.08] dark:border-white/[0.1] focus:outline-none focus:ring-2 focus:ring-[#0071e3]"
+              >
+                <option value="unexcused" className="dark:bg-[#1c1c1e]">
+                  រាប់តែអវត្តមានអត់ច្បាប់
+                </option>
+                <option value="all" className="dark:bg-[#1c1c1e]">
+                  រាប់អវត្តមានទាំងអស់ (ច្ប + អ.ច្ប)
+                </option>
+              </select>
+            </div>
           </div>
 
           <div className="pt-3 border-t border-black/[0.06] dark:border-white/[0.08]">

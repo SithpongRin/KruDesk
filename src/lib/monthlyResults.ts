@@ -461,3 +461,166 @@ export function computeSemesterResults(params: {
     takenDaysCount,
   };
 }
+
+export function annualResult(
+  annualAvg: number | null,
+  attendance: Pick<StudentMonthlyAttendance, 'excused' | 'unexcused' | 'total'>,
+  config: Pick<ScoreConfig, 'absenceFailLimit' | 'absenceFailCountType'>
+): { passed: boolean | null; failedByAbsenceOnly: boolean } {
+  if (annualAvg === null || !Number.isFinite(annualAvg)) {
+    return { passed: null, failedByAbsenceOnly: false };
+  }
+  const limit = config.absenceFailLimit ?? 30;
+  const countType = config.absenceFailCountType ?? 'unexcused';
+  const counted = countType === 'all' ? attendance.total : attendance.unexcused;
+  const avgPassed = annualAvg >= 25;
+  const overAbsenceLimit = limit > 0 && counted > limit;
+
+  if (!avgPassed) {
+    return { passed: false, failedByAbsenceOnly: false };
+  }
+  if (overAbsenceLimit) {
+    return { passed: false, failedByAbsenceOnly: true };
+  }
+  return { passed: true, failedByAbsenceOnly: false };
+}
+
+export interface AnnualResultRow {
+  student: Student;
+  sem1Avg: number | null;
+  sem2Avg: number | null;
+  annualAvg: number | null;
+  rank: number | null;
+  grade: ScoreGrade | null;
+  passed: boolean | null;
+  failedByAbsenceOnly: boolean;
+  attendance: StudentMonthlyAttendance;
+  note: string;
+}
+
+export interface AnnualResultsSummary {
+  rows: AnnualResultRow[];
+  totalStudents: number;
+  femaleStudents: number;
+  gradeCounts: Record<ScoreGrade, GradeCountPair>;
+  failedCount: GradeCountPair;
+}
+
+export function computeAnnualResults(params: {
+  students: Student[];
+  subjects: Subject[];
+  academicYear: string;
+  monthlyRecords: MonthlyScore[];
+  semesterExams: SemesterExam[];
+  attendanceRows: Attendance[];
+  attendanceSessions: AttendanceSession[];
+  scoreConfig: ScoreConfig;
+}): AnnualResultsSummary {
+  const {
+    students,
+    subjects,
+    academicYear,
+    monthlyRecords,
+    semesterExams,
+    attendanceRows,
+    attendanceSessions,
+    scoreConfig,
+  } = params;
+
+  const activeStudents = getActiveStudentsOrdered(students);
+  const orderedSubjects = sortSubjects(subjects);
+
+  const annualSummaries = computeSemesterAnnualSummary({
+    students: activeStudents,
+    subjects: orderedSubjects,
+    academicYear,
+    monthlyRecords,
+    semesterExams,
+    config: scoreConfig,
+  });
+
+  // Whole academic year attendance (all 12 months of the academic year)
+  const yearMonthSet = new Set(
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) =>
+      resolveAcademicMonthKey(academicYear, m)
+    )
+  );
+  const yearAttRows = attendanceRows.filter((a) => yearMonthSet.has(a.date.slice(0, 7)));
+  const yearAttSessions = attendanceSessions.filter((s) =>
+    yearMonthSet.has(s.date.slice(0, 7))
+  );
+  const takenDates = buildTakenDatesSet(yearAttSessions);
+  const attLookup = buildAttendanceLookup(yearAttRows);
+  const countableDays: MonthDayInfo[] = Array.from(takenDates).map((dateKey) => ({
+    dateKey,
+    day: Number(dateKey.split('-')[2]) || 1,
+    weekday: 1,
+    isRestDay: false,
+    isHoliday: false,
+    isNonSchoolDay: false,
+    isFuture: false,
+    isTaken: true,
+    isCountable: true,
+  }));
+
+  const rows: AnnualResultRow[] = annualSummaries
+    .map((sum) => {
+      const sid = sum.student.id ?? -1;
+      const attendance = computeStudentMonthlyAttendance(sid, attLookup, countableDays);
+      const res = annualResult(sum.annualAvg, attendance, scoreConfig);
+      return {
+        student: sum.student,
+        sem1Avg: sum.sem1Avg,
+        sem2Avg: sum.sem2Avg,
+        annualAvg: sum.annualAvg,
+        rank: sum.annualRank,
+        grade: sum.annualGrade,
+        passed: res.passed,
+        failedByAbsenceOnly: res.failedByAbsenceOnly,
+        attendance,
+        note: res.failedByAbsenceOnly ? 'អវត្តមានលើសកំណត់' : '',
+      };
+    })
+    .sort((a, b) => {
+      if (a.rank !== null && b.rank !== null) {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        return compareKhmerNames(a.student.nameKm, b.student.nameKm);
+      }
+      if (a.rank !== null) return -1;
+      if (b.rank !== null) return 1;
+      return compareKhmerNames(a.student.nameKm, b.student.nameKm);
+    });
+
+  const gradeCounts: Record<ScoreGrade, GradeCountPair> = {
+    A: { total: 0, female: 0 },
+    B: { total: 0, female: 0 },
+    C: { total: 0, female: 0 },
+    D: { total: 0, female: 0 },
+    E: { total: 0, female: 0 },
+    F: { total: 0, female: 0 },
+  };
+  let femaleStudents = 0;
+  let failedTotal = 0;
+  let failedFemale = 0;
+
+  for (const r of rows) {
+    const isFemale = r.student.gender === 'ស្រី';
+    if (isFemale) femaleStudents++;
+    if (r.grade) {
+      gradeCounts[r.grade].total++;
+      if (isFemale) gradeCounts[r.grade].female++;
+    }
+    if (r.passed === false) {
+      failedTotal++;
+      if (isFemale) failedFemale++;
+    }
+  }
+
+  return {
+    rows,
+    totalStudents: rows.length,
+    femaleStudents,
+    gradeCounts,
+    failedCount: { total: failedTotal, female: failedFemale },
+  };
+}

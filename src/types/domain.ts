@@ -98,11 +98,14 @@ export interface AppSetting {
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 export type AverageDecimalMode = 'truncate' | 'round';
+export type AbsenceFailCountType = 'unexcused' | 'all';
 
 export interface ScoreConfig {
   scale: 10 | 20 | 50 | 100;
   countBlankAsZero: boolean;
   averageDecimalMode?: AverageDecimalMode;
+  absenceFailLimit?: number;
+  absenceFailCountType?: AbsenceFailCountType;
   wMonthly: number;
   wExam: number;
   wSem1: number;
@@ -119,6 +122,8 @@ export const DEFAULT_SCORE_CONFIG: ScoreConfig = {
   scale: 50,
   countBlankAsZero: false,
   averageDecimalMode: 'truncate',
+  absenceFailLimit: 30,
+  absenceFailCountType: 'unexcused',
   wMonthly: 1,
   wExam: 1,
   wSem1: 1,

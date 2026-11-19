@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  annualResult,
   buildStudentReportSubjectRows,
+  computeAnnualResults,
   computeMonthlyResults,
   computeSemesterResults,
   getGradeWord,
@@ -260,5 +262,110 @@ describe('monthlyResults & formatAverage', () => {
 
     // Sorted by rank: r3 (1) -> r2 (2) -> r1 (3)
     expect(sem.rows.map((r) => r.student.id)).toEqual([3, 2, 1]);
+  });
+
+  it('evaluates annualResult absence-limit rule and computes annual summary counts', () => {
+    // 35 unexcused / limit 30 -> fails even with avg 30.36
+    expect(
+      annualResult(30.36, { excused: 2, unexcused: 35, total: 37 }, {
+        absenceFailLimit: 30,
+        absenceFailCountType: 'unexcused',
+      })
+    ).toEqual({ passed: false, failedByAbsenceOnly: true });
+
+    // 29 -> passes; 30 -> passes (strictly greater)
+    expect(
+      annualResult(30.36, { excused: 0, unexcused: 29, total: 29 }, {
+        absenceFailLimit: 30,
+        absenceFailCountType: 'unexcused',
+      })
+    ).toEqual({ passed: true, failedByAbsenceOnly: false });
+    expect(
+      annualResult(30.36, { excused: 0, unexcused: 30, total: 30 }, {
+        absenceFailLimit: 30,
+        absenceFailCountType: 'unexcused',
+      })
+    ).toEqual({ passed: true, failedByAbsenceOnly: false });
+
+    // 'all' mode counts ច្ប + អ.ច្ប (ឈ is inside ច្ប)
+    expect(
+      annualResult(30.36, { excused: 16, unexcused: 15, total: 31 }, {
+        absenceFailLimit: 30,
+        absenceFailCountType: 'all',
+      })
+    ).toEqual({ passed: false, failedByAbsenceOnly: true });
+
+    // limit 0 -> rule off
+    expect(
+      annualResult(30.36, { excused: 0, unexcused: 50, total: 50 }, {
+        absenceFailLimit: 0,
+        absenceFailCountType: 'unexcused',
+      })
+    ).toEqual({ passed: true, failedByAbsenceOnly: false });
+
+    // Low average (< 25) -> fails by score, not failedByAbsenceOnly
+    expect(
+      annualResult(24.99, { excused: 0, unexcused: 35, total: 35 }, {
+        absenceFailLimit: 30,
+        absenceFailCountType: 'unexcused',
+      })
+    ).toEqual({ passed: false, failedByAbsenceOnly: false });
+
+    // Full computeAnnualResults integration: student 1 passes, student 2 fails by absence only
+    const students = [
+      makeStudent(1, 'កែវ សុខា', 'ប្រុស'),
+      makeStudent(2, 'ចាន់ ដារ៉ា', 'ស្រី'),
+    ];
+    const subjects: Subject[] = [
+      { id: 'kh', name: 'ខ្មែរ', maxScore: 50, order: 1 },
+      { id: 'math', name: 'គណិត', maxScore: 50, order: 2 },
+    ];
+    const config = {
+      ...DEFAULT_SCORE_CONFIG,
+      sem1Months: [1],
+      sem2Months: [4],
+      absenceFailLimit: 1,
+      absenceFailCountType: 'unexcused' as const,
+    };
+    const monthlyRecords = [
+      { classId: 1, studentRef: 1, month: '2027-01', scores: { kh: 40, math: 40 } },
+      { classId: 1, studentRef: 1, month: '2027-04', scores: { kh: 40, math: 40 } },
+      { classId: 1, studentRef: 2, month: '2027-01', scores: { kh: 30, math: 30 } },
+      { classId: 1, studentRef: 2, month: '2027-04', scores: { kh: 30, math: 30 } },
+    ];
+    const semesterExams = [
+      { classId: 1, studentRef: 1, semester: 1 as const, scores: { kh: 40, math: 40 } },
+      { classId: 1, studentRef: 1, semester: 2 as const, scores: { kh: 40, math: 40 } },
+      { classId: 1, studentRef: 2, semester: 1 as const, scores: { kh: 30, math: 30 } },
+      { classId: 1, studentRef: 2, semester: 2 as const, scores: { kh: 30, math: 30 } },
+    ];
+    const attendanceRows = [
+      { classId: 1, studentRef: 2, date: '2027-01-05', status: 'អច្ប' as const },
+      { classId: 1, studentRef: 2, date: '2027-04-05', status: 'អច្ប' as const },
+    ];
+    const attendanceSessions = [
+      { classId: 1, date: '2027-01-05', savedAt: 1 },
+      { classId: 1, date: '2027-04-05', savedAt: 2 },
+    ];
+
+    const annual = computeAnnualResults({
+      students,
+      subjects,
+      academicYear: '2026-2027',
+      monthlyRecords,
+      semesterExams,
+      attendanceRows,
+      attendanceSessions,
+      scoreConfig: config,
+    });
+
+    expect(annual.totalStudents).toBe(2);
+    expect(annual.femaleStudents).toBe(1);
+    expect(annual.failedCount).toEqual({ total: 1, female: 1 });
+    expect(annual.gradeCounts.B).toEqual({ total: 1, female: 0 });
+    expect(annual.gradeCounts.D).toEqual({ total: 1, female: 1 });
+    const s2 = annual.rows.find((r) => r.student.id === 2)!;
+    expect(s2.passed).toBe(false);
+    expect(s2.note).toBe('អវត្តមានលើសកំណត់');
   });
 });
