@@ -71,6 +71,7 @@ export interface SemesterStudentSummary {
   sem1ExamScores: Record<string, number | null>;
   sem1SubjectRanks: Record<string, number | null>;
   sem1ExamTotal: number | null;
+  sem1MonthlySum: number | null;
   sem1MonthlyAvg: number | null;
   sem1ExamAvg: number | null;
   sem1Avg: number | null;
@@ -80,6 +81,7 @@ export interface SemesterStudentSummary {
   sem2ExamScores: Record<string, number | null>;
   sem2SubjectRanks: Record<string, number | null>;
   sem2ExamTotal: number | null;
+  sem2MonthlySum: number | null;
   sem2MonthlyAvg: number | null;
   sem2ExamAvg: number | null;
   sem2Avg: number | null;
@@ -424,6 +426,8 @@ export function computeSemesterAnnualSummary(params: {
     examByKey.set(`${ex.studentRef}|${ex.semester}`, ex);
   }
 
+  const sumOf = (vals: number[]): number | null =>
+    vals.length === 0 ? null : vals.reduce((acc, v) => acc + v, 0);
   const meanOf = (vals: number[]): number | null =>
     vals.length === 0 ? null : vals.reduce((acc, v) => acc + v, 0) / vals.length;
 
@@ -449,6 +453,8 @@ export function computeSemesterAnnualSummary(params: {
     const ex1Row = computeScoreRow(ex1?.scores, orderedSubjects, config);
     const ex2Row = computeScoreRow(ex2?.scores, orderedSubjects, config);
 
+    const sem1MonthlySum = sumOf(sem1Avgs);
+    const sem2MonthlySum = sumOf(sem2Avgs);
     const sem1MonthlyAvg = meanOf(sem1Avgs);
     const sem2MonthlyAvg = meanOf(sem2Avgs);
 
@@ -477,12 +483,14 @@ export function computeSemesterAnnualSummary(params: {
       student,
       sem1ExamScores,
       sem1ExamTotal: ex1Row.total,
+      sem1MonthlySum,
       sem1MonthlyAvg,
       sem1ExamAvg: ex1Row.average,
       sem1Avg,
       sem1Grade: gradeFor(sem1Avg),
       sem2ExamScores,
       sem2ExamTotal: ex2Row.total,
+      sem2MonthlySum,
       sem2MonthlyAvg,
       sem2ExamAvg: ex2Row.average,
       sem2Avg,

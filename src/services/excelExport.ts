@@ -29,6 +29,7 @@ import type { MonthlyScoreSheetPageData } from '../print/MonthlyScoreSheet';
 import {
   GRADE_ORDER,
   type MonthlyResultsSummary,
+  type SemesterResultsSummary,
 } from '../lib/monthlyResults';
 import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
 import { formatMinistryProvince } from '../print/DocumentHeader';
@@ -1491,6 +1492,182 @@ export async function exportMonthlyResultsExcel(params: {
     document: 'លទ្ធផលប្រចាំខែ',
     className: cls.name,
     month,
+    ext: 'xlsx',
+    useKhmerDigits,
+  });
+  triggerBlobDownload(blob, fileName);
+  return fileName;
+}
+
+/**
+ * Exports Semester Results («លទ្ធផលប្រចាំឆមាស») ranked table + grade/attendance summary.
+ */
+export async function exportSemesterResultsExcel(params: {
+  cls: SchoolClass;
+  profile: Profile;
+  summary: SemesterResultsSummary;
+  scoreConfig: ScoreConfig;
+  signOptions: DocumentSignOptions;
+  useKhmerDigits?: boolean;
+}): Promise<string> {
+  const { cls, profile, summary, scoreConfig, signOptions, useKhmerDigits = false } = params;
+
+  const fmt = (val: number | string) =>
+    useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
+
+  const { default: ExcelJS } = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'KruDesk';
+
+  const sheet = workbook.addWorksheet(
+    safeSheetName(`លទ្ធផលឆមាសទី_${summary.semester}_${cls.name}`, `Semester_${summary.semester}`),
+    {
+      pageSetup: {
+        paperSize: 9,
+        orientation: 'portrait',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: { left: 0.3, right: 0.3, top: 0.35, bottom: 0.35, header: 0.15, footer: 0.15 },
+      },
+    }
+  );
+
+  const fontBase: Partial<ExcelJS.Font> = { name: 'Khmer OS Battambang', size: 9.5 };
+  const fontBold: Partial<ExcelJS.Font> = { name: 'Khmer OS Battambang', size: 9.5, bold: true };
+  const thinBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FF334155' } },
+    left: { style: 'thin', color: { argb: 'FF334155' } },
+    bottom: { style: 'thin', color: { argb: 'FF334155' } },
+    right: { style: 'thin', color: { argb: 'FF334155' } },
+  };
+
+  sheet.mergeCells('A1:M1');
+  sheet.getCell('A1').value = `ព្រះរាជាណាចក្រកម្ពុជា — ជាតិ សាសនា ព្រះមហាក្សត្រ`;
+  sheet.getCell('A1').font = { ...fontBold, size: 11 };
+  sheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+
+  sheet.mergeCells('A2:M2');
+  sheet.getCell('A2').value = `មន្ទីរអប់រំ យុវជន និងកីឡា ${formatMinistryProvince(profile.province)} | ${profile.schoolName}`;
+  sheet.getCell('A2').font = fontBase;
+  sheet.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
+
+  sheet.mergeCells('A3:M3');
+  sheet.getCell('A3').value = `តារាងលទ្ធផលពិន្ទុសិស្សថ្នាក់ទី ${cls.name} ប្រចាំឆមាសទី ${toKhmerNumerals(summary.semester)} (ឆ្នាំសិក្សា ${toKhmerNumerals(cls.academicYear)})`;
+  sheet.getCell('A3').font = { ...fontBold, size: 11 };
+  sheet.getCell('A3').alignment = { horizontal: 'center', vertical: 'middle' };
+
+  sheet.addRow([]);
+
+  const rH1 = 5;
+  const rH2 = 6;
+  const singleHeaders: Array<{ col: number; label: string }> = [
+    { col: 1, label: 'ល.រ' },
+    { col: 2, label: 'គោត្តនាម-នាម' },
+    { col: 3, label: 'ភេទ' },
+    { col: 4, label: 'មធ្យមប្រលង' },
+    { col: 5, label: 'មធ្យមខែ' },
+    { col: 6, label: 'មធ្យមឆមាស' },
+    { col: 7, label: 'ចំណាត់ថ្នាក់' },
+    { col: 8, label: 'និទ្ទេស' },
+    { col: 9, label: 'លទ្ធផល' },
+    { col: 13, label: 'ផ្សេងៗ' },
+  ];
+  for (const h of singleHeaders) {
+    sheet.mergeCells(rH1, h.col, rH2, h.col);
+    sheet.getCell(rH1, h.col).value = h.label;
+  }
+  sheet.mergeCells(rH1, 10, rH1, 12);
+  sheet.getCell(rH1, 10).value = 'ចំនួនអវត្តមាន';
+  sheet.getCell(rH2, 10).value = 'ច្ប';
+  sheet.getCell(rH2, 11).value = 'អ.ច្ប';
+  sheet.getCell(rH2, 12).value = 'សរុប';
+
+  for (let r = rH1; r <= rH2; r++) {
+    for (let c = 1; c <= 13; c++) {
+      const cell = sheet.getCell(r, c);
+      cell.font = fontBold;
+      cell.border = thinBorder;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    }
+  }
+
+  const fmtAvgCell = (v: number | null) => {
+    if (v === null) return '';
+    const s = formatAverage(v, scoreConfig.averageDecimalMode);
+    return useKhmerDigits ? fmt(s) : Number(s);
+  };
+
+  summary.rows.forEach((row, idx) => {
+    const r = sheet.addRow([
+      fmt(idx + 1),
+      row.student.nameKm,
+      row.student.gender === 'ប្រុស' ? 'ប' : 'ស',
+      fmtAvgCell(row.examAvg),
+      fmtAvgCell(row.monthlyAvg),
+      fmtAvgCell(row.semesterAvg),
+      row.rank !== null ? (useKhmerDigits ? fmt(row.rank) : row.rank) : '',
+      row.grade ?? '',
+      row.passed === true ? 'ជាប់' : row.passed === false ? 'ធ្លាក់' : '',
+      useKhmerDigits ? fmt(row.attendance.excused) : row.attendance.excused,
+      useKhmerDigits ? fmt(row.attendance.unexcused) : row.attendance.unexcused,
+      useKhmerDigits ? fmt(row.attendance.total) : row.attendance.total,
+      row.note,
+    ]);
+    r.eachCell((cell, colNum) => {
+      cell.font = colNum === 7 ? { ...fontBold, color: { argb: 'FFDC2626' } } : fontBase;
+      cell.border = thinBorder;
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: colNum === 2 || colNum === 13 ? 'left' : 'center',
+      };
+    });
+  });
+
+  sheet.addRow([]);
+  sheet.addRow([
+    `ចំនួនសិស្សសរុប: ${fmt(summary.totalStudents)} នាក់, ស្រី: ${fmt(summary.femaleStudents)} នាក់`,
+  ]);
+  for (let i = 0; i < GRADE_ORDER.length; i += 2) {
+    const g1 = GRADE_ORDER[i];
+    const g2 = GRADE_ORDER[i + 1];
+    sheet.addRow([
+      `-និទ្ទេស ${g1}: ${fmt(summary.gradeCounts[g1].total)} នាក់, ស្រី ${fmt(summary.gradeCounts[g1].female)} នាក់`,
+      '',
+      '',
+      '',
+      g2
+        ? `-និទ្ទេស ${g2}: ${fmt(summary.gradeCounts[g2].total)} នាក់, ស្រី ${fmt(summary.gradeCounts[g2].female)} នាក់`
+        : '',
+    ]);
+  }
+  sheet.addRow([
+    `សិស្សមិនមករៀនសោះក្នុងឆមាស: ${fmt(summary.absentAllSemester.total)} នាក់, ស្រី ${fmt(summary.absentAllSemester.female)} នាក់`,
+  ]);
+
+  sheet.addRow([]);
+  const lunarLine = signOptions.lunarDate || 'ថ្ងៃ…………… ខែ………… ឆ្នាំ………… ព.ស. ២៥……';
+  const gregLine = formatDocumentGregorianDate(signOptions.place, signOptions.gregorianDate);
+  sheet.addRow(['', 'បានឃើញ និងឯកភាព', '', '', '', '', '', '', lunarLine]);
+  sheet.addRow(['', lunarLine, '', '', '', '', '', '', gregLine]);
+  sheet.addRow(['', gregLine, '', '', '', '', '', '', 'គ្រូបន្ទុកថ្នាក់']);
+  sheet.addRow(['', 'នាយក/នាយិកាសាលា']);
+  sheet.addRow([]);
+  sheet.addRow(['', profile.directorName, '', '', '', '', '', '', profile.teacherName]);
+
+  [5, 22, 6, 11, 11, 11, 10, 8, 9, 6, 7, 7, 14].forEach((w, i) => {
+    sheet.getColumn(i + 1).width = w;
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const fileName = buildExportFileName({
+    document: `លទ្ធផលឆមាសទី_${summary.semester}`,
+    className: cls.name,
+    year: cls.academicYear,
     ext: 'xlsx',
     useKhmerDigits,
   });

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildStudentReportSubjectRows,
   computeMonthlyResults,
+  computeSemesterResults,
   getGradeWord,
   orderReportRows,
   resolveSemesterForMonth,
@@ -169,5 +170,95 @@ describe('monthlyResults & formatAverage', () => {
     expect(getGradeWord('F')).toBe('ខ្សោយ');
     expect(getGradeWord('A', { A: 'ឆ្នើម' })).toBe('ឆ្នើម');
     expect(getGradeWord(null)).toBe('');
+  });
+
+  it('computes semester results matching sample 05 numbers (divisor 16) with truncation and certificate counts', () => {
+    // 16 = divisor -> total maxScore = 800 (e.g., 16 subjects * 50, or 8 subjects * 100)
+    const subjects16: Subject[] = Array.from({ length: 16 }, (_, i) => ({
+      id: `s${i + 1}`,
+      name: `មុខវិជ្ជា ${i + 1}`,
+      maxScore: 50,
+      order: i + 1,
+    }));
+
+    const students = [
+      makeStudent(1, 'កែវ សុខា', 'ប្រុស'), // exam 527, monthly sum 66.75 / 2 -> 32.93, 33.37, 33.15, D
+      makeStudent(2, 'ចាន់ ដារ៉ា', 'ស្រី'), // exam 608, monthly sum 65.00 / 2 -> 38.00, 32.50, 35.25, C
+      makeStudent(3, 'នួន ម៉ាលី', 'ស្រី'), // exam 661, monthly sum 77.9375 / 2 -> 41.31, 38.96, 40.14, B
+    ];
+
+    const makeScores = (total: number): Record<string, number> => {
+      const rec: Record<string, number> = {};
+      const base = Math.floor(total / 16);
+      let rem = total - base * 16;
+      for (let i = 1; i <= 16; i++) {
+        const add = rem > 0 ? Math.min(50 - base, rem) : 0;
+        rec[`s${i}`] = base + add;
+        rem -= add;
+      }
+      return rec;
+    };
+
+    const config: typeof DEFAULT_SCORE_CONFIG = {
+      ...DEFAULT_SCORE_CONFIG,
+      sem1Months: [1, 2],
+      sem2Months: [4, 5],
+    };
+
+    // Monthly totals corresponding to monthly averages:
+    // Student 1: 33.375 * 16 = 534 each month -> sum = 66.75
+    // Student 2: 32.50 * 16 = 520 each month -> sum = 65.00
+    // Student 3: 38.96875 * 16 = 623.5 each month -> sum = 77.9375
+    const monthlyRecords = [
+      { classId: 1, studentRef: 1, month: '2027-01', scores: makeScores(534) },
+      { classId: 1, studentRef: 1, month: '2027-02', scores: makeScores(534) },
+      { classId: 1, studentRef: 2, month: '2027-01', scores: makeScores(520) },
+      { classId: 1, studentRef: 2, month: '2027-02', scores: makeScores(520) },
+      { classId: 1, studentRef: 3, month: '2027-01', scores: { ...makeScores(623), s1: (makeScores(623).s1 ?? 0) + 0.5 } },
+      { classId: 1, studentRef: 3, month: '2027-02', scores: { ...makeScores(623), s1: (makeScores(623).s1 ?? 0) + 0.5 } },
+    ];
+
+    const semesterExams = [
+      { classId: 1, studentRef: 1, semester: 1 as const, scores: makeScores(527) },
+      { classId: 1, studentRef: 2, semester: 1 as const, scores: makeScores(608) },
+      { classId: 1, studentRef: 3, semester: 1 as const, scores: makeScores(661) },
+    ];
+
+    const sem = computeSemesterResults({
+      students,
+      subjects: subjects16,
+      academicYear: '2026-2027',
+      semester: 1,
+      monthlyRecords,
+      semesterExams,
+      attendanceRows: [{ classId: 1, studentRef: 1, date: '2027-01-05', status: 'ច្ប' }],
+      attendanceSessions: [{ classId: 1, date: '2027-01-05', savedAt: 1 }],
+      scoreConfig: config,
+    });
+
+    const byId = new Map(sem.rows.map((r) => [r.student.id, r]));
+    const r1 = byId.get(1)!;
+    const r2 = byId.get(2)!;
+    const r3 = byId.get(3)!;
+
+    expect(formatAverage(r1.examAvg)).toBe('32.93');
+    expect(formatAverage(r1.monthlyAvg)).toBe('33.37');
+    expect(formatAverage(r1.semesterAvg)).toBe('33.15');
+    expect(r1.grade).toBe('D');
+    expect(r1.attendance.excused).toBe(1);
+    expect(r1.certificatesCount).toBe(2); // rank 2 in both months
+
+    expect(formatAverage(r2.examAvg)).toBe('38.00');
+    expect(formatAverage(r2.monthlyAvg)).toBe('32.50');
+    expect(formatAverage(r2.semesterAvg)).toBe('35.25');
+    expect(r2.grade).toBe('C');
+
+    expect(formatAverage(r3.examAvg)).toBe('41.31');
+    expect(formatAverage(r3.monthlyAvg)).toBe('38.96');
+    expect(formatAverage(r3.semesterAvg)).toBe('40.14');
+    expect(r3.grade).toBe('B');
+
+    // Sorted by rank: r3 (1) -> r2 (2) -> r1 (3)
+    expect(sem.rows.map((r) => r.student.id)).toEqual([3, 2, 1]);
   });
 });

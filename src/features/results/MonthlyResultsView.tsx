@@ -17,16 +17,20 @@ import { formatKhmerMonthYear, resolveAcademicMonthKey } from '../../lib/khmerDa
 import { buildExportFileName } from '../../lib/exportFilename';
 import {
   computeMonthlyResults,
+  computeSemesterResults,
   GRADE_COLOR_CLASSES,
   GRADE_ORDER,
   orderReportRows,
   type MonthlyResultRow,
   type ReportOrderMode,
+  type SemesterResultRow,
 } from '../../lib/monthlyResults';
+import { compareKhmerNames } from '../../lib/khmerSort';
 import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
 import { AppleCard } from '../../components/common/AppleCard';
 import { AppleButton } from '../../components/common/AppleButton';
 import { AppleBadge } from '../../components/common/AppleBadge';
+import { AppleSegmentedControl } from '../../components/common/AppleSegmentedControl';
 import { EmptyState } from '../../components/common/EmptyState';
 import { DocumentSignDialog } from '../../components/common/DocumentSignDialog';
 import type { DocumentSignOptions } from '../../print/DocumentSignature';
@@ -35,14 +39,22 @@ import {
   StudentReportSheet,
   type StudentReportEntry,
 } from '../../print/StudentReportSheet';
-import { exportMonthlyResultsExcel } from '../../services/excelExport';
+import { SemesterResultsSheet } from '../../print/SemesterResultsSheet';
+import { SemesterReportSheet } from '../../print/SemesterReportSheet';
+import {
+  exportMonthlyResultsExcel,
+  exportSemesterResultsExcel,
+} from '../../services/excelExport';
 import { ensurePrintFontsReady, exportPrintNodesToPdf, nextPaint } from '../../services/pdfExport';
 
 interface MonthlyResultsViewProps {
   profile: Profile;
 }
 
+type PeriodMode = 'monthly' | 'sem1' | 'sem2';
+
 export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile }) => {
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('monthly');
   const {
     selectedClassId,
     setSelectedClassId,
@@ -155,28 +167,168 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
     };
   }, [currentClass?.id, academicMonthOptions, selectedMonth, setSelectedMonth]);
 
+  const semesterData = useLiveQuery(async () => {
+    if (!currentClass?.id || periodMode === 'monthly') return null;
+    const classId = currentClass.id;
+    const [students, monthlyRecords, semesterExams, attendanceRows, attendanceSessions] =
+      await Promise.all([
+        db.students.where('classId').equals(classId).toArray(),
+        db.monthlyScores
+          .where('[classId+month]')
+          .between([classId, Dexie.minKey], [classId, Dexie.maxKey])
+          .toArray(),
+        db.semesterExams
+          .where('[classId+semester]')
+          .between([classId, Dexie.minKey], [classId, Dexie.maxKey])
+          .toArray(),
+        db.attendance.where('classId').equals(classId).toArray(),
+        db.attendanceSessions.where('classId').equals(classId).toArray(),
+      ]);
+    return { students, monthlyRecords, semesterExams, attendanceRows, attendanceSessions };
+  }, [currentClass?.id, periodMode]);
+
+  const semesterSummary = useMemo(() => {
+    if (!currentClass || !semesterData || periodMode === 'monthly') return null;
+    return computeSemesterResults({
+      students: semesterData.students,
+      subjects: currentClass.subjects,
+      academicYear: currentClass.academicYear,
+      semester: periodMode === 'sem1' ? 1 : 2,
+      monthlyRecords: semesterData.monthlyRecords,
+      semesterExams: semesterData.semesterExams,
+      attendanceRows: semesterData.attendanceRows,
+      attendanceSessions: semesterData.attendanceSessions,
+      scoreConfig,
+    });
+  }, [currentClass, semesterData, periodMode, scoreConfig]);
+
   const [pendingExportType, setPendingExportType] = useState<
-    'pdf' | 'excel' | 'report-all' | 'report-one' | null
+    | 'pdf'
+    | 'excel'
+    | 'report-all'
+    | 'report-one'
+    | 'sem-pdf'
+    | 'sem-excel'
+    | 'sem-report-all'
+    | 'sem-report-one'
+    | null
   >(null);
   const [targetReportRow, setTargetReportRow] = useState<MonthlyResultRow | null>(null);
+  const [targetSemReportRow, setTargetSemReportRow] = useState<SemesterResultRow | null>(null);
   const [reportOrder, setReportOrder] = useState<ReportOrderMode>('rank');
   const [printSignOptions, setPrintSignOptions] = useState<DocumentSignOptions | null>(null);
   const [printReportData, setPrintReportData] = useState<{
     entries: StudentReportEntry[];
     signOptions: DocumentSignOptions;
   } | null>(null);
+  const [printSemSignOptions, setPrintSemSignOptions] = useState<DocumentSignOptions | null>(null);
+  const [printSemReportData, setPrintSemReportData] = useState<{
+    rows: SemesterResultRow[];
+    signOptions: DocumentSignOptions;
+  } | null>(null);
   const pdfStageRef = useRef<HTMLDivElement>(null);
   const reportStageRef = useRef<HTMLDivElement>(null);
+  const semStageRef = useRef<HTMLDivElement>(null);
+  const semReportStageRef = useRef<HTMLDivElement>(null);
 
   const handleConfirmExport = async (signOptions: DocumentSignOptions) => {
-    if (!currentClass || !summary || !monthData) return;
+    if (!currentClass) return;
     const mode = pendingExportType;
     const singleRow = targetReportRow;
+    const singleSemRow = targetSemReportRow;
     setPendingExportType(null);
     setTargetReportRow(null);
+    setTargetSemReportRow(null);
     if (!mode) return;
 
     try {
+      if (mode === 'sem-excel' && semesterSummary) {
+        const fileName = await exportSemesterResultsExcel({
+          cls: currentClass,
+          profile,
+          summary: semesterSummary,
+          scoreConfig,
+          signOptions,
+          useKhmerDigits: useKhmerNumerals,
+        });
+        addToast({ type: 'success', title: 'នាំចេញ Excel ជោគជ័យ!', message: fileName });
+        return;
+      }
+
+      if (mode === 'sem-pdf' && semesterSummary) {
+        setPrintSemSignOptions(signOptions);
+        await new Promise((r) => setTimeout(r, 80));
+        await nextPaint();
+        await ensurePrintFontsReady();
+        const stage = semStageRef.current;
+        if (!stage) return;
+        const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
+        const fileName = buildExportFileName({
+          document: `លទ្ធផលឆមាសទី_${semesterSummary.semester}`,
+          className: currentClass.name,
+          year: currentClass.academicYear,
+          ext: 'pdf',
+          useKhmerDigits: useKhmerNumerals,
+        });
+        await exportPrintNodesToPdf(pageNodes, {
+          fileName,
+          orientation: 'portrait',
+          pixelRatio: 3,
+        });
+        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+        return;
+      }
+
+      if ((mode === 'sem-report-one' || mode === 'sem-report-all') && semesterSummary) {
+        const rankedRows = semesterSummary.rows.filter((r) => r.rank !== null);
+        const selectedRows =
+          mode === 'sem-report-one'
+            ? singleSemRow
+              ? [singleSemRow]
+              : []
+            : reportOrder === 'rank'
+              ? rankedRows
+              : [...rankedRows].sort(
+                  (a, b) =>
+                    a.student.order - b.student.order ||
+                    compareKhmerNames(a.student.nameKm, b.student.nameKm)
+                );
+        if (selectedRows.length === 0) {
+          addToast({
+            type: 'error',
+            title: 'គ្មានទិន្នន័យពិន្ទុ',
+            message: 'មិនទាន់មានសិស្សដែលមានពិន្ទុសម្រាប់បង្កើតលទ្ធផលឆមាសទេ។',
+          });
+          return;
+        }
+        setPrintSemReportData({ rows: selectedRows, signOptions });
+        await new Promise((r) => setTimeout(r, 80));
+        await nextPaint();
+        await ensurePrintFontsReady();
+        const stage = semReportStageRef.current;
+        if (!stage) return;
+        const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
+        const fileName =
+          mode === 'sem-report-one' && singleSemRow
+            ? `លទ្ធផលឆមាសទី_${semesterSummary.semester}_${singleSemRow.student.nameKm}.pdf`
+            : buildExportFileName({
+                document: `លទ្ធផលសិក្សាឆមាសទី_${semesterSummary.semester}`,
+                className: currentClass.name,
+                year: currentClass.academicYear,
+                ext: 'pdf',
+                useKhmerDigits: useKhmerNumerals,
+              });
+        await exportPrintNodesToPdf(pageNodes, {
+          fileName,
+          orientation: 'portrait',
+          pixelRatio: 3,
+        });
+        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+        return;
+      }
+
+      if (!summary || !monthData) return;
+
       if (mode === 'excel') {
         const fileName = await exportMonthlyResultsExcel({
           cls: currentClass,
@@ -268,6 +420,8 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
     } finally {
       setPrintSignOptions(null);
       setPrintReportData(null);
+      setPrintSemSignOptions(null);
+      setPrintSemReportData(null);
     }
   };
 
@@ -312,6 +466,17 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <AppleSegmentedControl<PeriodMode>
+            size="sm"
+            value={periodMode}
+            onChange={setPeriodMode}
+            options={[
+              { value: 'monthly', label: 'ប្រចាំខែ' },
+              { value: 'sem1', label: `ឆមាសទី ${fmt(1)}` },
+              { value: 'sem2', label: `ឆមាសទី ${fmt(2)}` },
+            ]}
+          />
+
           {classes.length > 1 && (
             <select
               aria-label="ជ្រើសរើសថ្នាក់"
@@ -327,28 +492,36 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
             </select>
           )}
 
-          <select
-            aria-label="ជ្រើសរើសខែ"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-[#1c1c1e] text-[#1d1d1f] dark:text-[#f5f5f7] border border-black/[0.08] dark:border-white/[0.12]"
-          >
-            {(academicMonthOptions.includes(selectedMonth)
-              ? academicMonthOptions
-              : [selectedMonth, ...academicMonthOptions]
-            ).map((ym) => (
-              <option key={ym} value={ym} className="dark:bg-[#1c1c1e]">
-                {formatKhmerMonthYear(ym, useKhmerNumerals)}
-              </option>
-            ))}
-          </select>
+          {periodMode === 'monthly' && (
+            <select
+              aria-label="ជ្រើសរើសខែ"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-[#1c1c1e] text-[#1d1d1f] dark:text-[#f5f5f7] border border-black/[0.08] dark:border-white/[0.12]"
+            >
+              {(academicMonthOptions.includes(selectedMonth)
+                ? academicMonthOptions
+                : [selectedMonth, ...academicMonthOptions]
+              ).map((ym) => (
+                <option key={ym} value={ym} className="dark:bg-[#1c1c1e]">
+                  {formatKhmerMonthYear(ym, useKhmerNumerals)}
+                </option>
+              ))}
+            </select>
+          )}
 
           <AppleButton
             variant="secondary"
             size="sm"
             icon={<Download size={14} />}
-            disabled={!summary || summary.rows.every((r) => r.rank === null)}
-            onClick={() => setPendingExportType('report-all')}
+            disabled={
+              periodMode === 'monthly'
+                ? !summary || summary.rows.every((r) => r.rank === null)
+                : !semesterSummary || semesterSummary.rows.every((r) => r.rank === null)
+            }
+            onClick={() =>
+              setPendingExportType(periodMode === 'monthly' ? 'report-all' : 'sem-report-all')
+            }
           >
             ទាញយកទាំងអស់
           </AppleButton>
@@ -356,8 +529,14 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
             variant="secondary"
             size="sm"
             icon={<FileSpreadsheet size={14} />}
-            disabled={!summary || summary.rows.length === 0}
-            onClick={() => setPendingExportType('excel')}
+            disabled={
+              periodMode === 'monthly'
+                ? !summary || summary.rows.length === 0
+                : !semesterSummary || semesterSummary.rows.length === 0
+            }
+            onClick={() =>
+              setPendingExportType(periodMode === 'monthly' ? 'excel' : 'sem-excel')
+            }
           >
             Excel
           </AppleButton>
@@ -365,15 +544,147 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
             variant="primary"
             size="sm"
             icon={<FileText size={14} />}
-            disabled={!summary || summary.rows.length === 0}
-            onClick={() => setPendingExportType('pdf')}
+            disabled={
+              periodMode === 'monthly'
+                ? !summary || summary.rows.length === 0
+                : !semesterSummary || semesterSummary.rows.length === 0
+            }
+            onClick={() => setPendingExportType(periodMode === 'monthly' ? 'pdf' : 'sem-pdf')}
           >
             PDF
           </AppleButton>
         </div>
       </div>
 
-      {!summary || summary.rows.length === 0 ? (
+      {periodMode !== 'monthly' ? (
+        !semesterSummary || semesterSummary.rows.length === 0 ? (
+          <EmptyState
+            icon={<BarChart3 size={28} />}
+            title="មិនទាន់មានសិស្សសកម្មសម្រាប់ឆមាសនេះទេ"
+            hint="សូមពិនិត្យបញ្ជីសិស្ស ឬបញ្ចូលពិន្ទុប្រឡងឆមាសជាមុនសិន។"
+            actionLabel="ទៅកាន់ បញ្ជីពិន្ទុ"
+            onAction={() => setActiveView('scores')}
+          />
+        ) : (
+          <AppleCard noPadding>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7]">
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center w-10">
+                      ល.រ
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-3 py-2 text-left min-w-[160px]">
+                      គោត្តនាម-នាម
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center">
+                      ភេទ
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      មធ្យមប្រលង
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      មធ្យមខែ
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      មធ្យមឆមាស
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      ចំណាត់ថ្នាក់
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      និទ្ទេស
+                    </th>
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      លទ្ធផល
+                    </th>
+                    <th colSpan={3} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1 text-center">
+                      ចំនួនអវត្តមាន
+                    </th>
+                    <th rowSpan={2} className="border-b border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      សិក្សាប័ត្រ
+                    </th>
+                  </tr>
+                  <tr className="bg-[#fafafa] dark:bg-white/[0.04] text-[11px]">
+                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1 text-center">ច្ប</th>
+                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1 text-center">អ.ច្ប</th>
+                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1 text-center">សរុប</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {semesterSummary.rows.map((r, idx) => (
+                    <tr
+                      key={r.student.id ?? idx}
+                      className="border-b border-black/[0.06] dark:border-white/[0.06] last:border-b-0 hover:bg-[#f5f5f7]/60 dark:hover:bg-white/[0.03]"
+                    >
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center text-[#86868b]">
+                        {fmt(idx + 1)}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-3 py-2 font-medium whitespace-nowrap">
+                        {r.student.nameKm}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-2 text-center">
+                        {r.student.gender === 'ប្រុស' ? 'ប' : 'ស'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center">
+                        {r.examAvg !== null ? fmt(formatAverage(r.examAvg, scoreConfig.averageDecimalMode)) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center">
+                        {r.monthlyAvg !== null ? fmt(formatAverage(r.monthlyAvg, scoreConfig.averageDecimalMode)) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center font-semibold">
+                        {r.semesterAvg !== null ? fmt(formatAverage(r.semesterAvg, scoreConfig.averageDecimalMode)) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center font-bold text-[#ff3b30]">
+                        {r.rank !== null ? fmt(r.rank) : '—'}
+                      </td>
+                      <td
+                        className={`border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center font-bold ${
+                          r.grade ? GRADE_COLOR_CLASSES[r.grade] : ''
+                        }`}
+                      >
+                        {r.grade ?? '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center">
+                        {r.passed === true ? (
+                          <AppleBadge variant="green" size="sm">ជាប់</AppleBadge>
+                        ) : r.passed === false ? (
+                          <AppleBadge variant="red" size="sm">ធ្លាក់</AppleBadge>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-2 text-center">
+                        {r.attendance.excused > 0 ? fmt(r.attendance.excused) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-2 text-center">
+                        {r.attendance.unexcused > 0 ? fmt(r.attendance.unexcused) : '—'}
+                      </td>
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-2 text-center font-medium">
+                        {r.attendance.total > 0 ? fmt(r.attendance.total) : '—'}
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        <AppleButton
+                          variant="ghost"
+                          size="sm"
+                          icon={<Download size={13} />}
+                          disabled={r.rank === null}
+                          onClick={() => {
+                            setTargetSemReportRow(r);
+                            setPendingExportType('sem-report-one');
+                          }}
+                        >
+                          ទាញយក
+                        </AppleButton>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </AppleCard>
+        )
+      ) : !summary || summary.rows.length === 0 ? (
         <EmptyState
           icon={<BarChart3 size={28} />}
           title="មិនទាន់មានសិស្សសកម្មក្នុងខែនេះទេ"
@@ -535,20 +846,23 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
         onClose={() => {
           setPendingExportType(null);
           setTargetReportRow(null);
+          setTargetSemReportRow(null);
         }}
         title={
-          pendingExportType === 'excel'
-            ? 'នាំចេញលទ្ធផលប្រចាំខែ (Excel)'
+          pendingExportType === 'excel' || pendingExportType === 'sem-excel'
+            ? 'នាំចេញលទ្ធផល (Excel)'
             : pendingExportType === 'report-one'
               ? `លទ្ធផលសិក្សា — ${targetReportRow?.student.nameKm ?? ''}`
-              : pendingExportType === 'report-all'
-                ? 'ទាញយកលទ្ធផលសិក្សាទាំងអស់ (PDF)'
-                : 'នាំចេញលទ្ធផលប្រចាំខែ (PDF)'
+              : pendingExportType === 'sem-report-one'
+                ? `លទ្ធផលឆមាស — ${targetSemReportRow?.student.nameKm ?? ''}`
+                : pendingExportType === 'report-all' || pendingExportType === 'sem-report-all'
+                  ? 'ទាញយកលទ្ធផលសិក្សាទាំងអស់ (PDF)'
+                  : 'នាំចេញលទ្ធផល (PDF)'
         }
         month={selectedMonth}
         onConfirm={handleConfirmExport}
       >
-        {pendingExportType === 'report-all' && (
+        {(pendingExportType === 'report-all' || pendingExportType === 'sem-report-all') && (
           <div>
             <label
               htmlFor="report-order-select"
@@ -572,6 +886,43 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
           </div>
         )}
       </DocumentSignDialog>
+
+      {printSemSignOptions && semesterSummary && (
+        <div
+          ref={semStageRef}
+          aria-hidden="true"
+          style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}
+        >
+          <SemesterResultsSheet
+            cls={currentClass}
+            profile={profile}
+            summary={semesterSummary}
+            scoreConfig={scoreConfig}
+            signOptions={printSemSignOptions}
+            useKhmerDigits={useKhmerNumerals}
+          />
+        </div>
+      )}
+
+      {printSemReportData && semesterSummary && (
+        <div
+          ref={semReportStageRef}
+          aria-hidden="true"
+          style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}
+        >
+          <SemesterReportSheet
+            cls={currentClass}
+            profile={profile}
+            semester={semesterSummary.semester}
+            subjects={currentClass.subjects}
+            rows={printSemReportData.rows}
+            totalStudents={semesterSummary.totalStudents}
+            scoreConfig={scoreConfig}
+            signOptions={printSemReportData.signOptions}
+            useKhmerDigits={useKhmerNumerals}
+          />
+        </div>
+      )}
 
       {printSignOptions && summary && (
         <div

@@ -1,10 +1,16 @@
 import type {
   AbsenceCode,
+  Attendance,
+  AttendanceSession,
+  MonthlyScore,
   ScoreConfig,
+  SemesterExam,
   Student,
   Subject,
 } from '../types/domain';
 import {
+  buildAttendanceLookup,
+  buildTakenDatesSet,
   computeStudentMonthlyAttendance,
   getActiveStudentsOrdered,
   type MonthDayInfo,
@@ -12,13 +18,14 @@ import {
 import {
   computeCompetitionRanks,
   computeScoreRow,
+  computeSemesterAnnualSummary,
   gradeFor,
   isSubjectActive,
   sortSubjects,
   type ScoreGrade,
 } from './grading';
 import { compareKhmerNames } from './khmerSort';
-import { parseYearMonth } from './khmerDate';
+import { parseYearMonth, resolveAcademicMonthKey } from './khmerDate';
 
 export type StudentMonthlyAttendance = ReturnType<typeof computeStudentMonthlyAttendance>;
 
@@ -269,4 +276,188 @@ export function selectTopRankStudents(
   maxRank = 3
 ): MonthlyResultRow[] {
   return rows.filter((r) => r.rank !== null && r.rank <= maxRank);
+}
+
+export interface SemesterResultRow {
+  student: Student;
+  examScores: Record<string, number | null>;
+  examTotal: number | null;
+  examAvg: number | null;
+  monthlySum: number | null;
+  monthlyAvg: number | null;
+  semesterAvg: number | null;
+  rank: number | null;
+  grade: ScoreGrade | null;
+  passed: boolean | null;
+  attendance: StudentMonthlyAttendance;
+  certificatesCount: number;
+  note: string;
+}
+
+export interface SemesterResultsSummary {
+  semester: 1 | 2;
+  rows: SemesterResultRow[];
+  totalStudents: number;
+  femaleStudents: number;
+  gradeCounts: Record<ScoreGrade, GradeCountPair>;
+  absentAllSemester: GradeCountPair;
+  takenDaysCount: number;
+}
+
+export function computeSemesterResults(params: {
+  students: Student[];
+  subjects: Subject[];
+  academicYear: string;
+  semester: 1 | 2;
+  monthlyRecords: MonthlyScore[];
+  semesterExams: SemesterExam[];
+  attendanceRows: Attendance[];
+  attendanceSessions: AttendanceSession[];
+  scoreConfig: ScoreConfig;
+}): SemesterResultsSummary {
+  const {
+    students,
+    subjects,
+    academicYear,
+    semester,
+    monthlyRecords,
+    semesterExams,
+    attendanceRows,
+    attendanceSessions,
+    scoreConfig,
+  } = params;
+
+  const activeStudents = getActiveStudentsOrdered(students);
+  const orderedSubjects = sortSubjects(subjects);
+  const semMonthsNums = semester === 1 ? scoreConfig.sem1Months : scoreConfig.sem2Months;
+  const semMonthKeys = semMonthsNums.map((m) => resolveAcademicMonthKey(academicYear, m));
+  const semMonthSet = new Set(semMonthKeys);
+
+  // Compute semester summary via computeSemesterAnnualSummary
+  const annualSummaries = computeSemesterAnnualSummary({
+    students: activeStudents,
+    subjects: orderedSubjects,
+    academicYear,
+    monthlyRecords,
+    semesterExams,
+    config: scoreConfig,
+  });
+
+  // Count how many months in this semester each student placed rank <= 3
+  const certCounts = new Map<number, number>();
+  for (const mk of semMonthKeys) {
+    const monthScoresMap = new Map<number, Record<string, number | null>>();
+    for (const rec of monthlyRecords) {
+      if (rec.month === mk) monthScoresMap.set(rec.studentRef, rec.scores);
+    }
+    const avgs = activeStudents.map((st) => {
+      const sid = st.id ?? -1;
+      const row = computeScoreRow(monthScoresMap.get(sid), orderedSubjects, scoreConfig);
+      return { id: sid, value: row.average };
+    });
+    const mRanks = computeCompetitionRanks(avgs);
+    for (const [sid, r] of mRanks.entries()) {
+      if (r !== null && r <= 3) {
+        certCounts.set(sid, (certCounts.get(sid) ?? 0) + 1);
+      }
+    }
+  }
+
+  // Filter attendance to the semester's months
+  const semAttRows = attendanceRows.filter((a) => semMonthSet.has(a.date.slice(0, 7)));
+  const semAttSessions = attendanceSessions.filter((s) => semMonthSet.has(s.date.slice(0, 7)));
+  const takenDates = buildTakenDatesSet(semAttSessions);
+  const attLookup = buildAttendanceLookup(semAttRows);
+  const countableDays: MonthDayInfo[] = Array.from(takenDates).map((dateKey) => ({
+    dateKey,
+    day: Number(dateKey.split('-')[2]) || 1,
+    weekday: 1,
+    isRestDay: false,
+    isHoliday: false,
+    isNonSchoolDay: false,
+    isFuture: false,
+    isTaken: true,
+    isCountable: true,
+  }));
+
+  // Map exam raw scores and notes by studentRef
+  const examByStudent = new Map<number, SemesterExam>();
+  for (const ex of semesterExams) {
+    if (ex.semester === semester) examByStudent.set(ex.studentRef, ex);
+  }
+
+  const rows: SemesterResultRow[] = annualSummaries
+    .map((sum) => {
+      const sid = sum.student.id ?? -1;
+      const examTotal = semester === 1 ? sum.sem1ExamTotal : sum.sem2ExamTotal;
+      const examAvg = semester === 1 ? sum.sem1ExamAvg : sum.sem2ExamAvg;
+      const monthlySum = semester === 1 ? sum.sem1MonthlySum : sum.sem2MonthlySum;
+      const monthlyAvg = semester === 1 ? sum.sem1MonthlyAvg : sum.sem2MonthlyAvg;
+      const semesterAvg = semester === 1 ? sum.sem1Avg : sum.sem2Avg;
+      const rank = semester === 1 ? sum.sem1Rank : sum.sem2Rank;
+      const grade = semester === 1 ? sum.sem1Grade : sum.sem2Grade;
+      const passed = semesterAvg !== null ? semesterAvg >= 25 : null;
+      const exRec = examByStudent.get(sid);
+
+      return {
+        student: sum.student,
+        examScores: exRec?.scores ?? {},
+        examTotal,
+        examAvg,
+        monthlySum,
+        monthlyAvg,
+        semesterAvg,
+        rank,
+        grade,
+        passed,
+        attendance: computeStudentMonthlyAttendance(sid, attLookup, countableDays),
+        certificatesCount: certCounts.get(sid) ?? 0,
+        note: exRec?.note ?? '',
+      };
+    })
+    .sort((a, b) => {
+      if (a.rank !== null && b.rank !== null) {
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        return compareKhmerNames(a.student.nameKm, b.student.nameKm);
+      }
+      if (a.rank !== null) return -1;
+      if (b.rank !== null) return 1;
+      return compareKhmerNames(a.student.nameKm, b.student.nameKm);
+    });
+
+  const gradeCounts: Record<ScoreGrade, GradeCountPair> = {
+    A: { total: 0, female: 0 },
+    B: { total: 0, female: 0 },
+    C: { total: 0, female: 0 },
+    D: { total: 0, female: 0 },
+    E: { total: 0, female: 0 },
+    F: { total: 0, female: 0 },
+  };
+  let femaleStudents = 0;
+  let absentAllTotal = 0;
+  let absentAllFemale = 0;
+  const takenDaysCount = takenDates.size;
+
+  for (const r of rows) {
+    const isFemale = r.student.gender === 'ស្រី';
+    if (isFemale) femaleStudents++;
+    if (r.grade) {
+      gradeCounts[r.grade].total++;
+      if (isFemale) gradeCounts[r.grade].female++;
+    }
+    if (takenDaysCount >= 1 && r.attendance.total >= takenDaysCount) {
+      absentAllTotal++;
+      if (isFemale) absentAllFemale++;
+    }
+  }
+
+  return {
+    semester,
+    rows,
+    totalStudents: rows.length,
+    femaleStudents,
+    gradeCounts,
+    absentAllSemester: { total: absentAllTotal, female: absentAllFemale },
+    takenDaysCount,
+  };
 }
