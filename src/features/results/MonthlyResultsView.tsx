@@ -653,7 +653,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
           <AppleCard noPadding>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-xs">
-                <thead>
+                <thead className="whitespace-nowrap">
                   <tr className="bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7]">
                     <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center w-10">
                       ល.រ
@@ -770,7 +770,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
           <AppleCard noPadding>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-xs">
-                <thead>
+                <thead className="whitespace-nowrap">
                   <tr className="bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7]">
                     <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center w-10">
                       ល.រ
@@ -782,14 +782,10 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                       ភេទ
                     </th>
                     <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center leading-tight">
-                      ខែប្រចាំ
-                      <br />
-                      ឆមាស
+                      ខែប្រចាំឆមាស
                     </th>
                     <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center leading-tight">
-                      ប្រឡង
-                      <br />
-                      ឆមាស
+                      ប្រឡងឆមាស
                     </th>
                     <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
                       ពិន្ទុសរុប
@@ -914,7 +910,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
           <AppleCard noPadding>
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-xs">
-                <thead>
+                <thead className="whitespace-nowrap">
                   <tr className="bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7]">
                     <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center w-10">
                       ល.រ

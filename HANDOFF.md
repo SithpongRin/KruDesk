@@ -3,7 +3,7 @@
 > **ខ្មែរ (សង្ខេប)** ៖ ឯកសារនេះប្រាប់ AI ថ្មី (Claude ឬ Gemini) ពីស្ថានភាពគម្រោង ការសម្រេចចិត្តរបស់គ្រូ
 > វិធានធ្វើការ និងការងារដែលនៅសល់។ ចាប់ផ្ដើមឆាតថ្មីដោយឲ្យ AI អានឯកសារនេះមុនគេ។
 >
-> Last updated: 2026-11-19 · Live commit: `c882a6b` on `main` (check Settings → «អំពីកម្មវិធី»)
+> Last updated: 2026-11-19 · Live commit: see `git log -1` on `main` (check Settings → «អំពីកម្មវិធី»)
 
 ---
 
@@ -99,6 +99,9 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
       merge → 15 active subjects, ids and scores kept, banner gone.
 - [ ] **Teacher's 8A still has the old 11 subjects (math /50, Khmer 50+50)** until they click
       «ប្ដូរតាមគំរូសាលា». Math scores already typed on /50 then count on /100 — teacher must re-check them.
-- [ ] Real PWA update flow not yet fully verified. On the live site (2026-11-19) the service worker
-      registers and «ពិនិត្យរកកំណែថ្មី» answers «អ្នកកំពុងប្រើកំណែចុងក្រោយ»; still to see: the
-      «មានកំណែថ្មី» prompt appearing after the next deploy, and «ធ្វើបច្ចុប្បន្នភាពឥឡូវ» reloading it.
+- [x] **Real PWA update flow (verified on the live site 2026-11-19):** after deploying `f8ba48a`, a tab
+      still on `c882a6b` showed «មានកំណែថ្មី — ចុចដើម្បីធ្វើបច្ចុប្បន្នភាព»; the button loaded the new
+      bundle, «អំពីកម្មវិធី» then showed `f8ba48a`, and the (fake) data was kept.
+- [x] **Screen tables, no wrapping:** subject editor names have a minimum width (`f8ba48a`); the
+      «លទ្ធផលប្រចាំខែ» tables (monthly / semester / annual) use single-line headers
+      («ខែប្រចាំឆមាស», «ប្រឡងឆមាស»). Print layouts are unchanged.
