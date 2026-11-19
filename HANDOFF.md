@@ -3,7 +3,7 @@
 > **ខ្មែរ (សង្ខេប)** ៖ ឯកសារនេះប្រាប់ AI ថ្មី (Claude ឬ Gemini) ពីស្ថានភាពគម្រោង ការសម្រេចចិត្តរបស់គ្រូ
 > វិធានធ្វើការ និងការងារដែលនៅសល់។ ចាប់ផ្ដើមឆាតថ្មីដោយឲ្យ AI អានឯកសារនេះមុនគេ។
 >
-> Last updated: 2026-11-19 · Live commit: `3dda197` on `main`
+> Last updated: 2026-11-19 · Live commit: `c738653` on `main`
 
 ---
 
@@ -20,7 +20,7 @@ daily roll call (បញ្ជីហៅឈ្មោះ), monthly/semester/annual 
 
 ## 2. Stack & layout
 
-React 19 · Vite 6 · TypeScript strict · Tailwind 3 · Dexie 4 (DB version 2) · Zustand · ExcelJS ·
+React 19 · Vite 6 · TypeScript strict · Tailwind 3 · Dexie 4 (DB version 4) · Zustand · ExcelJS ·
 pdf-lib + html-to-image · vite-plugin-pwa (`registerType: 'prompt'`) · Vitest.
 
 ```
@@ -42,7 +42,7 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 | Numbers | Arabic digits by default (Khmer digits optional in Settings); cards keep their own Khmer formatting |
 | Student order | automatic Khmer alphabetical ក–អ (no drag reorder) |
 | Attendance | **only days where the teacher took roll call and pressed «រក្សាទុក» count** (`attendanceSessions`). Untaken days: blank on screen, grey on paper. Codes ច្ប / អច្ប / ឈ; **ឈ is counted inside ច្ប** in totals. Paper columns: ច្ប · អច្ប · សរុប. On screen only: «ចំនួនថ្ងៃបានហៅឈ្មោះ» and per-student «មក» |
-| Subjects | editable per class; presets for grades 7–9 and 10–12. **អក្សរសាស្ត្រខ្មែរ = 100** (សរសេរតាមអាន 50 + តែងសេចក្ដី 50), **គណិតវិទ្យា = 100**, others 50 |
+| Subjects | editable per class; presets for grades 7–9 and 10–12. **អក្សរសាស្ត្រខ្មែរ = 100** (សរសេរតាមអាន 50 + តែងសេចក្ដី 50), **គណិតវិទ្យា = 100**, others 50. `isActive` / `isBonus` per subject; lower-secondary cols 12–15 + `extra_1..3` off (`isActive: false`) by default. Grades A–F shown on screen only (not on paper). Averages not capped at 50 (pending teacher decision) |
 | Khmer group | monthly sheet: two part columns under number 1, no total column. Semester summary: ONE «អក្សរសាស្ត្រខ្មែរ» column (sum of parts) with one rank |
 | Averages | (sum of scores ÷ sum of max) × 50; blank ≠ 0 (configurable); ties share rank (1,2,2,4) |
 | Semesters | S1 = Nov–Feb (+ exam Mar), S2 = Apr–Jun (+ exam Jul); semester avg = (monthly avg + exam avg) ÷ 2; annual = (S1 + S2) ÷ 2 — all configurable. **Not confirmed by an official MoEYS document** |
@@ -75,10 +75,10 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 - [x] **Privacy (done 2026-11-19):** a real 8A attendance PDF was committed once. History was
       rewritten, the GitHub repo was deleted and recreated, and clean `main` was pushed again —
       the old commit no longer exists on GitHub. Pages was re-enabled (`gh-pages` / root).
-- [ ] Roll call on Sundays/future dates shows «មិនទាន់ហៅឈ្មោះ (ព្រាង)» above the «មិនអាចហៅឈ្មោះបានទេ»
-      message — show only the blocking message.
-- [ ] Days migrated from old data show «បានរក្សាទុកនៅ» with the upgrade time — show «(ពីទិន្នន័យចាស់)» instead.
-- [ ] Subject names for preset columns 4, 13, 14 are still placeholders («(កែឈ្មោះ)»).
+- [x] **Roll call blocked days (done in `da602a5`):** Sundays/future/holiday dates now show only the blocking banner without draft badges or draft subtitle.
+- [x] **Migrated attendance display (done in `da602a5`, backup fix in `ba487c0`):** migrated sessions show «បានរក្សាទុក (ពីទិន្នន័យចាស់)» without a timestamp; Dexie v3 + backup restore flag shared `savedAt` sessions.
+- [x] **Stale chunk after deploy (done in `ba487c0`):** `vite:preloadError` and `ErrorBoundary` reload once via `krudesk-chunk-reload` in `sessionStorage`, cleared after healthy app start.
+- [x] **Subject names & lower-secondary scorebook (done in `c738653`):** cols 4, 13, 14 named, `isActive`/`isBonus` added, Dexie v4 + backup restore normalize old preset classes.
 - [ ] Not yet tested by a human: Excel import from a real file, restore from a `.json` file,
       printing on real paper (attendance, scores, cards duplex alignment).
 - [ ] Browser storage is not "persisted" on a normal visit → teachers should install the app and back up weekly.
