@@ -6,6 +6,7 @@ import { formatYearMonth, toLocalDateKey } from '../lib/khmerDate';
 export type ActiveView =
   | 'dashboard'
   | 'students'
+  | 'roster'
   | 'attendance'
   | 'scores'
   | 'cards'

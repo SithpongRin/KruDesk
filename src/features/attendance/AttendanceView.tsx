@@ -689,14 +689,14 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ profile }) => {
       const fileName =
         months.length === 1
           ? buildExportFileName({
-              document: 'បញ្ជីហៅឈ្មោះ',
+              document: 'បញ្ជីវត្តមាន',
               className: cls.name,
               month: months[0],
               ext: 'pdf',
               useKhmerDigits: useKhmerNumerals,
             })
           : buildExportFileName({
-              document: 'បញ្ជីហៅឈ្មោះ',
+              document: 'បញ្ជីវត្តមាន',
               className: cls.name,
               month: `${months.length}ខែ`,
               year: cls.academicYear,
@@ -739,7 +739,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ profile }) => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] font-moul tracking-wide">
-            បញ្ជីហៅឈ្មោះ — ថ្នាក់ទី {currentClass.name}
+            បញ្ជីវត្តមាន — ថ្នាក់ទី {currentClass.name}
           </h1>
           <p className="text-xs text-[#86868b] dark:text-[#98989d] mt-1">
             {formatKhmerMonthYear(selectedMonth, useKhmerNumerals)} · សិស្សកំពុងរៀន{' '}
@@ -1127,7 +1127,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ profile }) => {
       <ExportDialog
         isOpen={isExportOpen}
         onClose={() => setIsExportOpen(false)}
-        title="នាំចេញបញ្ជីហៅឈ្មោះ"
+        title="នាំចេញបញ្ជីវត្តមាន"
         classes={classes}
         defaultClassId={currentClass.id ?? null}
         showMonthPicker={true}

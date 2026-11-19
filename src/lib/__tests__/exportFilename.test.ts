@@ -33,13 +33,22 @@ describe('buildExportFileName', () => {
 
     expect(
       buildExportFileName({
-        document: 'បញ្ជីហៅឈ្មោះ',
+        document: 'បញ្ជីវត្តមាន',
         className: '៧ក',
         month: '3ខែ',
         year: '2026-2027',
         ext: 'xlsx',
         useKhmerDigits: false,
       })
-    ).toBe('បញ្ជីហៅឈ្មោះ_៧ក_3ខែ_2026-2027.xlsx');
+    ).toBe('បញ្ជីវត្តមាន_៧ក_3ខែ_2026-2027.xlsx');
+
+    expect(
+      buildExportFileName({
+        document: 'បញ្ជីហៅឈ្មោះ',
+        className: '៧ក',
+        year: '2026-2027',
+        ext: 'pdf',
+      })
+    ).toBe('បញ្ជីហៅឈ្មោះ_៧ក_2026-2027.pdf');
   });
 });

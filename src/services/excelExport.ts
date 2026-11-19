@@ -215,6 +215,170 @@ export async function exportStudentListExcel(
   return fileName;
 }
 
+/**
+ * Exports class roster («បញ្ជីហៅឈ្មោះ») with parent names/occupations for active students.
+ */
+export async function exportRosterExcel(
+  cls: SchoolClass,
+  students: Student[],
+  profile: Profile,
+  useKhmerDigits = false
+): Promise<string> {
+  const fmt = (val: number | string) =>
+    useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
+  const { default: ExcelJS } = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'KruDesk';
+  const sheet = workbook.addWorksheet(`បញ្ជីហៅឈ្មោះ_${cls.name}`, {
+    pageSetup: {
+      paperSize: 9,
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      margins: {
+        left: 0.35,
+        right: 0.35,
+        top: 0.4,
+        bottom: 0.4,
+        header: 0.2,
+        footer: 0.2,
+      },
+    },
+  });
+
+  const sorted = getActiveStudentsOrdered(students);
+  const maleCount = sorted.filter((s) => s.gender === 'ប្រុស').length;
+  const femaleCount = sorted.filter((s) => s.gender === 'ស្រី').length;
+
+  const fontBase: Partial<ExcelJS.Font> = { name: 'Khmer OS Battambang', size: 10 };
+  const fontBold: Partial<ExcelJS.Font> = { name: 'Khmer OS Battambang', size: 10, bold: true };
+  const thinBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+    left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+    bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
+    right: { style: 'thin', color: { argb: 'FF94A3B8' } },
+  };
+
+  sheet.mergeCells('A1:J1');
+  const title1 = sheet.getCell('A1');
+  title1.value = `${profile.schoolName} — បញ្ជីហៅឈ្មោះ ថ្នាក់ទី ${cls.name}`;
+  title1.font = { name: 'Khmer OS Battambang', size: 13, bold: true };
+  title1.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getRow(1).height = 24;
+
+  sheet.mergeCells('A2:J2');
+  const title2 = sheet.getCell('A2');
+  title2.value = `ឆ្នាំសិក្សា ${fmt(cls.academicYear)}   |   ប្រុស៖ ${fmt(maleCount)} នាក់   ស្រី៖ ${fmt(femaleCount)} នាក់   សរុប៖ ${fmt(sorted.length)} នាក់`;
+  title2.font = { name: 'Khmer OS Battambang', size: 10 };
+  title2.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getRow(2).height = 20;
+
+  sheet.addRow([]);
+
+  const headers = [
+    'ល.រ',
+    'អត្តលេខ',
+    'គោត្តនាម និងនាម',
+    'ភេទ',
+    'ថ្ងៃខែឆ្នាំកំណើត',
+    'ឈ្មោះឪពុក',
+    'មុខរបរ (ឪពុក)',
+    'ឈ្មោះម្តាយ',
+    'មុខរបរ (ម្តាយ)',
+    'ទីកន្លែងរស់នៅបច្ចុប្បន្ន',
+  ];
+
+  const headerRow = sheet.addRow(headers);
+  headerRow.height = 24;
+  headerRow.eachCell((cell) => {
+    cell.font = { ...fontBold, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF163D7E' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = thinBorder;
+  });
+
+  sorted.forEach((s, idx) => {
+    const row = sheet.addRow([
+      fmt(idx + 1),
+      s.studentId,
+      s.nameKm,
+      s.gender,
+      s.dateOfBirth ? fmt(s.dateOfBirth) : '',
+      s.fatherName || '',
+      s.fatherOccupation || '',
+      s.motherName || '',
+      s.motherOccupation || '',
+      s.address || '',
+    ]);
+    row.height = 20;
+    row.eachCell((cell, colNumber) => {
+      cell.font = fontBase;
+      cell.border = thinBorder;
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: [1, 2, 4, 5].includes(colNumber) ? 'center' : 'left',
+        wrapText: true,
+      };
+    });
+  });
+
+  const widths = [6, 14, 22, 8, 15, 18, 16, 18, 16, 28];
+  widths.forEach((w, idx) => {
+    sheet.getColumn(idx + 1).width = w;
+  });
+
+  sheet.pageSetup.printTitlesRow = '1:4';
+
+  sheet.addRow([]);
+  const sigRow1 = sheet.addRow([
+    '',
+    'បានឃើញ និងឯកភាព',
+    '',
+    '',
+    '',
+    '',
+    '',
+    'ធ្វើនៅ…………ថ្ងៃទី………ខែ………ឆ្នាំ………',
+  ]);
+  const sigRow2 = sheet.addRow(['', 'នាយកសាលា', '', '', '', '', '', 'គ្រូបន្ទុកថ្នាក់']);
+  const sigRow3 = sheet.addRow([
+    '',
+    profile.directorName,
+    '',
+    '',
+    '',
+    '',
+    '',
+    profile.teacherName,
+  ]);
+  [sigRow1, sigRow2, sigRow3].forEach((r) => {
+    r.eachCell((cell) => {
+      cell.font = fontBase;
+    });
+  });
+  sigRow2.eachCell((cell) => {
+    cell.font = fontBold;
+  });
+  sigRow3.eachCell((cell) => {
+    cell.font = fontBold;
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  const fileName = buildExportFileName({
+    document: 'បញ្ជីហៅឈ្មោះ',
+    className: cls.name,
+    year: cls.academicYear,
+    ext: 'xlsx',
+    useKhmerDigits,
+  });
+  triggerBlobDownload(blob, fileName);
+  return fileName;
+}
+
 export async function exportAttendanceExcel(params: {
   cls: SchoolClass;
   students: Student[];
@@ -474,14 +638,14 @@ export async function exportAttendanceExcel(params: {
   const fileName =
     monthsData.length === 1
       ? buildExportFileName({
-          document: 'បញ្ជីហៅឈ្មោះ',
+          document: 'បញ្ជីវត្តមាន',
           className: cls.name,
           month: monthsData[0].month,
           ext: 'xlsx',
           useKhmerDigits,
         })
       : buildExportFileName({
-          document: 'បញ្ជីហៅឈ្មោះ',
+          document: 'បញ្ជីវត្តមាន',
           className: cls.name,
           month: `${monthsData.length}ខែ`,
           year: cls.academicYear,

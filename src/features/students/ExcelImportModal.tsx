@@ -123,7 +123,13 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
       maxWidth="4xl"
       footer={
         <>
-          <AppleButton variant="secondary" size="sm" onClick={handleClose} disabled={isImporting}>
+          <AppleButton
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={handleClose}
+            disabled={isImporting}
+          >
             បោះបង់
           </AppleButton>
           <AppleButton

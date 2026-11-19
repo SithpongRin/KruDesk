@@ -38,7 +38,7 @@ export const AttendancePlaceholder: React.FC = () => (
   <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
     <EmptyState
       icon={<CalendarCheck size={28} />}
-      title="បញ្ជីហៅឈ្មោះ"
+      title="បញ្ជីវត្តមាន"
       hint="តារាងវត្តមានប្រចាំខែ បោះពុម្ព A4 និង Export Excel/PDF នឹងរួចរាល់នៅដំណាក់កាលទី ៣។"
     />
   </div>

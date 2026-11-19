@@ -25,8 +25,8 @@ pdf-lib + html-to-image · vite-plugin-pwa (`registerType: 'prompt'`) · Vitest.
 
 ```
 src/app            App shell, ErrorBoundary
-src/features/*     students, attendance, scores, cards, dashboard, settings (lazy-loaded views)
-src/print/*        print layouts (StudentList, Attendance, MonthlyScore, Semester sheets)
+src/features/*     students, roster, attendance, scores, cards, dashboard, settings (lazy-loaded views)
+src/print/*        print layouts (StudentList, Roster, Attendance, MonthlyScore, Semester sheets)
 src/lib/*          pure logic + tests: grading, attendance, khmerDate, khmerSort, exportFilename, provinces
 src/db/*           database.ts (Dexie schema), repos, presets (subject lists)
 src/services/*     backup, excelImport/Export, pdfExport, card renderer (copied from card app)
@@ -41,7 +41,8 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 | Onboarding | teacher name, school, director, province/capital (required), academic year |
 | Numbers | Arabic digits by default (Khmer digits optional in Settings); cards keep their own Khmer formatting |
 | Student order | automatic Khmer alphabetical ក–អ (no drag reorder) |
-| Attendance | **only days where the teacher took roll call and pressed «រក្សាទុក» count** (`attendanceSessions`). Untaken days: blank on screen, grey on paper. Codes ច្ប / អច្ប / ឈ; **ឈ is counted inside ច្ប** in totals. Paper columns: ច្ប · អច្ប · សរុប. On screen only: «ចំនួនថ្ងៃបានហៅឈ្មោះ» and per-student «មក» |
+| Attendance | Called **«បញ្ជីវត្តមាន»** (not «បញ្ជីហៅឈ្មោះ»; action words stay «ហៅឈ្មោះ»). **Only days where the teacher took roll call and pressed «រក្សាទុក» count** (`attendanceSessions`). Untaken days: blank on screen, grey on paper. Codes ច្ប / អច្ប / ឈ; **ឈ is counted inside ច្ប** in totals. Paper columns: ច្ប · អច្ប · សរុប. On screen only: «ចំនួនថ្ងៃបានហៅឈ្មោះ» and per-student «មក» |
+| Roster | **«បញ្ជីហៅឈ្មោះ»** is a read-only class roster with parents' names/occupations & address (`RosterView` + `RosterSheet`), showing active students in ក–អ order |
 | Subjects | editable per class; presets for grades 7–9 and 10–12. **អក្សរសាស្ត្រខ្មែរ = 100** (សរសេរតាមអាន 50 + តែងសេចក្ដី 50), **គណិតវិទ្យា = 100**, others 50. `isActive` / `isBonus` per subject; lower-secondary cols 12–15 + `extra_1..3` off (`isActive: false`) by default. Grades A–F shown on screen only (not on paper). Averages not capped at 50 (pending teacher decision) |
 | Khmer group | monthly sheet: two part columns under number 1, no total column. Semester summary: ONE «អក្សរសាស្ត្រខ្មែរ» column (sum of parts) with one rank |
 | Averages | (sum of scores ÷ sum of max) × 50; blank ≠ 0 (configurable); ties share rank (1,2,2,4) |

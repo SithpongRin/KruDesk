@@ -123,7 +123,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                     style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
                     className="text-[11pt] shrink-0"
                   >
-                    បញ្ជីហៅឈ្មោះ
+                    បញ្ជីវត្តមាន
                   </div>
 
                   <table className="border-collapse text-[8.5pt] shrink-0">

@@ -98,13 +98,20 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
       maxWidth="md"
       footer={
         <>
-          <AppleButton variant="secondary" size="sm" onClick={onClose} disabled={isSaving}>
+          <AppleButton
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={onClose}
+            disabled={isSaving}
+          >
             បោះបង់
           </AppleButton>
           <AppleButton
+            type="submit"
+            form="class-form"
             variant="primary"
             size="sm"
-            onClick={handleSubmit}
             disabled={isSaving || !name.trim()}
           >
             {isSaving ? 'កំពុងរក្សាទុក...' : classToEdit ? 'រក្សាទុក' : 'បង្កើតថ្នាក់'}
@@ -112,7 +119,8 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form id="class-form" onSubmit={handleSubmit} className="space-y-4">
+        <button type="submit" className="hidden" aria-hidden="true" tabIndex={-1} />
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label

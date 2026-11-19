@@ -23,6 +23,9 @@ const SettingsView = lazy(() =>
 const StudentsView = lazy(() =>
   import('../features/students/StudentsView').then((m) => ({ default: m.StudentsView }))
 );
+const RosterView = lazy(() =>
+  import('../features/roster/RosterView').then((m) => ({ default: m.RosterView }))
+);
 const AttendanceView = lazy(() =>
   import('../features/attendance/AttendanceView').then((m) => ({ default: m.AttendanceView }))
 );
@@ -195,6 +198,8 @@ const AppInner: React.FC<{
         return <DashboardView profile={profile} />;
       case 'students':
         return <StudentsView profile={profile} />;
+      case 'roster':
+        return <RosterView profile={profile} />;
       case 'attendance':
         return <AttendanceView profile={profile} />;
       case 'scores':

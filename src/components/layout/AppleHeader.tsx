@@ -9,7 +9,8 @@ import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
 const VIEW_TITLES: Record<ActiveView, string> = {
   dashboard: 'ផ្ទាំងដើម',
   students: 'សិស្ស',
-  attendance: 'បញ្ជីហៅឈ្មោះ',
+  roster: 'បញ្ជីហៅឈ្មោះ',
+  attendance: 'បញ្ជីវត្តមាន',
   scores: 'បញ្ជីពិន្ទុ',
   cards: 'កាតសិស្ស',
   settings: 'ការកំណត់',

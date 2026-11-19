@@ -193,7 +193,13 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({
       maxWidth="2xl"
       footer={
         <>
-          <AppleButton variant="secondary" size="sm" onClick={onClose} disabled={isSaving}>
+          <AppleButton
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={onClose}
+            disabled={isSaving}
+          >
             បោះបង់
           </AppleButton>
           <AppleButton variant="primary" size="sm" onClick={handleSubmit} disabled={isSaving}>

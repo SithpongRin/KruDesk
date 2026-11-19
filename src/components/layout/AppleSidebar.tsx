@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import {
   LayoutDashboard,
   Users,
+  ListOrdered,
   CalendarCheck,
   ClipboardList,
   CreditCard,
@@ -28,7 +29,8 @@ interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { id: 'dashboard', label: 'ផ្ទាំងដើម', icon: <LayoutDashboard size={18} /> },
   { id: 'students', label: 'សិស្ស', icon: <Users size={18} /> },
-  { id: 'attendance', label: 'បញ្ជីហៅឈ្មោះ', icon: <CalendarCheck size={18} /> },
+  { id: 'roster', label: 'បញ្ជីហៅឈ្មោះ', icon: <ListOrdered size={18} /> },
+  { id: 'attendance', label: 'បញ្ជីវត្តមាន', icon: <CalendarCheck size={18} /> },
   { id: 'scores', label: 'បញ្ជីពិន្ទុ', icon: <ClipboardList size={18} /> },
   { id: 'cards', label: 'កាតសិស្ស', icon: <CreditCard size={18} /> },
   { id: 'settings', label: 'ការកំណត់', icon: <Settings size={18} /> },
