@@ -17,7 +17,7 @@ export function createLowerSecondarySubjects(): Subject[] {
   const raw: Array<{ id: string; name: string; group?: string; maxScore?: number }> = [
     { id: 'kh_dictation', name: 'សរសេរតាមអាន', group: 'អក្សរសាស្ត្រខ្មែរ', maxScore: 50 },
     { id: 'kh_essay', name: 'តែងសេចក្ដី', group: 'អក្សរសាស្ត្រខ្មែរ', maxScore: 50 },
-    { id: 'math', name: 'គណិតវិទ្យា', maxScore: 50 },
+    { id: 'math', name: 'គណិតវិទ្យា', maxScore: 100 },
     { id: 'foreign_lang', name: 'ភាសាបរទេស (អង់គ្លេស ឬ បារាំង)', maxScore: 50 },
     { id: 'subj_4', name: 'មុខវិជ្ជាទី 4 (កែឈ្មោះ)', maxScore: 50 },
     { id: 'physics', name: 'រូបវិទ្យា', maxScore: 50 },

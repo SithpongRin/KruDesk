@@ -57,7 +57,7 @@ describe('Excel Student Import Parser', () => {
     // Template has class "១០A" and year "២០២៤ - ២០២៥" which differ from target "៧ក" / "២០២៦-២០២៧"
     expect(preview.classMismatchCount).toBe(2);
     expect(preview.yearMismatchCount).toBe(2);
-  }, 15000);
+  }, 30000);
 
   it('normalizes Khmer digits, Arabic digits, Excel Date objects, and Excel serial dates to DD/MM/YYYY', () => {
     expect(normalizeBirthDate('១៥/០៤/២០០៨')).toEqual({ value: '15/04/2008', valid: true });

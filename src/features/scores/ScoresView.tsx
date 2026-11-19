@@ -32,6 +32,7 @@ import {
 } from '../../types/domain';
 import { getActiveStudentsOrdered } from '../../lib/attendance';
 import {
+  collapseGroupedSubjects,
   computeCompetitionRanks,
   computeScoreRow,
   computeSemesterAnnualSummary,
@@ -296,6 +297,22 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
     () => sortSubjects(currentClass?.subjects ?? []),
     [currentClass?.subjects]
   );
+
+  const collapsedSubjects = useMemo(
+    () => collapseGroupedSubjects(sortedSubjects),
+    [sortedSubjects]
+  );
+
+  const groupMaxTotals = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const s of sortedSubjects) {
+      const grp = s.group?.trim();
+      if (grp) {
+        totals.set(grp, (totals.get(grp) ?? 0) + s.maxScore);
+      }
+    }
+    return totals;
+  }, [sortedSubjects]);
 
   const activeStudents = useMemo(() => {
     if (!allStudents) return [];
@@ -1432,7 +1449,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
 
                       <th
                         colSpan={
-                          (showDetailedSubjectCols ? sortedSubjects.length * 2 : 0) + 5
+                          (showDetailedSubjectCols ? collapsedSubjects.length * 2 : 0) + 5
                         }
                         className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center font-bold bg-[#eef5ff] dark:bg-blue-500/10"
                       >
@@ -1440,7 +1457,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                       </th>
                       <th
                         colSpan={
-                          (showDetailedSubjectCols ? sortedSubjects.length * 2 : 0) + 5
+                          (showDetailedSubjectCols ? collapsedSubjects.length * 2 : 0) + 5
                         }
                         className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center font-bold bg-[#f2fbf4] dark:bg-emerald-500/10"
                       >
@@ -1458,13 +1475,13 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                       {[1, 2].map((sem) => (
                         <React.Fragment key={`h-sem-${sem}`}>
                           {showDetailedSubjectCols &&
-                            sortedSubjects.flatMap((s) => [
+                            collapsedSubjects.flatMap((s) => [
                               <th
                                 key={`h-${sem}-${s.id}-p`}
-                                className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-1.5 py-1.5 text-center whitespace-nowrap"
-                                title={s.name}
+                                className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-1.5 py-1.5 text-center whitespace-nowrap max-w-[96px] truncate"
+                                title={`${s.name} (${fmtNum(s.maxScore)})`}
                               >
-                                {s.name.slice(0, 6)} (ព)
+                                {s.name} (ព)
                               </th>,
                               <th
                                 key={`h-${sem}-${s.id}-r`}
@@ -1521,7 +1538,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
 
                         {/* Sem 1 */}
                         {showDetailedSubjectCols &&
-                          sortedSubjects.flatMap((s) => [
+                          collapsedSubjects.flatMap((s) => [
                             <td
                               key={`s1-${s.id}-p`}
                               className="border-r border-black/[0.06] dark:border-white/[0.08] px-1.5 py-1.5 text-center"
@@ -1568,7 +1585,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
 
                         {/* Sem 2 */}
                         {showDetailedSubjectCols &&
-                          sortedSubjects.flatMap((s) => [
+                          collapsedSubjects.flatMap((s) => [
                             <td
                               key={`s2-${s.id}-p`}
                               className="border-r border-black/[0.06] dark:border-white/[0.08] px-1.5 py-1.5 text-center"
@@ -1797,6 +1814,11 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                             }}
                             className="w-full px-2.5 py-1.5 rounded-xl text-xs bg-[#f5f5f7]/70 dark:bg-white/[0.05] text-[#1d1d1f] dark:text-[#f5f5f7] border border-transparent focus:border-[#0071e3] focus:outline-none"
                           />
+                          {subj.group?.trim() && (
+                            <div className="mt-0.5 px-1 text-[10px] font-medium text-[#0071e3] dark:text-[#64d2ff]">
+                              សរុប {fmtNum(groupMaxTotals.get(subj.group.trim()) ?? subj.maxScore)}
+                            </div>
+                          )}
                         </td>
                         <td className="px-2 py-1.5 text-center">
                           <input

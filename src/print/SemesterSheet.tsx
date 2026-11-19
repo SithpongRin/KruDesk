@@ -1,8 +1,8 @@
 import React from 'react';
 import type { Profile, SchoolClass, ScoreConfig } from '../types/domain';
 import {
+  collapseGroupedSubjects,
   formatScoreDecimal,
-  sortSubjects,
   type SemesterStudentSummary,
 } from '../lib/grading';
 import type { PaperSize } from '../services/pdfExport';
@@ -42,7 +42,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
     return fmt(Number.isInteger(val) ? val : Number(val.toFixed(1)));
   };
 
-  const sortedSubjects = sortSubjects(cls.subjects);
+  const sortedSubjects = collapseGroupedSubjects(cls.subjects);
   const maleCount = summaries.filter((s) => s.student.gender === 'ប្រុស').length;
   const femaleCount = summaries.filter((s) => s.student.gender === 'ស្រី').length;
 

@@ -31,6 +31,19 @@ export interface SubjectHeaderSpan {
   subjects: Subject[];
 }
 
+export interface CollapsedSubject extends Subject {
+  partIds: string[];
+  parts: Subject[];
+  isGroup: boolean;
+}
+
+export interface CollapsedSubjectScore {
+  score: number | null;
+  maxScore: number;
+  maxScoreUsed: number;
+  average: number | null;
+}
+
 export interface SemesterStudentSummary {
   student: Student;
   sem1ExamScores: Record<string, number | null>;
@@ -101,6 +114,109 @@ export function buildSubjectHeaderSpans(subjects: Subject[]): SubjectHeaderSpan[
   }
 
   return spans;
+}
+
+/**
+ * Collapses subjects sharing the same `group` (e.g. សរសេរតាមអាន 50 + តែងសេចក្ដី 50 -> អក្សរសាស្ត្រខ្មែរ 100)
+ * into a single logical subject for per-subject semester summary columns, ranks, and averages.
+ */
+export function collapseGroupedSubjects(subjects: Subject[]): CollapsedSubject[] {
+  const ordered = sortSubjects(subjects);
+  const result: CollapsedSubject[] = [];
+  const groupIndexByName = new Map<string, number>();
+
+  for (const sub of ordered) {
+    const grp = sub.group?.trim() || undefined;
+    if (grp) {
+      const existingIdx = groupIndexByName.get(grp);
+      if (existingIdx !== undefined) {
+        const target = result[existingIdx];
+        target.maxScore += sub.maxScore;
+        target.partIds.push(sub.id);
+        target.parts.push(sub);
+      } else {
+        groupIndexByName.set(grp, result.length);
+        result.push({
+          id: `grp:${grp}`,
+          name: grp,
+          group: grp,
+          maxScore: sub.maxScore,
+          order: sub.order,
+          partIds: [sub.id],
+          parts: [sub],
+          isGroup: true,
+        });
+      }
+    } else {
+      result.push({
+        ...sub,
+        partIds: [sub.id],
+        parts: [sub],
+        isGroup: false,
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Computes the collapsed score, effective maxScore, and scaled average for one subject or group.
+ * - If ALL parts are blank -> { score: null, average: null }.
+ * - If SOME parts have a score -> sums parts and follows `countBlankAsZero` for missing parts' maxScore.
+ */
+export function computeCollapsedSubjectScore(
+  subject: CollapsedSubject,
+  scores: Record<string, number | null> | undefined,
+  config: Pick<ScoreConfig, 'scale' | 'countBlankAsZero'>
+): CollapsedSubjectScore {
+  let scoreSum = 0;
+  let enteredMax = 0;
+  let missingMax = 0;
+  let hasAnyScore = false;
+
+  for (const part of subject.parts) {
+    const raw = scores?.[part.id];
+    if (typeof raw === 'number' && Number.isFinite(raw)) {
+      hasAnyScore = true;
+      scoreSum += raw;
+      enteredMax += part.maxScore;
+    } else {
+      missingMax += part.maxScore;
+    }
+  }
+
+  if (!hasAnyScore) {
+    return {
+      score: null,
+      maxScore: subject.maxScore,
+      maxScoreUsed: 0,
+      average: null,
+    };
+  }
+
+  const maxScoreUsed = config.countBlankAsZero ? enteredMax + missingMax : enteredMax;
+  const average = maxScoreUsed > 0 ? (scoreSum / maxScoreUsed) * config.scale : null;
+
+  return {
+    score: scoreSum,
+    maxScore: subject.maxScore,
+    maxScoreUsed,
+    average,
+  };
+}
+
+export function collapseScoresBySubject(
+  subjects: Subject[],
+  scores: Record<string, number | null> | undefined,
+  config: Pick<ScoreConfig, 'scale' | 'countBlankAsZero'>
+): Record<string, CollapsedSubjectScore> {
+  const collapsed = collapseGroupedSubjects(subjects);
+  const out: Record<string, CollapsedSubjectScore> = {};
+  for (const sub of collapsed) {
+    out[sub.id] = computeCollapsedSubjectScore(sub, scores, config);
+  }
+  return out;
 }
 
 export interface SubjectColumnNumberCell {
@@ -240,6 +356,7 @@ export function computeSemesterAnnualSummary(params: {
 }): SemesterStudentSummary[] {
   const { students, subjects, academicYear, monthlyRecords, semesterExams, config } = params;
   const orderedSubjects = sortSubjects(subjects);
+  const collapsedSubjects = collapseGroupedSubjects(orderedSubjects);
 
   const sem1MonthKeys = config.sem1Months.map((m) => resolveAcademicMonthKey(academicYear, m));
   const sem2MonthKeys = config.sem2Months.map((m) => resolveAcademicMonthKey(academicYear, m));
@@ -298,14 +415,21 @@ export function computeSemesterAnnualSummary(params: {
     );
     const annualAvg = computeWeightedAverage(sem1Avg, config.wSem1, sem2Avg, config.wSem2);
 
+    const sem1ExamScores: Record<string, number | null> = {};
+    const sem2ExamScores: Record<string, number | null> = {};
+    for (const sub of collapsedSubjects) {
+      sem1ExamScores[sub.id] = computeCollapsedSubjectScore(sub, ex1?.scores, config).score;
+      sem2ExamScores[sub.id] = computeCollapsedSubjectScore(sub, ex2?.scores, config).score;
+    }
+
     return {
       student,
-      sem1ExamScores: ex1?.scores ?? {},
+      sem1ExamScores,
       sem1ExamTotal: ex1Row.total,
       sem1MonthlyAvg,
       sem1ExamAvg: ex1Row.average,
       sem1Avg,
-      sem2ExamScores: ex2?.scores ?? {},
+      sem2ExamScores,
       sem2ExamTotal: ex2Row.total,
       sem2MonthlyAvg,
       sem2ExamAvg: ex2Row.average,
@@ -329,7 +453,7 @@ export function computeSemesterAnnualSummary(params: {
 
   const sem1SubjectRankMaps = new Map<string, Map<number, number | null>>();
   const sem2SubjectRankMaps = new Map<string, Map<number, number | null>>();
-  for (const sub of orderedSubjects) {
+  for (const sub of collapsedSubjects) {
     sem1SubjectRankMaps.set(
       sub.id,
       rankActive((d) => {
@@ -350,7 +474,7 @@ export function computeSemesterAnnualSummary(params: {
     const sid = d.student.id!;
     const sem1SubjectRanks: Record<string, number | null> = {};
     const sem2SubjectRanks: Record<string, number | null> = {};
-    for (const sub of orderedSubjects) {
+    for (const sub of collapsedSubjects) {
       sem1SubjectRanks[sub.id] = sem1SubjectRankMaps.get(sub.id)?.get(sid) ?? null;
       sem2SubjectRanks[sub.id] = sem2SubjectRankMaps.get(sub.id)?.get(sid) ?? null;
     }

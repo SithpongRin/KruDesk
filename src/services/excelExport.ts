@@ -17,6 +17,7 @@ import {
 import {
   buildSubjectColumnNumbers,
   buildSubjectHeaderSpans,
+  collapseGroupedSubjects,
   computeCompetitionRanks,
   computeScoreRow,
   formatScoreDecimal,
@@ -841,8 +842,8 @@ export async function exportSemesterSummaryExcel(params: {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'KruDesk';
 
-  const sortedSubjects = sortSubjects(cls.subjects);
-  const subjCount = sortedSubjects.length;
+  const summarySubjects = collapseGroupedSubjects(cls.subjects);
+  const subjCount = summarySubjects.length;
   const semBlockWidth = subjCount * 2 + 5;
   const totalCols = 3 + semBlockWidth * 2 + 3;
 
@@ -933,7 +934,7 @@ export async function exportSemesterSummaryExcel(params: {
 
   const writeSemHeader = (startCol: number) => {
     let col = startCol;
-    for (const subj of sortedSubjects) {
+    for (const subj of summarySubjects) {
       sheet.mergeCells(r2, col, r2, col + 1);
       const cell = sheet.getCell(r2, col);
       cell.value = subj.name;
@@ -1013,7 +1014,7 @@ export async function exportSemesterSummaryExcel(params: {
       semRank: number | null
     ) => {
       let col = startCol;
-      for (const subj of sortedSubjects) {
+      for (const subj of summarySubjects) {
         const sc = scores[subj.id];
         if (typeof sc === 'number' && !Number.isNaN(sc)) {
           sheet.getCell(r, col).value = useKhmerDigits ? fmt(sc) : sc;

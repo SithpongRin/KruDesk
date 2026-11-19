@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   buildSubjectColumnNumbers,
   buildSubjectHeaderSpans,
+  collapseGroupedSubjects,
+  computeCollapsedSubjectScore,
   computeCompetitionRanks,
   computeScoreRow,
   computeSemesterAnnualSummary,
@@ -214,5 +216,119 @@ describe('Grading formulas & competition ranking', () => {
     ]);
     // Last 3 extra columns remain unnumbered (null)
     expect(colNums.slice(15).map((c) => c.columnNumber)).toEqual([null, null, null]);
+  });
+
+  it('sets lower-secondary preset Khmer parts to 50+50=100, math to 100, and others to 50', () => {
+    const preset = createLowerSecondarySubjects();
+    const byId = new Map(preset.map((s) => [s.id, s]));
+
+    expect(byId.get('kh_dictation')?.maxScore).toBe(50);
+    expect(byId.get('kh_essay')?.maxScore).toBe(50);
+    expect(byId.get('math')?.maxScore).toBe(100);
+    expect(byId.get('physics')?.maxScore).toBe(50);
+    expect(byId.get('foreign_lang')?.maxScore).toBe(50);
+
+    const collapsed = collapseGroupedSubjects(preset);
+    const khGroup = collapsed.find((c) => c.name === 'អក្សរសាស្ត្រខ្មែរ');
+    expect(khGroup).toBeDefined();
+    expect(khGroup?.isGroup).toBe(true);
+    expect(khGroup?.maxScore).toBe(100);
+    expect(khGroup?.partIds).toEqual(['kh_dictation', 'kh_essay']);
+  });
+
+  it('collapses grouped Khmer subject with hand-computed totals, blanks, and semester summary rank', () => {
+    const subjects: Subject[] = [
+      { id: 'kh_dictation', name: 'សរសេរតាមអាន', group: 'អក្សរសាស្ត្រខ្មែរ', maxScore: 50, order: 1 },
+      { id: 'kh_essay', name: 'តែងសេចក្ដី', group: 'អក្សរសាស្ត្រខ្មែរ', maxScore: 50, order: 2 },
+      { id: 'math', name: 'គណិតវិទ្យា', maxScore: 100, order: 3 },
+      { id: 'other', name: 'រូបវិទ្យា', maxScore: 50, order: 4 },
+    ];
+
+    // Overall score row: Khmer 40 + 45 = 85/100, Math 70/100, Other 30/50 -> 185/250 * 50 = 37.00
+    const s1Scores = { kh_dictation: 40, kh_essay: 45, math: 70, other: 30 };
+    const overall = computeScoreRow(s1Scores, subjects, { scale: 50, countBlankAsZero: false });
+    expect(overall.total).toBe(185);
+    expect(overall.maxScoreUsed).toBe(250);
+    expect(overall.average).toBeCloseTo(37.0, 10);
+
+    // Collapsed group scoring + blank handling
+    const collapsed = collapseGroupedSubjects(subjects);
+    expect(collapsed.map((c) => c.name)).toEqual(['អក្សរសាស្ត្រខ្មែរ', 'គណិតវិទ្យា', 'រូបវិទ្យា']);
+    const khCol = collapsed[0];
+
+    expect(
+      computeCollapsedSubjectScore(khCol, s1Scores, { scale: 50, countBlankAsZero: false })
+    ).toEqual({
+      score: 85,
+      maxScore: 100,
+      maxScoreUsed: 100,
+      average: 42.5,
+    });
+
+    // All parts blank -> blank even with countBlankAsZero: true
+    expect(
+      computeCollapsedSubjectScore(
+        khCol,
+        { kh_dictation: null, kh_essay: null },
+        { scale: 50, countBlankAsZero: true }
+      )
+    ).toEqual({
+      score: null,
+      maxScore: 100,
+      maxScoreUsed: 0,
+      average: null,
+    });
+
+    // Partial blank (40 + blank): countBlankAsZero OFF uses 50, ON uses 100
+    expect(
+      computeCollapsedSubjectScore(
+        khCol,
+        { kh_dictation: 40, kh_essay: null },
+        { scale: 50, countBlankAsZero: false }
+      )
+    ).toEqual({
+      score: 40,
+      maxScore: 100,
+      maxScoreUsed: 50,
+      average: 40,
+    });
+    expect(
+      computeCollapsedSubjectScore(
+        khCol,
+        { kh_dictation: 40, kh_essay: null },
+        { scale: 50, countBlankAsZero: true }
+      )
+    ).toEqual({
+      score: 40,
+      maxScore: 100,
+      maxScoreUsed: 100,
+      average: 20,
+    });
+
+    // Semester summary produces ONE Khmer column with 85 and ONE Khmer rank
+    const summary = computeSemesterAnnualSummary({
+      students: [makeStudent(1, 'សិស្ស ក'), makeStudent(2, 'សិស្ស ខ')],
+      subjects,
+      academicYear: '2026-2027',
+      monthlyRecords: [],
+      semesterExams: [
+        { classId: 1, studentRef: 1, semester: 1, scores: s1Scores },
+        {
+          classId: 1,
+          studentRef: 2,
+          semester: 1,
+          scores: { kh_dictation: 48, kh_essay: 42, math: 60, other: 40 }, // Khmer = 90 > 85
+        },
+      ],
+      config: DEFAULT_SCORE_CONFIG,
+    });
+
+    expect(Object.keys(summary[0].sem1ExamScores)).toEqual([khCol.id, 'math', 'other']);
+    expect(summary[0].sem1ExamScores[khCol.id]).toBe(85);
+    expect(summary[1].sem1ExamScores[khCol.id]).toBe(90);
+    expect(summary[0].sem1SubjectRanks[khCol.id]).toBe(2);
+    expect(summary[1].sem1SubjectRanks[khCol.id]).toBe(1);
+    expect(summary[0].sem1ExamTotal).toBe(185);
+    expect(summary[0].sem1ExamAvg).toBeCloseTo(37.0, 10);
   });
 });
