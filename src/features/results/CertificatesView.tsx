@@ -4,7 +4,7 @@ import { Award, Download } from 'lucide-react';
 import { db, setSetting } from '../../db/database';
 import { useAppStore } from '../../store/useAppStore';
 import {
-  DEFAULT_SCORE_CONFIG,
+  resolveScoreConfig,
   type Profile,
   type SchoolClass,
   type ScoreConfig,
@@ -63,10 +63,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
 
   const scoreCfgRow = useLiveQuery(() => db.settings.get('scoreConfig'), []);
   const scoreConfig: ScoreConfig = useMemo(
-    () => ({
-      ...DEFAULT_SCORE_CONFIG,
-      ...((scoreCfgRow?.value as Partial<ScoreConfig> | undefined) ?? {}),
-    }),
+    () => (resolveScoreConfig(scoreCfgRow?.value as Partial<ScoreConfig> | undefined)),
     [scoreCfgRow]
   );
 

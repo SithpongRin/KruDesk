@@ -5,7 +5,7 @@ import { BarChart3, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { db } from '../../db/database';
 import { useAppStore } from '../../store/useAppStore';
 import {
-  DEFAULT_SCORE_CONFIG,
+  resolveScoreConfig,
   type AbsenceCode,
   type Profile,
   type SchoolClass,
@@ -83,10 +83,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
 
   const scoreCfgRow = useLiveQuery(() => db.settings.get('scoreConfig'), []);
   const scoreConfig: ScoreConfig = useMemo(
-    () => ({
-      ...DEFAULT_SCORE_CONFIG,
-      ...((scoreCfgRow?.value as Partial<ScoreConfig> | undefined) ?? {}),
-    }),
+    () => (resolveScoreConfig(scoreCfgRow?.value as Partial<ScoreConfig> | undefined)),
     [scoreCfgRow]
   );
 

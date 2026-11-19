@@ -110,17 +110,26 @@ export interface ScoreConfig {
   wExam: number;
   wSem1: number;
   wSem2: number;
-  sem1Months: number[]; // e.g. [11, 12, 1, 2]
-  sem2Months: number[]; // e.g. [4, 5, 6]
+  sem1Months: number[]; // e.g. [11, 12, 1]
+  sem2Months: number[]; // e.g. [3, 4, 5, 6, 7]
+  /** Which default rules this saved config was written under (see SCORE_RULES_VERSION). */
+  rulesVersion?: number;
 }
 
 export interface AttendanceConfig {
   restWeekdays: number[]; // 0 = Sunday, 6 = Saturday
 }
 
+/**
+ * 2 = MoEYS instruction ៦៧ អយក.សណន for 2026-2027 (adopted by the teacher 2026-11-19):
+ * grades 7–8 sit the semester-1 exam in February and semester 2 in August, so the monthly
+ * months are Nov–Jan and Mar–Jul; averages divide by the full total (blank = 0).
+ */
+export const SCORE_RULES_VERSION = 2;
+
 export const DEFAULT_SCORE_CONFIG: ScoreConfig = {
   scale: 50,
-  countBlankAsZero: false,
+  countBlankAsZero: true,
   averageDecimalMode: 'truncate',
   absenceFailLimit: 30,
   absenceFailCountType: 'unexcused',
@@ -128,9 +137,26 @@ export const DEFAULT_SCORE_CONFIG: ScoreConfig = {
   wExam: 1,
   wSem1: 1,
   wSem2: 1,
-  sem1Months: [11, 12, 1, 2],
-  sem2Months: [4, 5, 6],
+  sem1Months: [11, 12, 1],
+  sem2Months: [3, 4, 5, 6, 7],
+  rulesVersion: SCORE_RULES_VERSION,
 };
+
+/**
+ * Saved settings + defaults. A config saved under older rules (or restored from an older
+ * backup) gets the ministry semester months and blank = 0 once; later edits in Settings
+ * are saved with the current rulesVersion and are kept.
+ */
+export function resolveScoreConfig(stored?: Partial<ScoreConfig> | null): ScoreConfig {
+  const merged: ScoreConfig = { ...DEFAULT_SCORE_CONFIG, ...(stored ?? {}) };
+  if ((stored?.rulesVersion ?? 1) < SCORE_RULES_VERSION) {
+    merged.sem1Months = [...DEFAULT_SCORE_CONFIG.sem1Months];
+    merged.sem2Months = [...DEFAULT_SCORE_CONFIG.sem2Months];
+    merged.countBlankAsZero = DEFAULT_SCORE_CONFIG.countBlankAsZero;
+    merged.rulesVersion = SCORE_RULES_VERSION;
+  }
+  return merged;
+}
 
 export const DEFAULT_ATTENDANCE_CONFIG: AttendanceConfig = {
   restWeekdays: [0], // Sunday by default

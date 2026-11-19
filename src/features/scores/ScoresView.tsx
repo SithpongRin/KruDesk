@@ -29,7 +29,7 @@ import {
 } from '../../db/subjectRepo';
 import { useAppStore } from '../../store/useAppStore';
 import {
-  DEFAULT_SCORE_CONFIG,
+  resolveScoreConfig,
   type Profile,
   type SchoolClass,
   type ScoreConfig,
@@ -299,10 +299,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
 
   const scoreCfgRow = useLiveQuery(() => db.settings.get('scoreConfig'), []);
   const scoreConfig: ScoreConfig = useMemo(
-    () => ({
-      ...DEFAULT_SCORE_CONFIG,
-      ...((scoreCfgRow?.value as Partial<ScoreConfig> | undefined) ?? {}),
-    }),
+    () => (resolveScoreConfig(scoreCfgRow?.value as Partial<ScoreConfig> | undefined)),
     [scoreCfgRow]
   );
 
@@ -909,7 +906,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
     if (currentClass.gradeLevel < 7 || currentClass.gradeLevel > 9) return false;
     return subjectsDifferFromPreset(
       currentClass.subjects ?? [],
-      getPresetSubjects('lower-secondary')
+      getPresetSubjects('lower-secondary', currentClass.gradeLevel)
     );
   }, [currentClass, presetHintDismissed]);
   const dismissPresetHint = () => {
@@ -1011,7 +1008,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
       const highest = await getHighestScoresBySubject(currentClass.id);
       const { subjects: merged, keptMaxScores } = mergeSubjectsWithPreset(
         currentClass.subjects ?? [],
-        getPresetSubjects(presetKey),
+        getPresetSubjects(presetKey, currentClass.gradeLevel),
         highest
       );
       await saveClassSubjects(currentClass.id, merged);
@@ -1325,8 +1322,9 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
           <div className="flex items-start gap-2.5 flex-1 text-sm text-[#1d1d1f] dark:text-orange-100">
             <Sparkles size={18} className="text-[#ff9500] shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              មុខវិជ្ជារបស់ថ្នាក់នេះមិនទាន់ត្រូវតាមគំរូសាលាទេ (១៥ មុខវិជ្ជា៖ សរសេរតាមអាន ៤០ ·
-              តែងសេចក្ដី ៦០ · គណិតវិទ្យា ១០០ · មុខវិជ្ជាផ្សេង ៥០)។ ពិន្ទុដែលបានបញ្ចូលរួចនៅដដែល។
+              {currentClass?.gradeLevel === 9
+                ? 'មុខវិជ្ជារបស់ថ្នាក់នេះមិនទាន់ត្រូវតាមគំរូថ្នាក់ទី ៩ របស់ក្រសួងទេ (១០ មុខវិជ្ជា ពិន្ទុសរុប ៤២០ + ភាសាបរទេសជាពិន្ទុបន្ថែម)។ ពិន្ទុដែលបានបញ្ចូលរួចនៅដដែល។'
+                : 'មុខវិជ្ជារបស់ថ្នាក់នេះមិនទាន់ត្រូវតាមគំរូសាលាទេ (១៥ មុខវិជ្ជា៖ សរសេរតាមអាន ៤០ · តែងសេចក្ដី ៦០ · គណិតវិទ្យា ១០០ · មុខវិជ្ជាផ្សេង ៥០)។ ពិន្ទុដែលបានបញ្ចូលរួចនៅដដែល។'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">

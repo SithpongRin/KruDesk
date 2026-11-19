@@ -22,7 +22,7 @@ import { db, clearAllAppData, saveProfile, setSetting } from '../../db/database'
 import { useAppStore } from '../../store/useAppStore';
 import {
   DEFAULT_ATTENDANCE_CONFIG,
-  DEFAULT_SCORE_CONFIG,
+  resolveScoreConfig,
   type AbsenceFailCountType,
   type AttendanceConfig,
   type AverageDecimalMode,
@@ -147,10 +147,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
 
   // Score settings (scale, blank-as-zero, semester months, weights)
   const scoreCfgRow = useLiveQuery(() => db.settings.get('scoreConfig'), []);
-  const scoreConfig: ScoreConfig = {
-    ...DEFAULT_SCORE_CONFIG,
-    ...((scoreCfgRow?.value as Partial<ScoreConfig> | undefined) ?? {}),
-  };
+  const scoreConfig: ScoreConfig = resolveScoreConfig(scoreCfgRow?.value as Partial<ScoreConfig> | undefined);
 
   const ACADEMIC_MONTH_ORDER = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 

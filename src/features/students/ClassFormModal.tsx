@@ -79,7 +79,7 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
           gradeLevel,
           academicYear: academicYear.trim() || defaultAcademicYear,
           color,
-          subjects: getPresetSubjects(preset),
+          subjects: getPresetSubjects(preset, gradeLevel),
         });
         onSaved(newId, true);
       }
@@ -223,7 +223,9 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
                   អនុវិទ្យាល័យ ៧–៩
                 </div>
                 <div className="text-[11px] text-[#86868b] mt-0.5">
-                  តាមក្រដាសប្រឡងប្រចាំខែ (១៥ មុខវិជ្ជា)
+                  {gradeLevel === 9
+                    ? 'ថ្នាក់ទី ៩ តាមក្រសួង (១០ មុខវិជ្ជា + ភាសាបរទេសបន្ថែម)'
+                    : 'តាមក្រដាសប្រឡងប្រចាំខែ (១៥ មុខវិជ្ជា)'}
                 </div>
               </button>
 

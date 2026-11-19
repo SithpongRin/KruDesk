@@ -86,10 +86,43 @@ export function createUpperSecondarySubjects(): Subject[] {
   }));
 }
 
-export function getPresetSubjects(preset: PresetKey): Subject[] {
-  return preset === 'lower-secondary'
-    ? createLowerSecondarySubjects()
-    : createUpperSecondarySubjects();
+/**
+ * Grade 9 per MoEYS instruction ៦៧ អយក.សណន (2026-2027, §2): monthly and semester scores use
+ * the exam subjects only — 10 subjects totalling 420 (÷ 8.4), plus ភាសាបរទេស as a bonus
+ * (only the part above 25 is added, not counted in the total). Same ids and column positions
+ * as the grades 7–8 preset; the subjects grade 9 does not sit are switched off.
+ */
+const GRADE_9_MAX_SCORES: Record<string, number> = {
+  kh_dictation: 40,
+  kh_essay: 60,
+  math: 100,
+  foreign_lang: 50,
+  physics: 35,
+  chemistry: 25,
+  biology: 35,
+  earth_science: 25,
+  civics: 35,
+  history: 33,
+  geography: 32,
+};
+
+export function createGrade9Subjects(): Subject[] {
+  return createLowerSecondarySubjects().map((s) => {
+    const max = GRADE_9_MAX_SCORES[s.id];
+    const { isActive: _a, isBonus: _b, ...base } = s;
+    if (max === undefined) return { ...base, isActive: false };
+    return {
+      ...base,
+      maxScore: max,
+      ...(s.id === 'foreign_lang' ? { isBonus: true } : {}),
+    };
+  });
+}
+
+/** The preset's subjects for a class; grade 9 gets the ministry's grade-9 list. */
+export function getPresetSubjects(preset: PresetKey, gradeLevel?: number): Subject[] {
+  if (preset === 'upper-secondary') return createUpperSecondarySubjects();
+  return gradeLevel === 9 ? createGrade9Subjects() : createLowerSecondarySubjects();
 }
 
 /**
@@ -151,7 +184,7 @@ export interface PresetMergeResult {
  * - Name, group, maxScore, order and on/off state come from the preset, except:
  *   · maxScore is never lowered below the highest score already entered for that subject;
  *   · a subject that already has scores stays active even if the preset turns it off;
- *   · a foreign-language bonus setting the teacher chose is kept.
+ *   · a foreign-language bonus setting the teacher chose is kept (and the grade-9 preset turns it on).
  * - Subjects the teacher added themselves stay, after the preset rows, in their old order.
  */
 export function mergeSubjectsWithPreset(
@@ -204,7 +237,8 @@ export function mergeSubjectsWithPreset(
     }
 
     const active = p.isActive !== false || hasScores;
-    const bonus = ex.isBonus === true;
+    // Bonus when the preset says so (grade 9 ភាសាបរទេស) or the teacher already chose it.
+    const bonus = ex.isBonus === true || p.isBonus === true;
     return {
       id: ex.id,
       name: p.name,

@@ -162,7 +162,10 @@ describe('monthlyResults & formatAverage', () => {
 
     expect(resolveSemesterForMonth('2026-01', DEFAULT_SCORE_CONFIG)).toBe(1);
     expect(resolveSemesterForMonth('2026-06', DEFAULT_SCORE_CONFIG)).toBe(2);
-    expect(resolveSemesterForMonth('2026-03', DEFAULT_SCORE_CONFIG)).toBeNull();
+    // MoEYS 2026-2027: semester exams in February and August belong to no monthly semester
+    expect(resolveSemesterForMonth('2026-03', DEFAULT_SCORE_CONFIG)).toBe(2);
+    expect(resolveSemesterForMonth('2026-02', DEFAULT_SCORE_CONFIG)).toBeNull();
+    expect(resolveSemesterForMonth('2026-08', DEFAULT_SCORE_CONFIG)).toBeNull();
 
     expect(getGradeWord('A')).toBe('ល្អប្រសើរ');
     expect(getGradeWord('B')).toBe('ល្អណាស់');
