@@ -18,6 +18,7 @@ import {
   type ScoreGrade,
 } from './grading';
 import { compareKhmerNames } from './khmerSort';
+import { parseYearMonth } from './khmerDate';
 
 export type StudentMonthlyAttendance = ReturnType<typeof computeStudentMonthlyAttendance>;
 
@@ -221,4 +222,51 @@ export function orderReportRows(
       a.student.order - b.student.order ||
       compareKhmerNames(a.student.nameKm, b.student.nameKm)
   );
+}
+
+export const DEFAULT_GRADE_WORDS: Record<ScoreGrade, string> = {
+  A: 'ល្អប្រសើរ',
+  B: 'ល្អណាស់',
+  C: 'ល្អ',
+  D: 'ល្អបង្គួរ',
+  E: 'មធ្យម',
+  F: 'ខ្សោយ',
+};
+
+export function getGradeWord(
+  grade: ScoreGrade | null,
+  customWords?: Partial<Record<ScoreGrade, string>>
+): string {
+  if (!grade) return '';
+  const custom = customWords?.[grade]?.trim();
+  return custom || DEFAULT_GRADE_WORDS[grade];
+}
+
+export function resolveSemesterForMonth(
+  monthKey: string,
+  scoreConfig: Pick<ScoreConfig, 'sem1Months' | 'sem2Months'>
+): 1 | 2 | null {
+  const { month } = parseYearMonth(monthKey);
+  if (scoreConfig.sem1Months.includes(month)) return 1;
+  if (scoreConfig.sem2Months.includes(month)) return 2;
+  return null;
+}
+
+export function selectHonorRollStudents(
+  rows: MonthlyResultRow[],
+  maxRank = 5,
+  maxCount = 6
+): { items: MonthlyResultRow[]; overflowCount: number } {
+  const eligible = rows.filter((r) => r.rank !== null && r.rank <= maxRank);
+  return {
+    items: eligible.slice(0, maxCount),
+    overflowCount: Math.max(0, eligible.length - maxCount),
+  };
+}
+
+export function selectTopRankStudents(
+  rows: MonthlyResultRow[],
+  maxRank = 3
+): MonthlyResultRow[] {
+  return rows.filter((r) => r.rank !== null && r.rank <= maxRank);
 }

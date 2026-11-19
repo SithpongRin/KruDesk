@@ -25,9 +25,9 @@ pdf-lib + html-to-image · vite-plugin-pwa (`registerType: 'prompt'`) · Vitest.
 
 ```
 src/app            App shell, ErrorBoundary
-src/features/*     students, roster, attendance, scores, cards, dashboard, settings (lazy-loaded views)
-src/print/*        print layouts (StudentList, Roster, Attendance, MonthlyScore, Semester sheets)
-src/lib/*          pure logic + tests: grading, attendance, khmerDate, khmerSort, exportFilename, provinces
+src/features/*     students, roster, results, attendance, scores, cards, dashboard, settings (lazy-loaded views)
+src/print/*        print layouts (StudentList, Roster, Attendance, MonthlyScore, Semester, MonthlyResults, StudentReport, HonorRoll, Certificate sheets)
+src/lib/*          pure logic + tests: grading, attendance, monthlyResults, khmerDate, khmerSort, exportFilename, provinces
 src/db/*           database.ts (Dexie schema), repos, presets (subject lists)
 src/services/*     backup, excelImport/Export, pdfExport, card renderer (copied from card app)
 reference/*.webp   photos of the official paper forms — print layouts must match them
@@ -45,7 +45,8 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 | Roster | **«បញ្ជីហៅឈ្មោះ»** is a read-only class roster with parents' names/occupations & address (`RosterView` + `RosterSheet`), showing active students in ក–អ order |
 | Subjects | editable per class; presets for grades 7–9 and 10–12. **អក្សរសាស្ត្រខ្មែរ = 100** (សរសេរតាមអាន 50 + តែងសេចក្ដី 50), **គណិតវិទ្យា = 100**, others 50. `isActive` / `isBonus` per subject; lower-secondary cols 12–15 + `extra_1..3` off (`isActive: false`) by default. Grades A–F shown on screen only (not on paper). Averages not capped at 50 (pending teacher decision) |
 | Khmer group | monthly sheet: two part columns under number 1, no total column. Semester summary: ONE «អក្សរសាស្ត្រខ្មែរ» column (sum of parts) with one rank |
-| Averages | (sum of scores ÷ sum of max) × 50; blank ≠ 0 (configurable); ties share rank (1,2,2,4) |
+| Averages | (sum of scores ÷ sum of max) × 50; blank ≠ 0 (configurable); ties share rank (1,2,2,4). Display defaults to **truncation** (`កាត់ចោល`, e.g. `44.625 → 44.62`, configurable in Settings); ranking uses full precision |
+| Documents & Sidebar | Sidebar order: `ផ្ទាំងដើម · សិស្ស · បញ្ជីហៅឈ្មោះ · បញ្ជីវត្តមាន · បញ្ជីពិន្ទុ · លទ្ធផលប្រចាំខែ · តារាងកិត្តិយស · ប័ណ្ណសរសើរ · កាតសិស្ស · ការកំណត់` (mobile nav shows 4 primary + «ច្រើនទៀត»). Shared `DocumentSignDialog` prompts for lunar date (free text typed by teacher), place (remembered), and Gregorian date; Certificate grade words (`A: ល្អប្រសើរ`, `B: ល្អណាស់`, `C: ល្អ`, `D: ល្អបង្គួរ`, `E: មធ្យម`, `F: ខ្សោយ`) are editable and remembered |
 | Semesters | S1 = Nov–Feb (+ exam Mar), S2 = Apr–Jun (+ exam Jul); semester avg = (monthly avg + exam avg) ÷ 2; annual = (S1 + S2) ÷ 2 — all configurable. **Not confirmed by an official MoEYS document** |
 | Students who leave | `statusChangedAt`; still shown in the month they left, hidden afterwards |
 

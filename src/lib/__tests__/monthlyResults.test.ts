@@ -2,7 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   buildStudentReportSubjectRows,
   computeMonthlyResults,
+  getGradeWord,
   orderReportRows,
+  resolveSemesterForMonth,
+  selectHonorRollStudents,
+  selectTopRankStudents,
 } from '../monthlyResults';
 import { formatAverage } from '../grading';
 import { DEFAULT_SCORE_CONFIG, type AbsenceCode, type Student, type Subject } from '../../types/domain';
@@ -119,5 +123,51 @@ describe('monthlyResults & formatAverage', () => {
 
     expect(orderReportRows(summary.rows, 'rank').map((r) => r.student.id)).toEqual([2, 1]);
     expect(orderReportRows(summary.rows, 'class').map((r) => r.student.id)).toEqual([1, 2]);
+  });
+
+  it('selects honor roll (cap 6 with overflow), top 1-3 with ties, semester label, and grade words', () => {
+    const students = Array.from({ length: 8 }, (_, i) =>
+      makeStudent(i + 1, `សិស្ស ${i + 1}`, i % 2 === 0 ? 'ស្រី' : 'ប្រុស')
+    );
+    const scoresByStudent = new Map<number, Record<string, number | null>>([
+      [1, { kh: 50, math: 50 }], // rank 1
+      [2, { kh: 50, math: 50 }], // rank 1 (tie)
+      [3, { kh: 45, math: 45 }], // rank 3
+      [4, { kh: 45, math: 45 }], // rank 3 (tie)
+      [5, { kh: 40, math: 40 }], // rank 5
+      [6, { kh: 40, math: 40 }], // rank 5 (tie)
+      [7, { kh: 40, math: 40 }], // rank 5 (7th eligible -> overflow!)
+      [8, { kh: 20, math: 20 }], // rank 8
+    ]);
+
+    const summary = computeMonthlyResults({
+      students,
+      subjects: SUBJECTS,
+      month: '2026-06',
+      scoresByStudent,
+      attendanceLookup: new Map(),
+      takenDates: new Set(),
+      scoreConfig: DEFAULT_SCORE_CONFIG,
+    });
+
+    const honor = selectHonorRollStudents(summary.rows, 5, 6);
+    expect(honor.items).toHaveLength(6);
+    expect(honor.overflowCount).toBe(1);
+
+    const top3 = selectTopRankStudents(summary.rows, 3);
+    expect(top3.map((r) => r.rank)).toEqual([1, 1, 3, 3]);
+
+    expect(resolveSemesterForMonth('2026-01', DEFAULT_SCORE_CONFIG)).toBe(1);
+    expect(resolveSemesterForMonth('2026-06', DEFAULT_SCORE_CONFIG)).toBe(2);
+    expect(resolveSemesterForMonth('2026-03', DEFAULT_SCORE_CONFIG)).toBeNull();
+
+    expect(getGradeWord('A')).toBe('ល្អប្រសើរ');
+    expect(getGradeWord('B')).toBe('ល្អណាស់');
+    expect(getGradeWord('C')).toBe('ល្អ');
+    expect(getGradeWord('D')).toBe('ល្អបង្គួរ');
+    expect(getGradeWord('E')).toBe('មធ្យម');
+    expect(getGradeWord('F')).toBe('ខ្សោយ');
+    expect(getGradeWord('A', { A: 'ឆ្នើម' })).toBe('ឆ្នើម');
+    expect(getGradeWord(null)).toBe('');
   });
 });

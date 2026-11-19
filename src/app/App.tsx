@@ -37,6 +37,16 @@ const MonthlyResultsView = lazy(() =>
     default: m.MonthlyResultsView,
   }))
 );
+const HonorRollView = lazy(() =>
+  import('../features/results/HonorRollView').then((m) => ({
+    default: m.HonorRollView,
+  }))
+);
+const CertificatesView = lazy(() =>
+  import('../features/results/CertificatesView').then((m) => ({
+    default: m.CertificatesView,
+  }))
+);
 const CardsView = lazy(() =>
   import('../features/cards/CardsView').then((m) => ({ default: m.CardsView }))
 );
@@ -212,12 +222,9 @@ const AppInner: React.FC<{
       case 'monthlyResults':
         return <MonthlyResultsView profile={profile} />;
       case 'honorRoll':
+        return <HonorRollView profile={profile} />;
       case 'certificates':
-        return (
-          <div className="p-8 text-center text-sm text-[#86868b]">
-            កំពុងរៀបចំទំព័រ...
-          </div>
-        );
+        return <CertificatesView profile={profile} />;
       case 'cards':
         return <CardsView profile={profile} />;
       case 'settings':
