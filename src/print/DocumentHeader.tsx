@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Profile } from '../types/domain';
+import { getAssetUrl } from '../utils/assets';
 
 export function formatMinistryProvince(province?: string): string {
   const trimmed = (province ?? '').trim();
@@ -41,7 +42,7 @@ export const DocumentHeader: React.FC<DocumentHeaderProps> = ({
         </div>
         <div className="flex justify-center mt-0.5">
           <img
-            src="/images/flourishes/flourish_1_clean.png"
+            src={getAssetUrl('images/flourishes/flourish_1_clean.png')}
             alt=""
             className="h-3.5 w-auto object-contain"
           />

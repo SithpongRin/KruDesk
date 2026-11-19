@@ -27,8 +27,9 @@ export function getAssetUrl(path: string | undefined): string {
     return path;
   }
 
-  const meta = import.meta as unknown as { env?: { BASE_URL?: string } };
-  const base = meta.env?.BASE_URL || '/';
+  // Must be written literally as `import.meta.env.BASE_URL`: Vite only replaces/injects that
+  // exact expression (an aliased `import.meta` silently falls back to '/' and 404s on Pages).
+  const base = import.meta.env.BASE_URL || '/';
   const cleanBase = base.endsWith('/') ? base : `${base}/`;
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   return `${cleanBase}${cleanPath}`;

@@ -4,6 +4,7 @@ import type { ScoreGrade } from '../lib/grading';
 import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
 import { getGradeWord, type MonthlyResultRow } from '../lib/monthlyResults';
 import { toKhmerNumerals } from '../utils/khmerNumerals';
+import { getAssetUrl } from '../utils/assets';
 import { DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
 
@@ -110,7 +111,7 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
                 </h2>
                 <div className="flex justify-center mt-0.5">
                   <img
-                    src="/images/flourishes/flourish_2_clean.png"
+                    src={getAssetUrl('images/flourishes/flourish_2_clean.png')}
                     alt=""
                     className="h-3.5 w-auto object-contain"
                   />
