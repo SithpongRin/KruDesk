@@ -86,16 +86,22 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
               </div>
 
               {/* 5-column subject table */}
-              <table className="w-full border-collapse text-[8.5pt]">
+              {/* Column widths measured from the school's sample 05 */}
+              <table className="w-full table-fixed border-collapse text-[8.5pt]">
+                <colgroup>
+                  <col style={{ width: '7.4%' }} />
+                  <col style={{ width: '32.1%' }} />
+                  <col style={{ width: '18.7%' }} />
+                  <col style={{ width: '18.7%' }} />
+                  <col style={{ width: '23.1%' }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-100">
-                    <th className="border border-black px-1.5 py-0.5 text-center w-9">ល.រ</th>
-                    <th className="border border-black px-2 py-0.5 text-left">មុខវិជ្ជា</th>
-                    <th className="border border-black px-1.5 py-0.5 text-center w-22">
-                      ពិន្ទុអតិបរមា
-                    </th>
-                    <th className="border border-black px-1.5 py-0.5 text-center w-16">ពិន្ទុ</th>
-                    <th className="border border-black px-1.5 py-0.5 text-center w-14">និទ្ទេស</th>
+                    <th className="border border-black px-1 py-0.5 text-center">ល.រ</th>
+                    <th className="border border-black px-2 py-0.5 text-center">មុខវិជ្ជា</th>
+                    <th className="border border-black px-1 py-0.5 text-center">ពិន្ទុអតិបរមា</th>
+                    <th className="border border-black px-1 py-0.5 text-center">ពិន្ទុ</th>
+                    <th className="border border-black px-1 py-0.5 text-center">និទ្ទេស</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -127,11 +133,19 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
               </table>
 
               {/* Semester Summary Grid matching sample 05 */}
-              <table className="w-full border-collapse text-[8.5pt] -mt-[1px] mb-1.5">
+              <table className="w-full table-fixed border-collapse text-[8.5pt] -mt-[1px] mb-1.5">
+                {/* label | value | (2 cols) | value — lines up with the subject table above */}
+                <colgroup>
+                  <col style={{ width: '30%' }} />
+                  <col style={{ width: '9.5%' }} />
+                  <col style={{ width: '18.7%' }} />
+                  <col style={{ width: '18.7%' }} />
+                  <col style={{ width: '23.1%' }} />
+                </colgroup>
                 <tbody>
                   <tr>
-                    <td className="border border-black px-2 py-0.5 w-[28%]">សរុបពិន្ទុប្រលងឆមាស៖</td>
-                    <td className="border border-black px-2 py-0.5 text-center font-bold w-[14%]">
+                    <td className="border border-black px-2 py-0.5">សរុបពិន្ទុប្រលងឆមាស៖</td>
+                    <td className="border border-black px-2 py-0.5 text-center font-bold">
                       {row.examTotal !== null
                         ? fmt(
                             Number.isInteger(row.examTotal)
@@ -140,11 +154,11 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                           )
                         : '—'}
                     </td>
-                    <td colSpan={2} className="border border-black px-2 py-0.5 w-[34%]">
+                    <td colSpan={2} className="border border-black px-2 py-0.5">
                       និទ្ទេស៖
                     </td>
                     <td
-                      className="border border-black px-2 py-0.5 text-center font-bold w-[24%]"
+                      className="border border-black px-2 py-0.5 text-center font-bold"
                       style={{ color: row.grade ? GRADE_PRINT_COLORS[row.grade] : '#111827' }}
                     >
                       {row.grade ?? '—'}
@@ -204,10 +218,10 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                         ? fmt(formatAverage(row.semesterAvg, scoreConfig.averageDecimalMode))
                         : '—'}
                     </td>
-                    <td className="border border-black px-1.5 py-0.5 text-center text-[8pt] w-[16%]">
+                    <td className="border border-black px-1.5 py-0.5 text-center text-[8pt]">
                       សីលធម៌
                     </td>
-                    <td className="border border-black px-1.5 py-0.5 text-center text-[8pt] w-[18%]">
+                    <td className="border border-black px-1.5 py-0.5 text-center text-[8pt]">
                       សុខភាព - អនាម័យ
                     </td>
                     <td className="border border-black px-1.5 py-0.5 text-center text-[8pt]">

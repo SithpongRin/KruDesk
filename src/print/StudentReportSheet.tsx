@@ -94,14 +94,22 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
                 </div>
               </div>
 
-              <table className="w-full border-collapse text-[9pt]">
+              {/* Column widths measured from the school's sample 01 */}
+              <table className="w-full table-fixed border-collapse text-[9pt]">
+                <colgroup>
+                  <col style={{ width: '6%' }} />
+                  <col style={{ width: '42%' }} />
+                  <col style={{ width: '15.5%' }} />
+                  <col style={{ width: '15.5%' }} />
+                  <col style={{ width: '21%' }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-100">
-                    <th className="border border-black px-2 py-1 text-center w-10">ល.រ</th>
-                    <th className="border border-black px-2.5 py-1 text-left">មុខវិជ្ជា</th>
-                    <th className="border border-black px-2 py-1 text-center w-24">ពិន្ទុអតិបរមា</th>
-                    <th className="border border-black px-2 py-1 text-center w-20">ពិន្ទុ</th>
-                    <th className="border border-black px-2 py-1 text-center w-16">និទ្ទេស</th>
+                    <th className="border border-black px-1 py-1 text-center">ល.រ</th>
+                    <th className="border border-black px-2.5 py-1 text-center">មុខវិជ្ជា</th>
+                    <th className="border border-black px-1 py-1 text-center">ពិន្ទុអតិបរមា</th>
+                    <th className="border border-black px-1 py-1 text-center">ពិន្ទុ</th>
+                    <th className="border border-black px-1 py-1 text-center">និទ្ទេស</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -133,17 +141,24 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
               </table>
 
               {/* Summary Grid (4 rows x 4 cells, flush beneath subject table) */}
-              <table className="w-full border-collapse text-[9pt] -mt-[1px] mb-2">
+              <table className="w-full table-fixed border-collapse text-[9pt] -mt-[1px] mb-2">
+                {/* lines up with the subject table: ល.រ+មុខវិជ្ជា | ពិន្ទុអតិបរមា+ពិន្ទុ | និទ្ទេស */}
+                <colgroup>
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '33%' }} />
+                  <col style={{ width: '31%' }} />
+                  <col style={{ width: '21%' }} />
+                </colgroup>
                 <tbody>
                   <tr>
-                    <td className="border border-black px-2.5 py-1 w-[24%]">ពិន្ទុសរុប</td>
-                    <td className="border border-black px-2.5 py-1 text-center font-bold w-[26%]">
+                    <td className="border border-black px-2.5 py-1">ពិន្ទុសរុប</td>
+                    <td className="border border-black px-2.5 py-1 text-center font-bold">
                       {row.total !== null
                         ? fmt(Number.isInteger(row.total) ? row.total : row.total.toFixed(1))
                         : '—'}
                     </td>
-                    <td className="border border-black px-2.5 py-1 w-[26%]">ក្នុងចំណោមសិស្ស</td>
-                    <td className="border border-black px-2.5 py-1 text-center font-bold w-[24%]">
+                    <td className="border border-black px-2.5 py-1">ក្នុងចំណោមសិស្ស</td>
+                    <td className="border border-black px-2.5 py-1 text-center font-bold">
                       {fmt(totalStudents)} នាក់
                     </td>
                   </tr>
