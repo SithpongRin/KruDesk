@@ -63,6 +63,7 @@ export interface AttendanceSession {
   classId: number;
   date: string; // YYYY-MM-DD
   savedAt: number;
+  migrated?: boolean;
 }
 
 export interface Holiday {

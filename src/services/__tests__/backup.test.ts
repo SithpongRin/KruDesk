@@ -182,5 +182,22 @@ describe('Backup validation & helpers', () => {
     expect(derived).toHaveLength(1);
     expect(derived[0].date).toBe('2026-11-18');
     expect(derived[0].savedAt).toBe(v1Raw.exportedAt);
+    expect(derived[0].migrated).toBe(true);
+  });
+
+  it('preserves migrated flag in v2 backup export/restore and restores older v2 backups without migrated', async () => {
+    const payload = makeValidBackup();
+    payload.data.attendanceSessions = [
+      { classId: 1, date: '2026-11-18', savedAt: 1731890000000, migrated: true },
+      { classId: 1, date: '2026-11-19', savedAt: 1731900000000 },
+    ];
+    const parsed = parseAndValidateBackup(JSON.stringify(payload));
+    await restoreBackupPayload(parsed, 'replace');
+
+    const sessions = await db.attendanceSessions.toArray();
+    const nov18 = sessions.find((s) => s.date === '2026-11-18');
+    const nov19 = sessions.find((s) => s.date === '2026-11-19');
+    expect(nov18?.migrated).toBe(true);
+    expect(nov19?.migrated).toBeUndefined();
   });
 });

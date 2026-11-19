@@ -149,4 +149,112 @@ describe('AttendanceView Roll Call & Session workflow', () => {
     });
     void s2;
   });
+
+  it('shows only the blocking banner on Sunday and future dates without draft badges or subtitle', async () => {
+    const classId = await db.classes.add({
+      name: '៧ក',
+      gradeLevel: 7,
+      academicYear: '2026-2027',
+      color: '#0071e3',
+      subjects: [],
+      createdAt: 1,
+    });
+
+    const today = new Date();
+    const lastSunday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    lastSunday.setDate(lastSunday.getDate() - lastSunday.getDay());
+    const sundayKey = toLocalDateKey(lastSunday);
+
+    useAppStore.setState({
+      selectedClassId: classId,
+      selectedMonth: sundayKey.slice(0, 7),
+      useKhmerNumerals: false,
+      pendingRollCallDate: sundayKey,
+    });
+
+    render(<AttendanceView profile={TEST_PROFILE} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rollcall-blocked-banner')).toBeTruthy();
+    });
+    expect(screen.queryByText('មិនទាន់ហៅឈ្មោះ (ព្រាង)')).toBeNull();
+    expect(
+      screen.queryByText('មិនទាន់ហៅឈ្មោះសម្រាប់ថ្ងៃនេះទេ (ព្រាង — មិនទាន់រក្សាទុក)')
+    ).toBeNull();
+
+    // Future date
+    cleanup();
+    const future = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3);
+    const futureKey = toLocalDateKey(future);
+
+    useAppStore.setState({
+      selectedClassId: classId,
+      selectedMonth: futureKey.slice(0, 7),
+      useKhmerNumerals: false,
+      pendingRollCallDate: futureKey,
+    });
+
+    render(<AttendanceView profile={TEST_PROFILE} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rollcall-blocked-banner')).toBeTruthy();
+    });
+    expect(screen.queryByText('មិនទាន់ហៅឈ្មោះ (ព្រាង)')).toBeNull();
+    expect(
+      screen.queryByText('មិនទាន់ហៅឈ្មោះសម្រាប់ថ្ងៃនេះទេ (ព្រាង — មិនទាន់រក្សាទុក)')
+    ).toBeNull();
+  });
+
+  it('renders migrated subtitle without time and normal subtitle with time', async () => {
+    const classId = await db.classes.add({
+      name: '៧ក',
+      gradeLevel: 7,
+      academicYear: '2026-2027',
+      color: '#0071e3',
+      subjects: [],
+      createdAt: 1,
+    });
+
+    const d1 = new Date();
+    if (d1.getDay() === 0) d1.setDate(d1.getDate() - 1);
+    const migratedDate = toLocalDateKey(d1);
+
+    const d2 = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate() - 1);
+    if (d2.getDay() === 0) d2.setDate(d2.getDate() - 1);
+    const normalDate = toLocalDateKey(d2);
+
+    await db.attendanceSessions.bulkPut([
+      { classId, date: migratedDate, savedAt: 1731800000000, migrated: true },
+      { classId, date: normalDate, savedAt: 1731900000000 },
+    ]);
+
+    useAppStore.setState({
+      selectedClassId: classId,
+      selectedMonth: migratedDate.slice(0, 7),
+      useKhmerNumerals: false,
+      pendingRollCallDate: migratedDate,
+    });
+
+    render(<AttendanceView profile={TEST_PROFILE} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('បានរក្សាទុក (ពីទិន្នន័យចាស់)')).toBeTruthy();
+    });
+    expect(screen.queryByText(/បានរក្សាទុកនៅ/)).toBeNull();
+
+    cleanup();
+    useAppStore.setState({
+      selectedClassId: classId,
+      selectedMonth: normalDate.slice(0, 7),
+      useKhmerNumerals: false,
+      pendingRollCallDate: normalDate,
+    });
+
+    render(<AttendanceView profile={TEST_PROFILE} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/បានរក្សាទុកនៅ/)).toBeTruthy();
+    });
+    expect(screen.queryByText('បានរក្សាទុក (ពីទិន្នន័យចាស់)')).toBeNull();
+  });
 });

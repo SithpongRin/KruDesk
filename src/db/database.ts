@@ -27,10 +27,24 @@ export function deriveSessionsFromAbsenceRows(
     const key = `${r.classId}|${r.date}`;
     if (!seen.has(key)) {
       seen.add(key);
-      sessions.push({ classId: r.classId, date: r.date, savedAt });
+      sessions.push({ classId: r.classId, date: r.date, savedAt, migrated: true });
     }
   }
   return sessions;
+}
+
+/**
+ * Returns sessions that should be marked `migrated: true` because their `savedAt`
+ * timestamp is shared by 2 or more sessions (created in one batch by the v2 upgrade).
+ */
+export function markMigratedSessionsInBatch(sessions: AttendanceSession[]): AttendanceSession[] {
+  const counts = new Map<number, number>();
+  for (const s of sessions) {
+    counts.set(s.savedAt, (counts.get(s.savedAt) ?? 0) + 1);
+  }
+  return sessions
+    .filter((s) => !s.migrated && (counts.get(s.savedAt) ?? 0) >= 2)
+    .map((s) => ({ ...s, migrated: true }));
 }
 
 export class KruDeskDatabase extends Dexie {
@@ -74,6 +88,28 @@ export class KruDeskDatabase extends Dexie {
         const sessions = deriveSessionsFromAbsenceRows(existingRows);
         if (sessions.length > 0) {
           await tx.table('attendanceSessions').bulkPut(sessions);
+        }
+      });
+
+    this.version(3)
+      .stores({
+        settings: '&key',
+        classes: '++id, name, academicYear',
+        students: '++id, classId, [classId+order], studentId',
+        attendance: '[classId+date+studentRef], [classId+date], classId',
+        attendanceSessions: '[classId+date], classId',
+        holidays: '++id, &date',
+        monthlyScores: '[classId+month+studentRef], [classId+month]',
+        semesterExams: '[classId+semester+studentRef], [classId+semester]',
+        templates: '&id, name, isDefault, isReference, updatedAt',
+      })
+      .upgrade(async (tx) => {
+        const existingSessions = (await tx
+          .table('attendanceSessions')
+          .toArray()) as AttendanceSession[];
+        const toUpdate = markMigratedSessionsInBatch(existingSessions);
+        if (toUpdate.length > 0) {
+          await tx.table('attendanceSessions').bulkPut(toUpdate);
         }
       });
   }

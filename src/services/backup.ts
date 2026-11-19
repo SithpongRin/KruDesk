@@ -73,6 +73,7 @@ const AttendanceSessionBackupSchema = z
     classId: z.number().int().positive(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     savedAt: z.number(),
+    migrated: z.boolean().optional(),
   })
   .passthrough();
 

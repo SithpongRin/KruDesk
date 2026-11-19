@@ -792,9 +792,13 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ profile }) => {
         <AppleCard
           title={`ហៅឈ្មោះ — ${formatDateKhmer(rollCallDate, useKhmerNumerals)}`}
           subtitle={
-            rollCallSession
-              ? `បានរក្សាទុកនៅ ${formatDateTimeKm(rollCallSession.savedAt, useKhmerNumerals)}`
-              : 'មិនទាន់ហៅឈ្មោះសម្រាប់ថ្ងៃនេះទេ (ព្រាង — មិនទាន់រក្សាទុក)'
+            !dateGuard.allowed
+              ? undefined
+              : rollCallSession
+                ? rollCallSession.migrated
+                  ? 'បានរក្សាទុក (ពីទិន្នន័យចាស់)'
+                  : `បានរក្សាទុកនៅ ${formatDateTimeKm(rollCallSession.savedAt, useKhmerNumerals)}`
+                : 'មិនទាន់ហៅឈ្មោះសម្រាប់ថ្ងៃនេះទេ (ព្រាង — មិនទាន់រក្សាទុក)'
           }
           headerAction={
             <div className="flex flex-wrap items-center gap-2">
@@ -839,36 +843,38 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ profile }) => {
           }
         >
           {/* Status bar for session vs draft */}
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              {rollCallSession ? (
-                <AppleBadge variant="green" size="sm">
-                  <CheckCircle2 size={12} className="mr-1 inline" />
-                  បានហៅឈ្មោះរួច
-                </AppleBadge>
-              ) : (
-                <AppleBadge variant="gray" size="sm">
-                  មិនទាន់ហៅឈ្មោះ (ព្រាង)
-                </AppleBadge>
-              )}
-              {isDirty && (
-                <AppleBadge variant="orange" size="sm">
-                  មានការកែប្រែមិនទាន់រក្សាទុក
-                </AppleBadge>
+          {(dateGuard.allowed || rollCallSession) && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {rollCallSession ? (
+                  <AppleBadge variant="green" size="sm">
+                    <CheckCircle2 size={12} className="mr-1 inline" />
+                    បានហៅឈ្មោះរួច
+                  </AppleBadge>
+                ) : dateGuard.allowed ? (
+                  <AppleBadge variant="gray" size="sm">
+                    មិនទាន់ហៅឈ្មោះ (ព្រាង)
+                  </AppleBadge>
+                ) : null}
+                {dateGuard.allowed && isDirty && (
+                  <AppleBadge variant="orange" size="sm">
+                    មានការកែប្រែមិនទាន់រក្សាទុក
+                  </AppleBadge>
+                )}
+              </div>
+
+              {rollCallSession && (
+                <AppleButton
+                  variant="danger"
+                  size="sm"
+                  icon={<Trash2 size={14} />}
+                  onClick={() => setIsDeleteConfirmOpen(true)}
+                >
+                  លុបការហៅឈ្មោះថ្ងៃនេះ
+                </AppleButton>
               )}
             </div>
-
-            {rollCallSession && (
-              <AppleButton
-                variant="danger"
-                size="sm"
-                icon={<Trash2 size={14} />}
-                onClick={() => setIsDeleteConfirmOpen(true)}
-              >
-                លុបការហៅឈ្មោះថ្ងៃនេះ
-              </AppleButton>
-            )}
-          </div>
+          )}
 
           {!dateGuard.allowed ? (
             <div
