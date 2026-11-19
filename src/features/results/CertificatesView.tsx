@@ -177,12 +177,12 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
             })
           : `ប័ណ្ណសរសើរ_${target.student.nameKm}_${selectedMonth}.pdf`;
 
-      await exportPrintNodesToPdf(pageNodes, {
+      const exported = await exportPrintNodesToPdf(pageNodes, {
         fileName,
         orientation: 'landscape',
         pixelRatio: 3,
       });
-      addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+      if (exported) addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
     } catch (err) {
       console.error('Certificates export failed:', err);
       addToast({

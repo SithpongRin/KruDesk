@@ -139,12 +139,12 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
         ext: 'pdf',
         useKhmerDigits: useKhmerNumerals,
       });
-      await exportPrintNodesToPdf(pageNodes, {
+      const exported = await exportPrintNodesToPdf(pageNodes, {
         fileName,
         orientation: 'portrait',
         pixelRatio: 3,
       });
-      addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+      if (exported) addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
     } catch (err) {
       console.error('HonorRoll export failed:', err);
       addToast({

@@ -292,12 +292,12 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
           ext: 'pdf',
           useKhmerDigits: useKhmerNumerals,
         });
-        await exportPrintNodesToPdf(pageNodes, {
+        const exported = await exportPrintNodesToPdf(pageNodes, {
           fileName,
           orientation: 'portrait',
           pixelRatio: 3,
         });
-        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+        if (exported) addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
         return;
       }
 
@@ -329,12 +329,12 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
           ext: 'pdf',
           useKhmerDigits: useKhmerNumerals,
         });
-        await exportPrintNodesToPdf(pageNodes, {
+        const exported = await exportPrintNodesToPdf(pageNodes, {
           fileName,
           orientation: 'portrait',
           pixelRatio: 3,
         });
-        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+        if (exported) addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
         return;
       }
 
@@ -377,12 +377,12 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                 ext: 'pdf',
                 useKhmerDigits: useKhmerNumerals,
               });
-        await exportPrintNodesToPdf(pageNodes, {
+        const exported = await exportPrintNodesToPdf(pageNodes, {
           fileName,
           orientation: 'portrait',
           pixelRatio: 3,
         });
-        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+        if (exported) addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
         return;
       }
 
@@ -440,12 +440,12 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                 ext: 'pdf',
                 useKhmerDigits: useKhmerNumerals,
               });
-        await exportPrintNodesToPdf(pageNodes, {
+        const exported = await exportPrintNodesToPdf(pageNodes, {
           fileName,
           orientation: 'portrait',
           pixelRatio: 3,
         });
-        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+        if (exported) addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
         return;
       }
 
@@ -463,12 +463,12 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
         ext: 'pdf',
         useKhmerDigits: useKhmerNumerals,
       });
-      await exportPrintNodesToPdf(pageNodes, {
+      const exported = await exportPrintNodesToPdf(pageNodes, {
         fileName,
         orientation: 'portrait',
         pixelRatio: 3,
       });
-      addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+      if (exported) addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
     } catch (err) {
       console.error('MonthlyResults export failed:', err);
       addToast({

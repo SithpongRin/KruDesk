@@ -299,12 +299,12 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ profile }) => {
           ext: 'pdf',
           useKhmerDigits: useKhmerNumerals,
         });
-        await exportPrintNodesToPdf(pageNodes, {
+        const exported = await exportPrintNodesToPdf(pageNodes, {
           fileName,
           orientation: 'landscape',
           pixelRatio: 3,
         });
-        addToast({
+        if (exported) addToast({
           type: 'success',
           title: 'នាំចេញ PDF ជោគជ័យ!',
           message: fileName,

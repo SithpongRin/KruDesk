@@ -46,31 +46,44 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
   return bytes;
 }
 
-/**
- * Shared PDF export pipeline for Khmer documents:
- * React print-layout DOM nodes -> await document.fonts.ready -> html-to-image (3x PNG) -> pdf-lib A4 pages.
- * Never calls pdf-lib drawText with Khmer strings (rasterizes properly shaped Khmer DOM instead).
- */
-export async function exportPrintNodesToPdf(
+export interface PdfExportOptions {
+  fileName: string;
+  orientation?: PageOrientation;
+  pageSize?: PaperSize;
+  pixelRatio?: number;
+  /** Show «មើលមុន» before downloading (default true). */
+  preview?: boolean;
+}
+
+/** Rasterizes each print page once (html-to-image, white background). */
+export async function renderPrintNodesToPng(
   pageElements: HTMLElement[],
-  options: {
-    fileName: string;
-    orientation?: PageOrientation;
-    pageSize?: PaperSize;
-    pixelRatio?: number;
-  }
-): Promise<Uint8Array> {
+  pixelRatio = 3
+): Promise<string[]> {
   if (pageElements.length === 0) {
     throw new Error('គ្មានទំព័រសម្រាប់បង្កើត PDF ទេ');
   }
-
   await ensurePrintFontsReady();
+  const { toPng } = await import('html-to-image');
+  const pages: string[] = [];
+  for (const el of pageElements) {
+    pages.push(
+      await toPng(el, {
+        pixelRatio,
+        backgroundColor: '#ffffff',
+        skipAutoScale: true,
+      })
+    );
+  }
+  return pages;
+}
 
-  const [{ PDFDocument }, { toPng }] = await Promise.all([
-    import('pdf-lib'),
-    import('html-to-image'),
-  ]);
-
+/** Builds the PDF from already-rendered page PNGs: one full-bleed image per A4/A3 page. */
+export async function buildPdfFromPngs(
+  pages: string[],
+  options: Pick<PdfExportOptions, 'orientation' | 'pageSize'>
+): Promise<Uint8Array> {
+  const { PDFDocument } = await import('pdf-lib');
   const pdfDoc = await PDFDocument.create();
   const isA3 = options.pageSize === 'A3';
   const [pageW, pageH] =
@@ -81,27 +94,40 @@ export async function exportPrintNodesToPdf(
       : isA3
         ? A3_LANDSCAPE_PT
         : A4_LANDSCAPE_PT;
-  const pixelRatio = options.pixelRatio ?? 3;
 
-  for (const el of pageElements) {
-    const dataUrl = await toPng(el, {
-      pixelRatio,
-      backgroundColor: '#ffffff',
-      skipAutoScale: true,
-    });
-    const pngBytes = dataUrlToUint8Array(dataUrl);
-    const embeddedPng = await pdfDoc.embedPng(pngBytes);
-
+  for (const dataUrl of pages) {
+    const embeddedPng = await pdfDoc.embedPng(dataUrlToUint8Array(dataUrl));
     const page = pdfDoc.addPage([pageW, pageH]);
-    page.drawImage(embeddedPng, {
-      x: 0,
-      y: 0,
-      width: pageW,
-      height: pageH,
+    page.drawImage(embeddedPng, { x: 0, y: 0, width: pageW, height: pageH });
+  }
+  return pdfDoc.save();
+}
+
+/**
+ * Shared PDF export pipeline for Khmer documents:
+ * React print-layout DOM nodes -> fonts ready -> html-to-image (3x PNG) -> «មើលមុន» of those
+ * same PNGs -> pdf-lib A4 pages from the same PNGs. Preview and PDF are therefore identical.
+ * Never calls pdf-lib drawText with Khmer strings (rasterizes properly shaped Khmer DOM instead).
+ *
+ * Returns the PDF bytes, or null when the teacher closed the preview without downloading.
+ */
+export async function exportPrintNodesToPdf(
+  pageElements: HTMLElement[],
+  options: PdfExportOptions
+): Promise<Uint8Array | null> {
+  const pages = await renderPrintNodesToPng(pageElements, options.pixelRatio ?? 3);
+
+  if (options.preview !== false) {
+    const { usePdfPreviewStore } = await import('../store/usePdfPreviewStore');
+    const download = await usePdfPreviewStore.getState().open({
+      pages,
+      fileName: options.fileName,
+      orientation: options.orientation ?? 'landscape',
     });
+    if (!download) return null;
   }
 
-  const pdfBytes = await pdfDoc.save();
+  const pdfBytes = await buildPdfFromPngs(pages, options);
   const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
   triggerBlobDownload(blob, options.fileName);
   return pdfBytes;

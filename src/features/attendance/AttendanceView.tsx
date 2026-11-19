@@ -704,12 +704,12 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ profile }) => {
                 ext: 'pdf',
                 useKhmerDigits: useKhmerNumerals,
               });
-        await exportPrintNodesToPdf(pageNodes, {
+        const exported = await exportPrintNodesToPdf(pageNodes, {
           fileName,
           orientation: 'landscape',
           pixelRatio: 3,
         });
-        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+        if (exported) addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
       }
     } catch (err) {
       console.error('Attendance export failed:', err);

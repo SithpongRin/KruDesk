@@ -1107,14 +1107,14 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
           ext: 'pdf',
           useKhmerDigits: useKhmerNumerals,
         });
-        await exportPrintNodesToPdf(pageNodes, {
+        const exported = await exportPrintNodesToPdf(pageNodes, {
           fileName,
           orientation: 'landscape',
           pageSize: paperSize,
           pixelRatio: paperSize === 'A3' ? 2.5 : 3,
         });
         setPrintStage(null);
-        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+        if (exported) addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
         return;
       }
       return;
@@ -1222,13 +1222,13 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                 ext: 'pdf',
                 useKhmerDigits: useKhmerNumerals,
               });
-      await exportPrintNodesToPdf(pageNodes, {
+      const exported = await exportPrintNodesToPdf(pageNodes, {
         fileName,
         orientation: 'landscape',
         pageSize: 'A4',
         pixelRatio: 3,
       });
-      addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+      if (exported) addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
     }
     } catch (err) {
       console.error('Scores export failed:', err);

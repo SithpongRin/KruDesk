@@ -3,7 +3,7 @@
 > **ខ្មែរ (សង្ខេប)** ៖ ឯកសារនេះប្រាប់ AI ថ្មី (Claude ឬ Gemini) ពីស្ថានភាពគម្រោង ការសម្រេចចិត្តរបស់គ្រូ
 > វិធានធ្វើការ និងការងារដែលនៅសល់។ ចាប់ផ្ដើមឆាតថ្មីដោយឲ្យ AI អានឯកសារនេះមុនគេ។
 >
-> Last updated: 2026-11-19 · Live commit: see `git log -1` on `main` (check Settings → «អំពីកម្មវិធី»)
+> Last updated: 2026-11-20 (handed back to Gemini) · Live commit: see `git log -1` on `main` (check Settings → «អំពីកម្មវិធី»)
 
 ---
 
@@ -31,7 +31,11 @@ src/lib/*          pure logic + tests: grading, attendance, monthlyResults, khme
 src/db/*           database.ts (Dexie schema), repos, presets (subject lists)
 src/services/*     backup, excelImport/Export, pdfExport, card renderer (copied from card app)
 reference/*.webp   photos of the official paper forms — print layouts must match them
-private_samples/   teacher's real school PDFs/PNGs (git-ignored — NEVER commit or copy names/photos into repo/tests)
+private_samples/   teacher's real school PDFs/PNGs (git-ignored — NEVER commit or copy names/photos into repo/tests):
+                   00_moeys_instruction_67_exams_2026-2027.pdf  official MoEYS rules (subjects, max scores, divisors, averages, calendar, absence rules)
+                   01 monthly report card · 02 monthly results table · 03 honor roll · 04 certificate
+                   05 semester report cards (54 pages, one per student) · 06 annual results · 07 semester results
+                   (*_pN.png = page images of the same PDFs)
 PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brief · README.md user guide
 ```
 
@@ -68,10 +72,13 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 
 ## 5. How the teacher works
 
-- Since 2026-11-19 **Claude (Claude Code) writes the code directly** in `D:\KruDesk` (no Gemini
-  prompts any more): change → `npm test` + `npm run build` → try the app in a browser (localhost and
-  the live site) → commit/push only after the teacher says so (push to `main` deploys the live site).
-- Earlier steps were written by Gemini (Antigravity) and reviewed by Claude.
+- **From 2026-11-20 Gemini (Antigravity) continues the work** (the teacher's choice). Claude wrote the
+  code on 2026-11-19/20 (commits `f8ba48a` … see `git log`); before that Gemini wrote it and Claude reviewed.
+- Each step: change → `npm test` + `npm run build` → try it in a browser (localhost and the live
+  site) → commit/push only after the teacher says so (push to `main` deploys the live site).
+- **Check every printed document against `private_samples/`** (layout) and
+  `private_samples/00_moeys_instruction_67_exams_2026-2027.pdf` (rules). The teacher notices
+  differences in column widths, fonts (Moul for headings), signature blocks and wording.
 - Local dev server: `npm run dev` → http://localhost:5173/KruDesk/
 
 ## 6. Open items
@@ -111,3 +118,34 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
       The app only has one absence limit. Ask the teacher before adding.
 - [ ] Ask the teacher how the school counts «បណ្ណសរសើរ» / «លិខិតសរសើរ» on the semester report
       (app counts months with a certificate; the school sample shows 0 / 0).
+- [x] **PDF preview «មើលមុន» (2026-11-20):** `exportPrintNodesToPdf` renders each page to PNG once
+      (`renderPrintNodesToPng`), shows those PNGs in `PdfPreviewModal` (`usePdfPreviewStore`, mounted
+      in `App.tsx`), and builds the PDF from the same PNGs (`buildPdfFromPngs`) only when the teacher
+      presses «ទាញយក PDF» — preview and PDF are identical. It returns `null` when the preview is
+      closed; every caller shows the success toast only `if (exported)`. Card PDFs (`pdfService.ts`)
+      keep their own `CardPreviewModal`. Tests: `src/services/__tests__/pdfPreview.test.tsx`.
+
+## 7. «បញ្ជីពិន្ទុ» vs the MoEYS standard (checked 2026-11-20)
+
+| Item | MoEYS instruction ៦៧ (2026-2027) | KruDesk now | Status |
+|---|---|---|---|
+| Grades 7–8 subjects | 14 exam subjects, total 750, i = 15 (§4.1): តែងសេចក្ដី 60, សរសេរតាមអាន 40, គណិត 100, others 50 incl. «អប់រំកាយ កីឡា និងសុខភាព» and «បំណិនជីវិតតាមមូលដ្ឋាន (សិល្បៈ កសិកម្ម ពេងជាង…)» | school preset: 15 subjects (សិល្បៈ and ICT separate, បំណិនជីវិត off), total 800, i = 16 | OK — the ministry note (§5) lets schools with extra subjects use i = total ÷ 50; the teacher chose the school list. Names follow the school («អប់រំកាយ-កីឡា», «ផែនដីវិទ្យា») |
+| Grade 9 subjects | 10 subjects, total 420, i = 8.4 + ភាសាបរទេស bonus (score − 25) (§2.1) | `createGrade9Subjects()` | OK (tests reproduce the ministry example: 35.82) |
+| Grades 10, 11, 12 subjects | grade 10: 13 subjects, 800 (i = 16), ភាសាខ្មែរ 150, គណិត 150, ភាសាបរទេស 100, others 25–50; grade 11 and 12: science / social-science tracks (825, i = 16.5 / 625, i = 12.5), grade 12 ភាសាបរទេស bonus (§3, §5) | `createUpperSecondarySubjects()`: 12 subjects, all /50 | **NOT per ministry** — next task |
+| Monthly average | sum of all subjects ÷ i (on /50) | (sum ÷ sum of max) × 50 with blank = 0 → same value | OK |
+| Monthly-in-semester average | sum of monthly averages ÷ number of months | same | OK |
+| Semester exam average | sum of exam scores ÷ i | same (exam tab uses the class subjects) | OK |
+| Semester average | (exam avg + monthly avg) ÷ 2 | same, on displayed 2-decimal values | OK |
+| Annual average | (S1 + S2) ÷ 2 | same | OK |
+| Decimals | examples are truncated (34.395 → 34.39) | truncate by default | OK |
+| Semester months (grades 7–8) | S1 exam 8–13 Feb, S2 exam 23–28 Aug | S1 = Nov–Jan, S2 = Mar–Jul | OK (grade 9 sits S2 on 14–19 June, grade 12 on 7–12 June — the app has one calendar for all grades) |
+| Fail / not eligible (grades 9, 12) | annual avg < 25; missing semester-exam subjects; unexcused > 30; unexcused + excused > 40; many excused absences (§6.5) | avg < 25 or one absence limit (default unexcused > 30) | **Partly** — open item above |
+
+### Next tasks for Gemini (ask the teacher before each)
+1. Upper-secondary presets per grade (10, 11 science / social, 12 science / social) from §3 and §5 of
+   the ministry PDF, the same way grade 9 was done (`getPresetSubjects(preset, gradeLevel)`, plus a
+   track choice for grades 11–12). Grade 12 ភាសាបរទេស is a bonus subject like grade 9.
+2. Per-grade semester calendars if the teacher wants grade 9 / 12 to differ from grades 7–8.
+3. The grade 9 / 12 absence and missing-exam rules (open item above).
+4. «បណ្ណសរសើរ» / «លិខិតសរសើរ» counting on the semester report (open item above).
+5. Results tables (samples 02, 06, 07) still use slightly smaller fonts than the samples.

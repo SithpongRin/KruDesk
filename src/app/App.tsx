@@ -12,6 +12,7 @@ import { OnboardingView } from '../components/layout/OnboardingView';
 import { AppleModal } from '../components/common/AppleModal';
 import { AppleButton } from '../components/common/AppleButton';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
+import { PdfPreviewModal } from '../components/common/PdfPreviewModal';
 import { MOEYS_EMBLEM_DATA_URI } from '../utils/moeysEmblemDataUri';
 
 const DashboardView = lazy(() =>
@@ -267,6 +268,7 @@ const AppInner: React.FC<{
 
       <MobileBottomNav />
       {toastPortal}
+      <PdfPreviewModal />
 
       {/* One-time prompt for existing profiles created before province field existed */}
       <AppleModal
