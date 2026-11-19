@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { computeMonthlyResults } from '../monthlyResults';
+import {
+  buildStudentReportSubjectRows,
+  computeMonthlyResults,
+  orderReportRows,
+} from '../monthlyResults';
 import { formatAverage } from '../grading';
 import { DEFAULT_SCORE_CONFIG, type AbsenceCode, type Student, type Subject } from '../../types/domain';
 
@@ -75,5 +79,45 @@ describe('monthlyResults & formatAverage', () => {
     expect(summary.gradeCounts.A).toEqual({ total: 2, female: 1 });
     expect(summary.gradeCounts.F).toEqual({ total: 1, female: 1 });
     expect(summary.absentAllMonth).toEqual({ total: 1, female: 1 });
+  });
+
+  it('builds per-subject report rows (grouped parts separate, inactive skipped) and orders ranked rows', () => {
+    const subjects: Subject[] = [
+      { id: 'kh_d', name: 'សរសេរតាមអាន', group: 'អក្សរសាស្ត្រខ្មែរ', maxScore: 50, order: 1 },
+      { id: 'kh_e', name: 'តែងសេចក្ដី', group: 'អក្សរសាស្ត្រខ្មែរ', maxScore: 50, order: 2 },
+      { id: 'math', name: 'គណិតវិទ្យា', maxScore: 100, order: 3 },
+      { id: 'opt', name: 'គេហវិទ្យា', maxScore: 50, order: 4, isActive: false },
+    ];
+
+    const rows = buildStudentReportSubjectRows(subjects, {
+      kh_d: 45, // 45/50 -> A
+      kh_e: 40, // 40/50 -> B
+      math: 80, // 80/100 * 50 = 40 -> B
+      opt: 50,
+    });
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.name)).toEqual(['សរសេរតាមអាន', 'តែងសេចក្ដី', 'គណិតវិទ្យា']);
+    expect(rows.map((r) => r.grade)).toEqual(['A', 'B', 'B']);
+
+    const students = [
+      makeStudent(1, 'កែវ ក', 'ស្រី'),
+      makeStudent(2, 'ចាន់ ខ', 'ប្រុស'),
+      makeStudent(3, 'គង់ គ', 'ប្រុស'), // no scores
+    ];
+    const summary = computeMonthlyResults({
+      students,
+      subjects,
+      month: '2026-06',
+      scoresByStudent: new Map([
+        [1, { kh_d: 30, kh_e: 30, math: 60 }], // rank 2
+        [2, { kh_d: 45, kh_e: 45, math: 90 }], // rank 1
+      ]),
+      attendanceLookup: new Map(),
+      takenDates: new Set(),
+      scoreConfig: DEFAULT_SCORE_CONFIG,
+    });
+
+    expect(orderReportRows(summary.rows, 'rank').map((r) => r.student.id)).toEqual([2, 1]);
+    expect(orderReportRows(summary.rows, 'class').map((r) => r.student.id)).toEqual([1, 2]);
   });
 });

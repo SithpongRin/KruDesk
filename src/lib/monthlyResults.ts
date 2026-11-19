@@ -13,6 +13,7 @@ import {
   computeCompetitionRanks,
   computeScoreRow,
   gradeFor,
+  isSubjectActive,
   sortSubjects,
   type ScoreGrade,
 } from './grading';
@@ -176,4 +177,48 @@ export function computeMonthlyResults(params: {
     absentAllMonth: { total: absentAllTotal, female: absentAllFemale },
     takenDaysCount,
   };
+}
+
+export interface StudentReportSubjectRow {
+  orderNum: number;
+  subjectId: string;
+  name: string;
+  maxScore: number;
+  score: number | null;
+  grade: ScoreGrade | null;
+}
+
+export function buildStudentReportSubjectRows(
+  subjects: Subject[],
+  scores: Record<string, number | null> | undefined
+): StudentReportSubjectRow[] {
+  const active = sortSubjects(subjects).filter(isSubjectActive);
+  return active.map((subj, idx) => {
+    const raw = scores?.[subj.id];
+    const score = typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+    const scaled = score !== null && subj.maxScore > 0 ? (score / subj.maxScore) * 50 : null;
+    return {
+      orderNum: idx + 1,
+      subjectId: subj.id,
+      name: subj.name,
+      maxScore: subj.maxScore,
+      score,
+      grade: gradeFor(scaled),
+    };
+  });
+}
+
+export type ReportOrderMode = 'rank' | 'class';
+
+export function orderReportRows(
+  rows: MonthlyResultRow[],
+  order: ReportOrderMode
+): MonthlyResultRow[] {
+  const ranked = rows.filter((r) => r.rank !== null);
+  if (order === 'rank') return ranked;
+  return [...ranked].sort(
+    (a, b) =>
+      a.student.order - b.student.order ||
+      compareKhmerNames(a.student.nameKm, b.student.nameKm)
+  );
 }

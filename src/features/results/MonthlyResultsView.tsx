@@ -18,6 +18,9 @@ import {
   computeMonthlyResults,
   GRADE_COLOR_CLASSES,
   GRADE_ORDER,
+  orderReportRows,
+  type MonthlyResultRow,
+  type ReportOrderMode,
 } from '../../lib/monthlyResults';
 import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
 import { AppleCard } from '../../components/common/AppleCard';
@@ -27,6 +30,10 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { DocumentSignDialog } from '../../components/common/DocumentSignDialog';
 import type { DocumentSignOptions } from '../../print/DocumentSignature';
 import { MonthlyResultsSheet } from '../../print/MonthlyResultsSheet';
+import {
+  StudentReportSheet,
+  type StudentReportEntry,
+} from '../../print/StudentReportSheet';
 import { exportMonthlyResultsExcel } from '../../services/excelExport';
 import { ensurePrintFontsReady, exportPrintNodesToPdf, nextPaint } from '../../services/pdfExport';
 
@@ -124,14 +131,25 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
     return order.map((m) => resolveAcademicMonthKey(yearStr, m));
   }, [currentClass?.academicYear, profile.academicYear]);
 
-  const [pendingExportType, setPendingExportType] = useState<'pdf' | 'excel' | null>(null);
+  const [pendingExportType, setPendingExportType] = useState<
+    'pdf' | 'excel' | 'report-all' | 'report-one' | null
+  >(null);
+  const [targetReportRow, setTargetReportRow] = useState<MonthlyResultRow | null>(null);
+  const [reportOrder, setReportOrder] = useState<ReportOrderMode>('rank');
   const [printSignOptions, setPrintSignOptions] = useState<DocumentSignOptions | null>(null);
+  const [printReportData, setPrintReportData] = useState<{
+    entries: StudentReportEntry[];
+    signOptions: DocumentSignOptions;
+  } | null>(null);
   const pdfStageRef = useRef<HTMLDivElement>(null);
+  const reportStageRef = useRef<HTMLDivElement>(null);
 
   const handleConfirmExport = async (signOptions: DocumentSignOptions) => {
-    if (!currentClass || !summary) return;
+    if (!currentClass || !summary || !monthData) return;
     const mode = pendingExportType;
+    const singleRow = targetReportRow;
     setPendingExportType(null);
+    setTargetReportRow(null);
     if (!mode) return;
 
     try {
@@ -146,6 +164,53 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
           useKhmerDigits: useKhmerNumerals,
         });
         addToast({ type: 'success', title: 'នាំចេញ Excel ជោគជ័យ!', message: fileName });
+        return;
+      }
+
+      if (mode === 'report-one' || mode === 'report-all') {
+        const selectedRows =
+          mode === 'report-one'
+            ? singleRow
+              ? [singleRow]
+              : []
+            : orderReportRows(summary.rows, reportOrder);
+        if (selectedRows.length === 0) {
+          addToast({
+            type: 'error',
+            title: 'គ្មានទិន្នន័យពិន្ទុ',
+            message: 'មិនទាន់មានសិស្សដែលមានពិន្ទុសម្រាប់បង្កើតលទ្ធផលសិក្សាទេ។',
+          });
+          return;
+        }
+        const entries: StudentReportEntry[] = selectedRows.map((row) => ({
+          row,
+          scores:
+            (row.student.id !== undefined && monthData.scoresByStudent.get(row.student.id)) || {},
+        }));
+
+        setPrintReportData({ entries, signOptions });
+        await new Promise((r) => setTimeout(r, 80));
+        await nextPaint();
+        await ensurePrintFontsReady();
+        const stage = reportStageRef.current;
+        if (!stage) return;
+        const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
+        const fileName =
+          mode === 'report-one' && singleRow
+            ? `លទ្ធផលសិក្សា_${singleRow.student.nameKm}_${selectedMonth}.pdf`
+            : buildExportFileName({
+                document: 'លទ្ធផលសិក្សា',
+                className: currentClass.name,
+                month: selectedMonth,
+                ext: 'pdf',
+                useKhmerDigits: useKhmerNumerals,
+              });
+        await exportPrintNodesToPdf(pageNodes, {
+          fileName,
+          orientation: 'portrait',
+          pixelRatio: 3,
+        });
+        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
         return;
       }
 
@@ -177,6 +242,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
       });
     } finally {
       setPrintSignOptions(null);
+      setPrintReportData(null);
     }
   };
 
@@ -255,6 +321,15 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
           <AppleButton
             variant="secondary"
             size="sm"
+            icon={<Download size={14} />}
+            disabled={!summary || summary.rows.every((r) => r.rank === null)}
+            onClick={() => setPendingExportType('report-all')}
+          >
+            ទាញយកទាំងអស់
+          </AppleButton>
+          <AppleButton
+            variant="secondary"
+            size="sm"
             icon={<FileSpreadsheet size={14} />}
             disabled={!summary || summary.rows.length === 0}
             onClick={() => setPendingExportType('excel')}
@@ -268,7 +343,6 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
             disabled={!summary || summary.rows.length === 0}
             onClick={() => setPendingExportType('pdf')}
           >
-            <Download size={13} className="hidden" />
             PDF
           </AppleButton>
         </div>
@@ -316,8 +390,11 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                     <th colSpan={3} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-1 text-center">
                       ចំនួនអវត្តមាន
                     </th>
-                    <th rowSpan={2} className="border-b border-black/[0.08] dark:border-white/[0.1] px-3 py-2 text-left">
+                    <th rowSpan={2} className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-3 py-2 text-left">
                       ផ្សេងៗ
+                    </th>
+                    <th rowSpan={2} className="border-b border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
+                      សិក្សាប័ត្រ
                     </th>
                   </tr>
                   <tr className="bg-[#fafafa] dark:bg-white/[0.04] text-[11px]">
@@ -385,8 +462,22 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                       <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-2 text-center font-medium">
                         {r.attendance.total > 0 ? fmt(r.attendance.total) : '—'}
                       </td>
-                      <td className="px-3 py-2 text-[#6e6e73] dark:text-[#98989d]">
+                      <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-3 py-2 text-[#6e6e73] dark:text-[#98989d]">
                         {r.note || '—'}
+                      </td>
+                      <td className="px-2 py-1.5 text-center">
+                        <AppleButton
+                          variant="ghost"
+                          size="sm"
+                          icon={<Download size={13} />}
+                          disabled={r.rank === null}
+                          onClick={() => {
+                            setTargetReportRow(r);
+                            setPendingExportType('report-one');
+                          }}
+                        >
+                          ទាញយក
+                        </AppleButton>
                       </td>
                     </tr>
                   ))}
@@ -416,15 +507,46 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
 
       <DocumentSignDialog
         isOpen={pendingExportType !== null}
-        onClose={() => setPendingExportType(null)}
+        onClose={() => {
+          setPendingExportType(null);
+          setTargetReportRow(null);
+        }}
         title={
           pendingExportType === 'excel'
             ? 'នាំចេញលទ្ធផលប្រចាំខែ (Excel)'
-            : 'នាំចេញលទ្ធផលប្រចាំខែ (PDF)'
+            : pendingExportType === 'report-one'
+              ? `លទ្ធផលសិក្សា — ${targetReportRow?.student.nameKm ?? ''}`
+              : pendingExportType === 'report-all'
+                ? 'ទាញយកលទ្ធផលសិក្សាទាំងអស់ (PDF)'
+                : 'នាំចេញលទ្ធផលប្រចាំខែ (PDF)'
         }
         month={selectedMonth}
         onConfirm={handleConfirmExport}
-      />
+      >
+        {pendingExportType === 'report-all' && (
+          <div>
+            <label
+              htmlFor="report-order-select"
+              className="block text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
+            >
+              លំដាប់ទំព័រ
+            </label>
+            <select
+              id="report-order-select"
+              value={reportOrder}
+              onChange={(e) => setReportOrder(e.target.value as ReportOrderMode)}
+              className="w-full px-3 py-2 rounded-xl text-xs bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7] border border-black/[0.08] dark:border-white/[0.1]"
+            >
+              <option value="rank" className="dark:bg-[#1c1c1e]">
+                តាមចំណាត់ថ្នាក់ (លេខ ១ ដល់ចុងក្រោយ)
+              </option>
+              <option value="class" className="dark:bg-[#1c1c1e]">
+                តាមបញ្ជីឈ្មោះថ្នាក់ (ក–អ)
+              </option>
+            </select>
+          </div>
+        )}
+      </DocumentSignDialog>
 
       {printSignOptions && summary && (
         <div
@@ -439,6 +561,26 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
             summary={summary}
             scoreConfig={scoreConfig}
             signOptions={printSignOptions}
+            useKhmerDigits={useKhmerNumerals}
+          />
+        </div>
+      )}
+
+      {printReportData && summary && (
+        <div
+          ref={reportStageRef}
+          aria-hidden="true"
+          style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}
+        >
+          <StudentReportSheet
+            cls={currentClass}
+            profile={profile}
+            month={selectedMonth}
+            subjects={currentClass.subjects}
+            entries={printReportData.entries}
+            totalStudents={summary.totalStudents}
+            scoreConfig={scoreConfig}
+            signOptions={printReportData.signOptions}
             useKhmerDigits={useKhmerNumerals}
           />
         </div>
