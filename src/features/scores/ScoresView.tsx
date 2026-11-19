@@ -33,6 +33,7 @@ import {
 } from '../../types/domain';
 import { getActiveStudentsOrdered } from '../../lib/attendance';
 import {
+  buildSubjectHeaderSpans,
   collapseGroupedSubjects,
   computeCompetitionRanks,
   computeScoreRow,
@@ -320,6 +321,14 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
     () => collapseGroupedSubjects(activeSubjects),
     [activeSubjects]
   );
+
+  // Grouped subjects (e.g. អក្សរសាស្ត្រខ្មែរ over សរសេរតាមអាន + តែងសេចក្ដី) get a parent
+  // header row on the entry grid, like the paper scorebook.
+  const subjectHeaderSpans = useMemo(
+    () => buildSubjectHeaderSpans(activeSubjects),
+    [activeSubjects]
+  );
+  const hasGroupedHeader = subjectHeaderSpans.some((span) => Boolean(span.group));
 
   const liveCoefficientInfo = useMemo(() => {
     const standardMaxSum = activeSubjects
@@ -1368,20 +1377,12 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
             <div className="mt-4 overflow-x-auto rounded-2xl border border-black/[0.08] dark:border-white/[0.1]">
               <table className="w-full border-collapse text-xs">
                 <thead>
-                  <tr className="bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7]">
-                    <th className="sticky left-0 z-20 bg-[#f5f5f7] dark:bg-[#242426] border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2.5 text-center w-10">
-                      ល.រ
-                    </th>
-                    <th className="sticky left-10 z-20 bg-[#f5f5f7] dark:bg-[#242426] border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2.5 text-left min-w-[155px]">
-                      គោត្តនាម និងនាម
-                    </th>
-                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2.5 text-center min-w-[44px] whitespace-nowrap">
-                      ភេទ
-                    </th>
-
-                    {activeSubjects.map((subj) => (
+                  {(() => {
+                    const headRows = hasGroupedHeader ? 2 : 1;
+                    const renderSubjectTh = (subj: Subject, rowSpan = 1) => (
                       <th
                         key={subj.id}
+                        rowSpan={rowSpan}
                         className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center min-w-[78px] whitespace-nowrap"
                         title={`${subj.name} (អតិបរមា ${subj.maxScore})`}
                       >
@@ -1393,24 +1394,87 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                           {isSubjectBonus(subj) ? ' (បន្ថែម)' : ''}
                         </div>
                       </th>
-                    ))}
+                    );
 
-                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center min-w-[68px] bg-[#eef5ff] dark:bg-blue-500/10">
-                      ពិន្ទុសរុប
-                    </th>
-                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center min-w-[68px] bg-[#eef5ff] dark:bg-blue-500/10">
-                      មធ្យម
-                    </th>
-                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center min-w-[62px] bg-[#eef5ff] dark:bg-blue-500/10">
-                      ចំណាត់
-                    </th>
-                    <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center min-w-[56px] bg-[#eef5ff] dark:bg-blue-500/10">
-                      និទ្ទេស
-                    </th>
-                    <th className="border-b border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-left min-w-[110px]">
-                      ផ្សេងៗ
-                    </th>
-                  </tr>
+                    return (
+                      <>
+                        <tr className="bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7]">
+                          <th
+                            rowSpan={headRows}
+                            className="sticky left-0 z-20 bg-[#f5f5f7] dark:bg-[#242426] border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2.5 text-center w-10"
+                          >
+                            ល.រ
+                          </th>
+                          <th
+                            rowSpan={headRows}
+                            className="sticky left-10 z-20 bg-[#f5f5f7] dark:bg-[#242426] border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2.5 text-left min-w-[155px]"
+                          >
+                            គោត្តនាម និងនាម
+                          </th>
+                          <th
+                            rowSpan={headRows}
+                            className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2.5 text-center min-w-[44px] whitespace-nowrap"
+                          >
+                            ភេទ
+                          </th>
+
+                          {subjectHeaderSpans.map((span) =>
+                            span.group ? (
+                              <th
+                                key={span.key}
+                                colSpan={span.subjects.length}
+                                className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2.5 py-1.5 text-center font-semibold whitespace-nowrap"
+                                title={`${span.group} (អតិបរមា ${span.subjects.reduce((acc, s) => acc + s.maxScore, 0)})`}
+                              >
+                                {span.group}
+                              </th>
+                            ) : (
+                              renderSubjectTh(span.subjects[0], headRows)
+                            )
+                          )}
+
+                          <th
+                            rowSpan={headRows}
+                            className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center min-w-[68px] whitespace-nowrap bg-[#eef5ff] dark:bg-blue-500/10"
+                          >
+                            ពិន្ទុសរុប
+                          </th>
+                          <th
+                            rowSpan={headRows}
+                            className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center min-w-[68px] whitespace-nowrap bg-[#eef5ff] dark:bg-blue-500/10"
+                          >
+                            មធ្យម
+                          </th>
+                          <th
+                            rowSpan={headRows}
+                            className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center min-w-[62px] whitespace-nowrap bg-[#eef5ff] dark:bg-blue-500/10"
+                          >
+                            ចំណាត់
+                          </th>
+                          <th
+                            rowSpan={headRows}
+                            className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-center min-w-[56px] whitespace-nowrap bg-[#eef5ff] dark:bg-blue-500/10"
+                          >
+                            និទ្ទេស
+                          </th>
+                          <th
+                            rowSpan={headRows}
+                            className="border-b border-black/[0.08] dark:border-white/[0.1] px-2 py-2 text-left min-w-[110px] whitespace-nowrap"
+                          >
+                            ផ្សេងៗ
+                          </th>
+                        </tr>
+
+                        {hasGroupedHeader && (
+                          <tr className="bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7]">
+                            {subjectHeaderSpans
+                              .filter((span) => Boolean(span.group))
+                              .flatMap((span) => span.subjects.map((subj) => renderSubjectTh(subj)))}
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })()}
                 </thead>
                 <tbody>
                   {activeStudents.map((student, rowIdx) => {

@@ -107,6 +107,13 @@ describe('Grid interaction performance at full 45-student scale', () => {
       return cells[0];
     });
 
+    // Khmer parts sit under one «អក្សរសាស្ត្រខ្មែរ» header spanning both columns
+    const groupTh = Array.from(container.querySelectorAll('thead th')).find(
+      (th) => th.textContent?.trim() === 'អក្សរសាស្ត្រខ្មែរ'
+    );
+    expect(groupTh?.getAttribute('colspan')).toBe('2');
+    expect(container.querySelectorAll('thead tr').length).toBe(2);
+
     const t0 = performance.now();
     fireEvent.change(cell, { target: { value: '32.5' } });
     const t1 = performance.now();
