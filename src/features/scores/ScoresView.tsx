@@ -1992,8 +1992,9 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                     <tr className="bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7]">
                       <th className="px-3 py-2.5 text-center w-12">ល.រ</th>
                       <th className="px-3 py-2.5 text-center w-16">ប្រើ</th>
-                      <th className="px-3 py-2.5 text-left">ឈ្មោះមុខវិជ្ជា</th>
-                      <th className="px-3 py-2.5 text-left w-48">ក្រុមមុខវិជ្ជា</th>
+                      {/* min width so long Khmer subject names are never cut off */}
+                      <th className="px-3 py-2.5 text-left min-w-[15rem]">ឈ្មោះមុខវិជ្ជា</th>
+                      <th className="px-3 py-2.5 text-left w-40 min-w-[9rem]">ក្រុមមុខវិជ្ជា</th>
                       <th className="px-3 py-2.5 text-center w-28">ពិន្ទុអតិបរមា</th>
                       <th className="px-3 py-2.5 text-center w-28">លំដាប់</th>
                       <th className="px-3 py-2.5 text-center w-20">លុប</th>
@@ -2027,6 +2028,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                           <input
                             type="text"
                             aria-label={`ឈ្មោះមុខវិជ្ជា ${subj.name}`}
+                            title={subj.name}
                             defaultValue={subj.name}
                             onBlur={(e) => {
                               const nextName = e.target.value.trim();

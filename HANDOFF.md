@@ -3,7 +3,7 @@
 > **ខ្មែរ (សង្ខេប)** ៖ ឯកសារនេះប្រាប់ AI ថ្មី (Claude ឬ Gemini) ពីស្ថានភាពគម្រោង ការសម្រេចចិត្តរបស់គ្រូ
 > វិធានធ្វើការ និងការងារដែលនៅសល់។ ចាប់ផ្ដើមឆាតថ្មីដោយឲ្យ AI អានឯកសារនេះមុនគេ។
 >
-> Last updated: 2026-11-19 · Live commit: `c738653` on `main`
+> Last updated: 2026-11-19 · Live commit: `c882a6b` on `main` (check Settings → «អំពីកម្មវិធី»)
 
 ---
 
@@ -68,9 +68,10 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 
 ## 5. How the teacher works
 
-- **Gemini (Antigravity)** writes the code in `D:\KruDesk`, commits and pushes.
-- **Claude (Claude Code)** reviews each step: reads the diff, runs tests/build, tries the app in a
-  browser (localhost and the live site), checks generated PDFs, and writes the next prompt for Gemini.
+- Since 2026-11-19 **Claude (Claude Code) writes the code directly** in `D:\KruDesk` (no Gemini
+  prompts any more): change → `npm test` + `npm run build` → try the app in a browser (localhost and
+  the live site) → commit/push only after the teacher says so (push to `main` deploys the live site).
+- Earlier steps were written by Gemini (Antigravity) and reviewed by Claude.
 - Local dev server: `npm run dev` → http://localhost:5173/KruDesk/
 
 ## 6. Open items
@@ -82,7 +83,9 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 - [x] **Migrated attendance display (done in `da602a5`, backup fix in `ba487c0`):** migrated sessions show «បានរក្សាទុក (ពីទិន្នន័យចាស់)» without a timestamp; Dexie v3 + backup restore flag shared `savedAt` sessions.
 - [x] **Stale chunk after deploy (done in `ba487c0`):** `vite:preloadError` and `ErrorBoundary` reload once via `krudesk-chunk-reload` in `sessionStorage`, cleared after healthy app start.
 - [x] **Subject names & lower-secondary scorebook (done in `c738653`, refined):** cols 4, 13, 14 named, `isActive`/`isBonus` added, Dexie v4 + backup restore (`< v3` only) normalize default-named preset subjects while leaving teacher-renamed subjects active.
-- [ ] Not yet tested by a human: Excel import from a real file, restore from a `.json` file,
+- [x] **Restore from `.json` (checked on the live site 2026-11-19):** a fake-data schema v3 backup
+      restored from the onboarding «ស្ដារពី Backup» (1 class, 3 students, attendance, monthly scores).
+- [ ] Not yet tested by a human: Excel import from a real file, real PDF downloads,
       printing on real paper (attendance, scores, cards duplex alignment).
 - [ ] Browser storage is not "persisted" on a normal visit → teachers should install the app and back up weekly.
 - [x] **App updates (done in `82d7218`):** the installed app also checks for a new version when the
@@ -92,7 +95,10 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
       from the school preset shows an orange banner «ប្ដូរតាមគំរូសាលា» (one click → merge) with
       «កុំបង្ហាញទៀត» (per class, `localStorage['krudesk.presetHintDismissed']`). The merge also
       matches hand-typed subjects **by name** (ignores spaces, hyphens, «(…)»), so no duplicates.
+      Checked on the live site (2026-11-19, fake class with the old 11 subjects): banner shown →
+      merge → 15 active subjects, ids and scores kept, banner gone.
 - [ ] **Teacher's 8A still has the old 11 subjects (math /50, Khmer 50+50)** until they click
       «ប្ដូរតាមគំរូសាលា». Math scores already typed on /50 then count on /100 — teacher must re-check them.
-- [ ] Real PWA update flow not yet verified on the live site (the browser pane cannot register a
-      service worker on localhost).
+- [ ] Real PWA update flow not yet fully verified. On the live site (2026-11-19) the service worker
+      registers and «ពិនិត្យរកកំណែថ្មី» answers «អ្នកកំពុងប្រើកំណែចុងក្រោយ»; still to see: the
+      «មានកំណែថ្មី» prompt appearing after the next deploy, and «ធ្វើបច្ចុប្បន្នភាពឥឡូវ» reloading it.
