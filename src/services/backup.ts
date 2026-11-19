@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { db, setSetting } from '../db/database';
+import { db, deriveSessionsFromAbsenceRows, setSetting } from '../db/database';
 import { toLocalDateKey } from '../lib/khmerDate';
 import type {
   AppSetting,
   Attendance,
+  AttendanceSession,
   Holiday,
   MonthlyScore,
   SchoolClass,
@@ -12,7 +13,7 @@ import type {
 } from '../types/domain';
 import type { CardTemplate } from '../types/template';
 
-export const BACKUP_SCHEMA_VERSION = 1 as const;
+export const BACKUP_SCHEMA_VERSION = 2 as const;
 
 const SubjectSchema = z.object({
   id: z.string().min(1),
@@ -67,6 +68,14 @@ const AttendanceBackupSchema = z.object({
   status: z.enum(['ច្ប', 'អច្ប', 'ឈ']),
 });
 
+const AttendanceSessionBackupSchema = z
+  .object({
+    classId: z.number().int().positive(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    savedAt: z.number(),
+  })
+  .passthrough();
+
 const HolidayBackupSchema = z
   .object({
     id: z.number().int().positive().optional(),
@@ -104,13 +113,14 @@ const AppSettingBackupSchema = z
 
 export const KruDeskBackupSchema = z.object({
   appName: z.literal('KruDesk'),
-  schemaVersion: z.literal(BACKUP_SCHEMA_VERSION),
+  schemaVersion: z.union([z.literal(1), z.literal(2)]),
   exportedAt: z.number().int().positive(),
   data: z.object({
     settings: z.array(AppSettingBackupSchema),
     classes: z.array(SchoolClassBackupSchema),
     students: z.array(StudentBackupSchema),
     attendance: z.array(AttendanceBackupSchema),
+    attendanceSessions: z.array(AttendanceSessionBackupSchema).optional(),
     holidays: z.array(HolidayBackupSchema),
     monthlyScores: z.array(MonthlyScoreBackupSchema),
     semesterExams: z.array(SemesterExamBackupSchema),
@@ -161,17 +171,27 @@ export function dataUrlToBlob(dataUrl: string): Blob | undefined {
 }
 
 export async function buildBackupPayload(now: number = Date.now()): Promise<KruDeskBackupPayload> {
-  const [settings, classes, students, attendance, holidays, monthlyScores, semesterExams, templates] =
-    await Promise.all([
-      db.settings.toArray(),
-      db.classes.toArray(),
-      db.students.toArray(),
-      db.attendance.toArray(),
-      db.holidays.toArray(),
-      db.monthlyScores.toArray(),
-      db.semesterExams.toArray(),
-      db.templates.toArray(),
-    ]);
+  const [
+    settings,
+    classes,
+    students,
+    attendance,
+    attendanceSessions,
+    holidays,
+    monthlyScores,
+    semesterExams,
+    templates,
+  ] = await Promise.all([
+    db.settings.toArray(),
+    db.classes.toArray(),
+    db.students.toArray(),
+    db.attendance.toArray(),
+    db.attendanceSessions.toArray(),
+    db.holidays.toArray(),
+    db.monthlyScores.toArray(),
+    db.semesterExams.toArray(),
+    db.templates.toArray(),
+  ]);
 
   const serializedStudents = await Promise.all(
     students.map(async (s) => {
@@ -193,6 +213,8 @@ export async function buildBackupPayload(now: number = Date.now()): Promise<KruD
       classes: classes as unknown as KruDeskBackupPayload['data']['classes'],
       students: serializedStudents,
       attendance,
+      attendanceSessions:
+        attendanceSessions as unknown as KruDeskBackupPayload['data']['attendanceSessions'],
       holidays: holidays as unknown as KruDeskBackupPayload['data']['holidays'],
       monthlyScores: monthlyScores as unknown as KruDeskBackupPayload['data']['monthlyScores'],
       semesterExams: semesterExams as unknown as KruDeskBackupPayload['data']['semesterExams'],
@@ -280,6 +302,7 @@ export async function restoreBackupPayload(
       db.classes,
       db.students,
       db.attendance,
+      db.attendanceSessions,
       db.holidays,
       db.monthlyScores,
       db.semesterExams,
@@ -295,6 +318,7 @@ export async function restoreBackupPayload(
           db.classes.clear(),
           db.students.clear(),
           db.attendance.clear(),
+          db.attendanceSessions.clear(),
           db.holidays.clear(),
           db.monthlyScores.clear(),
           db.semesterExams.clear(),
@@ -329,6 +353,15 @@ export async function restoreBackupPayload(
           studentRef: studentIdMap.get(a.studentRef) ?? a.studentRef,
         }));
         if (attendanceRows.length > 0) await db.attendance.bulkPut(attendanceRows);
+
+        const sessionRows: AttendanceSession[] =
+          validated.schemaVersion === 1 || data.attendanceSessions === undefined
+            ? deriveSessionsFromAbsenceRows(attendanceRows, validated.exportedAt)
+            : data.attendanceSessions.map((s) => ({
+                ...s,
+                classId: classIdMap.get(s.classId) ?? s.classId,
+              }));
+        if (sessionRows.length > 0) await db.attendanceSessions.bulkPut(sessionRows);
 
         const holidayRows: Holiday[] = data.holidays.map(({ id: _id, ...h }) => h);
         if (holidayRows.length > 0) await db.holidays.bulkAdd(holidayRows);
@@ -400,6 +433,15 @@ export async function restoreBackupPayload(
           studentRef: studentIdMap.get(a.studentRef) ?? a.studentRef,
         }));
         if (attendanceRows.length > 0) await db.attendance.bulkPut(attendanceRows);
+
+        const sessionRows: AttendanceSession[] =
+          validated.schemaVersion === 1 || data.attendanceSessions === undefined
+            ? deriveSessionsFromAbsenceRows(attendanceRows, validated.exportedAt)
+            : data.attendanceSessions.map((s) => ({
+                ...s,
+                classId: classIdMap.get(s.classId) ?? s.classId,
+              }));
+        if (sessionRows.length > 0) await db.attendanceSessions.bulkPut(sessionRows);
 
         for (const h of data.holidays) {
           const existingHoliday = await db.holidays.where('date').equals(h.date).first();

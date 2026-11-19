@@ -218,7 +218,7 @@ export async function exportAttendanceExcel(params: {
   cls: SchoolClass;
   students: Student[];
   profile: Profile;
-  monthsData: Array<{ month: string; lookup: Map<string, AbsenceCode> }>;
+  monthsData: Array<{ month: string; lookup: Map<string, AbsenceCode>; takenDates: Set<string> }>;
   attendanceConfig: AttendanceConfig;
   holidayDates: Set<string>;
   todayKey: string;
@@ -270,8 +270,11 @@ export async function exportAttendanceExcel(params: {
       restWeekdays: attendanceConfig.restWeekdays,
       holidayDates,
       todayKey,
+      takenDates: mData.takenDates,
     });
     const dailyTotals = computeDailyAbsenceTotals(activeStudents, mData.lookup, dayInfos);
+    const isShadedDay = (d: (typeof dayInfos)[number]) =>
+      d.isNonSchoolDay || (!d.isFuture && !d.isTaken);
 
     const daysCount = dayInfos.length;
     const totalCols = 3 + daysCount + 4; // ល.រ, អត្តលេខ, ឈ្មោះ + days + ច្ប, អច្ប, សរុប, ផ្សេងៗ
@@ -330,7 +333,7 @@ export async function exportAttendanceExcel(params: {
       const col = 4 + i;
       sheet.getCell(hdrTop, col).value = useKhmerDigits ? fmt(d.day) : d.day;
       sheet.mergeCells(hdrTop, col, hdrBot, col);
-      if (d.isNonSchoolDay) {
+      if (isShadedDay(d)) {
         sheet.getCell(hdrTop, col).fill = restFill;
         sheet.getCell(hdrBot, col).fill = restFill;
       }
@@ -376,10 +379,10 @@ export async function exportAttendanceExcel(params: {
       dayInfos.forEach((d, di) => {
         const col = 4 + di;
         const cell = row.getCell(col);
-        if (d.isNonSchoolDay) {
+        if (isShadedDay(d)) {
           cell.fill = restFill;
           cell.value = '';
-        } else if (!d.isFuture && s.id !== undefined) {
+        } else if (d.isTaken && s.id !== undefined) {
           const code = mData.lookup.get(makeAttendanceCellKey(s.id, d.dateKey));
           cell.value = code || '';
         } else {
@@ -414,7 +417,7 @@ export async function exportAttendanceExcel(params: {
     dayInfos.forEach((d, di) => {
       const col = 4 + di;
       const cell = sheet.getCell(footerRowNum, col);
-      if (d.isNonSchoolDay) cell.fill = restFill;
+      if (isShadedDay(d)) cell.fill = restFill;
       const cnt = dailyTotals[di];
       cell.value = cnt !== null && cnt > 0 ? (useKhmerDigits ? fmt(cnt) : cnt) : '';
     });

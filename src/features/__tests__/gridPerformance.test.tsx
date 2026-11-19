@@ -54,34 +54,46 @@ describe('Grid interaction performance at full 45-student scale', () => {
 
     useAppStore.setState({
       selectedClassId: classId,
-      selectedMonth: '2026-12', // 31 days
+      selectedMonth: '2026-10', // 31 days (October 2026)
+      pendingRollCallDate: '2026-10-15', // Past school day
       useKhmerNumerals: false,
     });
     return classId;
   }
 
-  it('handles 45 students x 31 days attendance cell click smoothly', async () => {
-    await seed45Class();
-    const { container } = render(<AttendanceView profile={TEST_PROFILE} />);
+  it('handles 45 students x 31 days attendance grid & roll call tap smoothly', async () => {
+    const classId = await seed45Class();
+    await db.attendanceSessions.put({ classId, date: '2026-10-01', savedAt: 1000 });
+    const { container, getByText } = render(<AttendanceView profile={TEST_PROFILE} />);
 
-    // Wait for 45 rows * 31 day cells to render
-    const firstSchoolCell = await waitFor(() => {
-      const cells = container.querySelectorAll<HTMLButtonElement>('[data-att-cell]');
-      expect(cells.length).toBeGreaterThanOrEqual(45 * 25);
-      // Pick row 0 Monday (Dec 1, 2026 is Tuesday -> index 0 or 1 not disabled)
-      const enabled = Array.from(cells).find((b) => !b.disabled);
-      expect(enabled).toBeTruthy();
-      return enabled!;
-    });
+    // 1. Wait for 45-student Roll Call list + initial query load to finish, then measure single tap latency
+    const firstRollBtn = await waitFor(
+      () => {
+        expect(container.textContent).toContain('មិនទាន់ហៅឈ្មោះ (ព្រាង)');
+        const btns = container.querySelectorAll<HTMLButtonElement>('[data-rollcall-btn$="-អច្ប"]');
+        expect(btns.length).toBe(45);
+        return btns[0];
+      },
+      { timeout: 4000 }
+    );
 
     const t0 = performance.now();
-    fireEvent.click(firstSchoolCell);
+    fireEvent.click(firstRollBtn);
     const t1 = performance.now();
     const latencyMs = t1 - t0;
-
-    expect(firstSchoolCell.textContent?.trim()).toBe('ច្ប');
     expect(latencyMs).toBeLessThan(250);
-    console.info(`[PERF] 45x31 Attendance single-cell click latency: ${latencyMs.toFixed(2)} ms`);
+    console.info(`[PERF] 45-student Roll Call single tap latency: ${latencyMs.toFixed(2)} ms`);
+
+    // Discard unsaved change if switching tab via ConfirmDialog
+    fireEvent.click(getByText('តារាងប្រចាំខែ'));
+    const discardBtn = await waitFor(() => getByText('បោះបង់ការកែប្រែ'));
+    fireEvent.click(discardBtn);
+
+    // 2. Verify 45x31 monthly grid renders smoothly
+    await waitFor(() => {
+      const cells = container.querySelectorAll<HTMLButtonElement>('[data-att-cell]');
+      expect(cells.length).toBeGreaterThanOrEqual(45 * 20);
+    });
   });
 
   it('handles 45 students x 19 subjects score entry smoothly', async () => {

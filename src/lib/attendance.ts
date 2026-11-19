@@ -1,4 +1,4 @@
-import type { AbsenceCode, Attendance, Student } from '../types/domain';
+import type { AbsenceCode, Attendance, AttendanceSession, Student } from '../types/domain';
 import { formatDateKey, formatYearMonth } from './khmerDate';
 import { compareKhmerNames } from './khmerSort';
 
@@ -9,14 +9,16 @@ export interface MonthDayInfo {
   isRestDay: boolean;
   isHoliday: boolean;
   isFuture: boolean;
+  isTaken: boolean;
   isNonSchoolDay: boolean; // rest day or holiday (grey/disabled)
-  isCountable: boolean; // !isNonSchoolDay && !isFuture
+  isCountable: boolean; // !isNonSchoolDay && !isFuture && isTaken
 }
 
 export interface AttendanceMonthOptions {
   restWeekdays: number[];
   holidayDates: Set<string>;
   todayKey: string;
+  takenDates?: Set<string>;
 }
 
 export interface StudentAttendanceSummary {
@@ -24,6 +26,8 @@ export interface StudentAttendanceSummary {
   unexcused: number; // អច្ប
   total: number; // excused + unexcused
   sickCount: number; // ឈ
+  present: number; // takenDaysCount - absences
+  takenDaysCount: number;
 }
 
 export function getDaysInMonth(year: number, month1Based: number): number {
@@ -46,7 +50,8 @@ export function getMonthDayInfos(
     const isHoliday = options.holidayDates.has(dateKey);
     const isFuture = dateKey > options.todayKey;
     const isNonSchoolDay = isRestDay || isHoliday;
-    const isCountable = !isNonSchoolDay && !isFuture;
+    const isTaken = !isNonSchoolDay && !isFuture && Boolean(options.takenDates?.has(dateKey));
+    const isCountable = isTaken;
 
     result.push({
       day,
@@ -55,12 +60,35 @@ export function getMonthDayInfos(
       isRestDay,
       isHoliday,
       isFuture,
+      isTaken,
       isNonSchoolDay,
       isCountable,
     });
   }
 
   return result;
+}
+
+export function buildTakenDatesSet(sessions: Array<Pick<AttendanceSession, 'date'>>): Set<string> {
+  return new Set(sessions.map((s) => s.date));
+}
+
+export function canTakeRollCallDate(
+  dateKey: string,
+  options: Omit<AttendanceMonthOptions, 'takenDates'>
+): { allowed: boolean; reason?: 'future' | 'rest' | 'holiday' } {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || dateKey > options.todayKey) {
+    return { allowed: false, reason: 'future' };
+  }
+  if (options.holidayDates.has(dateKey)) {
+    return { allowed: false, reason: 'holiday' };
+  }
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const weekday = new Date(y, m - 1, d).getDay();
+  if (options.restWeekdays.includes(weekday)) {
+    return { allowed: false, reason: 'rest' };
+  }
+  return { allowed: true };
 }
 
 export function cycleAbsenceCode(current: AbsenceCode | null | undefined): AbsenceCode | null {
@@ -108,9 +136,11 @@ export function computeStudentMonthlyAttendance(
   let excusedLeave = 0;
   let sickCount = 0;
   let unexcused = 0;
+  let takenDaysCount = 0;
 
   for (const d of dayInfos) {
     if (!d.isCountable) continue;
+    takenDaysCount++;
     const code = lookup.get(makeAttendanceCellKey(studentRef, d.dateKey));
     if (code === 'ច្ប') excusedLeave++;
     else if (code === 'ឈ') sickCount++;
@@ -118,11 +148,14 @@ export function computeStudentMonthlyAttendance(
   }
 
   const excused = excusedLeave + sickCount;
+  const total = excused + unexcused;
   return {
     excused,
     unexcused,
-    total: excused + unexcused,
+    total,
     sickCount,
+    present: Math.max(0, takenDaysCount - total),
+    takenDaysCount,
   };
 }
 

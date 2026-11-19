@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildAttendanceLookup,
+  canTakeRollCallDate,
   computeDailyAbsenceTotals,
   computeStudentMonthlyAttendance,
   cycleAbsenceCode,
@@ -39,10 +40,12 @@ describe('Attendance pure logic', () => {
 
   it('excludes rest days, holidays, and future days, and counts ឈ inside ច្ប totals', () => {
     // November 2026: Nov 1 = Sunday (rest day), Nov 9 = Independence Day (holiday)
+    const takenDates = new Set(['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-16']);
     const dayInfos = getMonthDayInfos(2026, 11, {
       restWeekdays: [0],
       holidayDates: new Set(['2026-11-09']),
       todayKey: '2026-11-16',
+      takenDates,
     });
 
     expect(dayInfos).toHaveLength(30);
@@ -50,32 +53,38 @@ describe('Attendance pure logic', () => {
     expect(dayInfos[0].isCountable).toBe(false);
     expect(dayInfos[8].isHoliday).toBe(true); // 2026-11-09 Holiday
     expect(dayInfos[8].isCountable).toBe(false);
+    expect(dayInfos[5].isTaken).toBe(false); // 2026-11-06 school day NOT taken
+    expect(dayInfos[5].isCountable).toBe(false);
     expect(dayInfos[14].isRestDay).toBe(true); // 2026-11-15 Sunday
-    expect(dayInfos[15].dateKey).toBe('2026-11-16'); // Monday
+    expect(dayInfos[15].dateKey).toBe('2026-11-16'); // Monday (taken)
     expect(dayInfos[15].isFuture).toBe(false);
+    expect(dayInfos[15].isTaken).toBe(true);
     expect(dayInfos[15].isCountable).toBe(true);
     expect(dayInfos[16].isFuture).toBe(true); // 2026-11-17 Future
     expect(dayInfos[16].isCountable).toBe(false);
 
     const lookup = buildAttendanceLookup([
-      // Counted days:
+      // Counted days (taken):
       { classId: 1, studentRef: 10, date: '2026-11-02', status: 'ច្ប' },
       { classId: 1, studentRef: 10, date: '2026-11-03', status: 'ឈ' },
       { classId: 1, studentRef: 10, date: '2026-11-04', status: 'ឈ' },
       { classId: 1, studentRef: 10, date: '2026-11-05', status: 'អច្ប' },
-      // Should NOT be counted (Sunday, Holiday, Future):
+      // Should NOT be counted (Sunday, Holiday, Future, and Untaken day 2026-11-06):
       { classId: 1, studentRef: 10, date: '2026-11-01', status: 'អច្ប' },
+      { classId: 1, studentRef: 10, date: '2026-11-06', status: 'អច្ប' },
       { classId: 1, studentRef: 10, date: '2026-11-09', status: 'ច្ប' },
       { classId: 1, studentRef: 10, date: '2026-11-20', status: 'អច្ប' },
     ]);
 
     const summary = computeStudentMonthlyAttendance(10, lookup, dayInfos);
-    // ច្ប = 1 (ច្ប) + 2 (ឈ) = 3; អច្ប = 1; សរុប = 4
+    // 5 taken days total: ច្ប = 1 (ច្ប) + 2 (ឈ) = 3; អច្ប = 1; សរុប = 4; មក = 5 - 4 = 1
     expect(summary).toEqual({
       excused: 3,
       unexcused: 1,
       total: 4,
       sickCount: 2,
+      present: 1,
+      takenDaysCount: 5,
     });
   });
 
@@ -126,6 +135,7 @@ describe('Attendance pure logic', () => {
       restWeekdays: [0],
       holidayDates: new Set(),
       todayKey: '2026-11-10',
+      takenDates: new Set(['2026-11-02', '2026-11-03']),
     });
 
     const lookup = buildAttendanceLookup([
@@ -136,7 +146,9 @@ describe('Attendance pure logic', () => {
 
     const daily = computeDailyAbsenceTotals(active, lookup, dayInfos);
     expect(daily[0]).toBeNull(); // Nov 1 Sunday
-    expect(daily[1]).toBe(2); // Nov 2: students 1 and 3
+    expect(daily[1]).toBe(2); // Nov 2: taken, students 1 and 3
+    expect(daily[2]).toBe(0); // Nov 3: taken, 0 absences
+    expect(daily[3]).toBeNull(); // Nov 4: school day NOT taken -> null
     expect(daily[15]).toBeNull(); // Nov 16 future
   });
 
@@ -176,5 +188,18 @@ describe('Attendance pure logic', () => {
     expect(getActiveStudentsOrdered(students, '2026-10').map((s) => s.id)).toEqual([1, 2]);
     expect(getActiveStudentsOrdered(students, '2026-11').map((s) => s.id)).toEqual([1, 2]);
     expect(getActiveStudentsOrdered(students, '2026-12').map((s) => s.id)).toEqual([1]);
+  });
+
+  it('rejects rest days, holidays, and future dates in canTakeRollCallDate', () => {
+    const opts = {
+      restWeekdays: [0], // Sunday
+      holidayDates: new Set(['2026-11-09']),
+      todayKey: '2026-11-16',
+    };
+    expect(canTakeRollCallDate('2026-11-15', opts)).toEqual({ allowed: false, reason: 'rest' });
+    expect(canTakeRollCallDate('2026-11-09', opts)).toEqual({ allowed: false, reason: 'holiday' });
+    expect(canTakeRollCallDate('2026-11-17', opts)).toEqual({ allowed: false, reason: 'future' });
+    expect(canTakeRollCallDate('2026-11-16', opts)).toEqual({ allowed: true });
+    expect(canTakeRollCallDate('2026-11-02', opts)).toEqual({ allowed: true });
   });
 });

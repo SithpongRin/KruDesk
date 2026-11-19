@@ -63,7 +63,12 @@ describe('DashboardView stats & backup reminder', () => {
       updatedAt: 1,
     });
 
-    // Seed today's absence for s1 and 3 monthly absences for s1 vs 1 for s2
+    // Seed taken sessions + today's absence for s1 and monthly absences
+    await db.attendanceSessions.bulkPut([
+      { classId, date: todayKey, savedAt: 1000 },
+      { classId, date: `${ym}-02`, savedAt: 1000 },
+      { classId, date: `${ym}-03`, savedAt: 1000 },
+    ]);
     await db.attendance.bulkPut([
       { classId, studentRef: s1, date: todayKey, status: 'អច្ប' },
       { classId, studentRef: s1, date: `${ym}-02`, status: 'ច្ប' },
@@ -93,7 +98,7 @@ describe('DashboardView stats & backup reminder', () => {
     });
   });
 
-  it('shows 0 today absences in green and displays storage persistence helper when persisted() is false', async () => {
+  it('shows មិនទាន់ហៅឈ្មោះ when today has no session, green 0 when taken with 0 absences, and storage persistence helper', async () => {
     const persistMock = vi.fn().mockResolvedValue(true);
     const persistedMock = vi.fn().mockResolvedValue(false);
     Object.defineProperty(navigator, 'storage', {
@@ -101,18 +106,37 @@ describe('DashboardView stats & backup reminder', () => {
       value: { persisted: persistedMock, persist: persistMock },
     });
 
+    const classId = await db.classes.add({
+      name: '៧ក',
+      gradeLevel: 7,
+      academicYear: '2026-2027',
+      color: '#0071e3',
+      subjects: [],
+      createdAt: 1,
+    });
+
     useAppStore.setState({
-      selectedClassId: null,
+      selectedClassId: classId,
       useKhmerNumerals: false,
     });
 
     render(<DashboardView profile={TEST_PROFILE} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('today-absences-count').className).toContain('text-[#34c759]');
+      expect(screen.getByTestId('today-absences-untaken').textContent).toContain('មិនទាន់ហៅឈ្មោះ');
       expect(screen.getByTestId('storage-persist-warning').textContent).toContain(
         'Chrome → Install KruDesk'
       );
+    });
+
+    // Save today's session with 0 absences -> turns into green 0 នាក់
+    await db.attendanceSessions.put({
+      classId,
+      date: toLocalDateKey(),
+      savedAt: Date.now(),
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('today-absences-count').className).toContain('text-[#34c759]');
     });
 
     fireEvent.click(screen.getByText('ស្នើសុំរក្សាទុកអចិន្ត្រៃយ៍'));

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ThemeMode } from '../types/domain';
 import { getSetting, setSetting } from '../db/database';
-import { formatYearMonth } from '../lib/khmerDate';
+import { formatYearMonth, toLocalDateKey } from '../lib/khmerDate';
 
 export type ActiveView =
   | 'dashboard'
@@ -64,12 +64,28 @@ interface AppState {
   requestOpenCreateClass: () => void;
   clearPendingOpenCreateClass: () => void;
 
+  pendingRollCallDate: string | null;
+  requestOpenRollCall: (dateKey?: string) => void;
+  clearPendingRollCallDate: () => void;
+
+  hasUnsavedAttendance: boolean;
+  setHasUnsavedAttendance: (dirty: boolean) => void;
+  pendingViewAfterLeaveConfirm: ActiveView | null;
+  confirmLeaveUnsavedAttendance: () => void;
+  cancelLeaveUnsavedAttendance: () => void;
+
   hydratePreferences: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set) => ({
   activeView: 'dashboard',
-  setActiveView: (view) => set({ activeView: view, isMobileSidebarOpen: false }),
+  setActiveView: (view) =>
+    set((state) => {
+      if (state.activeView === 'attendance' && view !== 'attendance' && state.hasUnsavedAttendance) {
+        return { pendingViewAfterLeaveConfirm: view, isMobileSidebarOpen: false };
+      }
+      return { activeView: view, isMobileSidebarOpen: false };
+    }),
 
   selectedClassId: null,
   setSelectedClassId: (classId) => {
@@ -121,6 +137,26 @@ export const useAppStore = create<AppState>((set) => ({
   requestOpenCreateClass: () =>
     set({ activeView: 'students', pendingOpenCreateClass: true, isMobileSidebarOpen: false }),
   clearPendingOpenCreateClass: () => set({ pendingOpenCreateClass: false }),
+
+  pendingRollCallDate: null,
+  requestOpenRollCall: (dateKey) =>
+    set({
+      activeView: 'attendance',
+      pendingRollCallDate: dateKey ?? toLocalDateKey(),
+      isMobileSidebarOpen: false,
+    }),
+  clearPendingRollCallDate: () => set({ pendingRollCallDate: null }),
+
+  hasUnsavedAttendance: false,
+  setHasUnsavedAttendance: (dirty) => set({ hasUnsavedAttendance: dirty }),
+  pendingViewAfterLeaveConfirm: null,
+  confirmLeaveUnsavedAttendance: () =>
+    set((state) => ({
+      activeView: state.pendingViewAfterLeaveConfirm ?? state.activeView,
+      pendingViewAfterLeaveConfirm: null,
+      hasUnsavedAttendance: false,
+    })),
+  cancelLeaveUnsavedAttendance: () => set({ pendingViewAfterLeaveConfirm: null }),
 
   hydratePreferences: async () => {
     const [savedClassId, savedMonth, savedTheme, savedKhmerNumerals] = await Promise.all([

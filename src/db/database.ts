@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import type {
   AppSetting,
   Attendance,
+  AttendanceSession,
   Holiday,
   MonthlyScore,
   Profile,
@@ -12,11 +13,32 @@ import type {
 } from '../types/domain';
 import type { CardTemplate } from '../types/template';
 
+/**
+ * Derives one AttendanceSession per unique (classId, date) from existing absence rows.
+ * Shared by Dexie v2 upgrade and v1 backup restore so historical data stays counted.
+ */
+export function deriveSessionsFromAbsenceRows(
+  rows: Array<Pick<Attendance, 'classId' | 'date'>>,
+  savedAt: number = Date.now()
+): AttendanceSession[] {
+  const seen = new Set<string>();
+  const sessions: AttendanceSession[] = [];
+  for (const r of rows) {
+    const key = `${r.classId}|${r.date}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      sessions.push({ classId: r.classId, date: r.date, savedAt });
+    }
+  }
+  return sessions;
+}
+
 export class KruDeskDatabase extends Dexie {
   settings!: Table<AppSetting, string>;
   classes!: Table<SchoolClass, number>;
   students!: Table<Student, number>;
   attendance!: Table<Attendance, [number, string, number]>;
+  attendanceSessions!: Table<AttendanceSession, [number, string]>;
   holidays!: Table<Holiday, number>;
   monthlyScores!: Table<MonthlyScore, [number, string, number]>;
   semesterExams!: Table<SemesterExam, [number, 1 | 2, number]>;
@@ -34,6 +56,26 @@ export class KruDeskDatabase extends Dexie {
       semesterExams: '[classId+semester+studentRef], [classId+semester]',
       templates: '&id, name, isDefault, isReference, updatedAt',
     });
+
+    this.version(2)
+      .stores({
+        settings: '&key',
+        classes: '++id, name, academicYear',
+        students: '++id, classId, [classId+order], studentId',
+        attendance: '[classId+date+studentRef], [classId+date], classId',
+        attendanceSessions: '[classId+date], classId',
+        holidays: '++id, &date',
+        monthlyScores: '[classId+month+studentRef], [classId+month]',
+        semesterExams: '[classId+semester+studentRef], [classId+semester]',
+        templates: '&id, name, isDefault, isReference, updatedAt',
+      })
+      .upgrade(async (tx) => {
+        const existingRows = (await tx.table('attendance').toArray()) as Attendance[];
+        const sessions = deriveSessionsFromAbsenceRows(existingRows);
+        if (sessions.length > 0) {
+          await tx.table('attendanceSessions').bulkPut(sessions);
+        }
+      });
   }
 }
 
@@ -69,6 +111,7 @@ export async function clearAllAppData(): Promise<void> {
       db.classes,
       db.students,
       db.attendance,
+      db.attendanceSessions,
       db.holidays,
       db.monthlyScores,
       db.semesterExams,
@@ -80,6 +123,7 @@ export async function clearAllAppData(): Promise<void> {
         db.classes.clear(),
         db.students.clear(),
         db.attendance.clear(),
+        db.attendanceSessions.clear(),
         db.holidays.clear(),
         db.monthlyScores.clear(),
         db.semesterExams.clear(),

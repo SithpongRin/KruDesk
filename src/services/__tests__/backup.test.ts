@@ -56,6 +56,10 @@ function makeValidBackup(): KruDeskBackupPayload {
         },
       ],
       attendance: [{ classId: 1, studentRef: 10, date: '2026-11-18', status: 'ច្ប' }],
+      attendanceSessions: [
+        { classId: 1, date: '2026-11-18', savedAt: 1731890000000 },
+        { classId: 1, date: '2026-11-19', savedAt: 1731900000000 },
+      ],
       holidays: [{ id: 1, date: '2026-11-09', label: 'បុណ្យឯករាជ្យជាតិ' }],
       monthlyScores: [{ classId: 1, studentRef: 10, month: '2026-11', scores: { kh: 45 } }],
       semesterExams: [{ classId: 1, studentRef: 10, semester: 1, scores: { kh: 42 } }],
@@ -73,7 +77,7 @@ describe('Backup validation & helpers', () => {
   it('accepts a valid KruDesk backup JSON with schemaVersion and exportedAt', () => {
     const payload = makeValidBackup();
     const parsed = parseAndValidateBackup(JSON.stringify(payload));
-    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.schemaVersion).toBe(2);
     expect(parsed.exportedAt).toBe(1731900000000);
     expect(summarizeBackup(parsed)).toEqual({
       classesCount: 1,
@@ -153,5 +157,30 @@ describe('Backup validation & helpers', () => {
     clickSpy.mockRestore();
     URL.createObjectURL = origCreateObjectURL;
     URL.revokeObjectURL = origRevokeObjectURL;
+  });
+
+  it('restores v2 attendanceSessions (including 0-absence taken days) and derives sessions for v1 backups', async () => {
+    // 1. Restore v2 backup -> keeps both taken days (Nov 18 with absence, Nov 19 with 0 absences)
+    const v2Payload = makeValidBackup();
+    await restoreBackupPayload(v2Payload, 'replace');
+    const v2Sessions = await db.attendanceSessions.toArray();
+    expect(v2Sessions).toHaveLength(2);
+    expect(v2Sessions.map((s) => s.date).sort()).toEqual(['2026-11-18', '2026-11-19']);
+
+    // 2. Restore a v1 backup lacking attendanceSessions -> derives 1 session from the absence row
+    const v1Raw = makeValidBackup();
+    const { attendanceSessions: _omit, ...v1Data } = v1Raw.data;
+    const v1Payload = {
+      ...v1Raw,
+      schemaVersion: 1 as const,
+      data: v1Data,
+    };
+    const parsedV1 = parseAndValidateBackup(JSON.stringify(v1Payload));
+    await restoreBackupPayload(parsedV1, 'replace');
+
+    const derived = await db.attendanceSessions.toArray();
+    expect(derived).toHaveLength(1);
+    expect(derived[0].date).toBe('2026-11-18');
+    expect(derived[0].savedAt).toBe(v1Raw.exportedAt);
   });
 });

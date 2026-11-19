@@ -20,6 +20,7 @@ import {
 } from '../../types/domain';
 import {
   buildAttendanceLookup,
+  buildTakenDatesSet,
   computeStudentMonthlyAttendance,
   getActiveStudentsOrdered,
   getMonthDayInfos,
@@ -51,6 +52,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
     useKhmerNumerals,
     setActiveView,
     requestOpenCreateClass,
+    requestOpenRollCall,
     addToast,
   } = useAppStore();
 
@@ -121,6 +123,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
       .toArray();
   }, [currentClass?.id, todayKey]);
 
+  const todaySession = useLiveQuery(async () => {
+    if (!currentClass?.id) return undefined;
+    return db.attendanceSessions.get([currentClass.id, todayKey]);
+  }, [currentClass?.id, todayKey]);
+
+  const classMonthSessions = useLiveQuery(async () => {
+    if (!currentClass?.id) return [];
+    return db.attendanceSessions
+      .where('[classId+date]')
+      .between([currentClass.id, `${selectedMonth}-01`], [currentClass.id, `${selectedMonth}-31`], true, true)
+      .toArray();
+  }, [currentClass?.id, selectedMonth]);
+
   // Aggregate student statistics across all classes & selected class
   const activeAllStudents = useMemo(
     () => (allStudents ?? []).filter((s) => s.status === 'active'),
@@ -142,8 +157,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
     [classStudents, selectedMonth]
   );
 
-  // Today's absences list for the selected class
+  // Today's absences list for the selected class (only valid when today's session is taken)
   const todayAbsences = useMemo(() => {
+    if (!todaySession) return [];
     const byId = new Map(activeClassStudentsToday.map((s) => [s.id, s]));
     return (todayAttendance ?? [])
       .map((row) => ({
@@ -151,16 +167,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
         status: row.status,
       }))
       .filter((item): item is { student: NonNullable<typeof item.student>; status: typeof item.status } => Boolean(item.student));
-  }, [activeClassStudentsToday, todayAttendance]);
+  }, [todaySession, activeClassStudentsToday, todayAttendance]);
 
-  // Top 3 absentees this month (selected class, selectedMonth)
+  // Top 3 absentees this month (selected class, selectedMonth) counting ONLY taken days
   const topAbsentees = useMemo(() => {
     if (!classMonthAttendance || activeClassStudentsMonth.length === 0) return [];
     const { year, month } = parseYearMonth(selectedMonth);
+    const takenDates = buildTakenDatesSet(classMonthSessions ?? []);
     const dayInfos = getMonthDayInfos(year, month, {
       restWeekdays: attendanceConfig.restWeekdays,
       holidayDates,
       todayKey,
+      takenDates,
     });
     const lookup = buildAttendanceLookup(classMonthAttendance);
 
@@ -169,7 +187,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
         const summary =
           student.id !== undefined
             ? computeStudentMonthlyAttendance(student.id, lookup, dayInfos)
-            : { excused: 0, unexcused: 0, total: 0, sickCount: 0 };
+            : { excused: 0, unexcused: 0, total: 0, sickCount: 0, present: 0, takenDaysCount: 0 };
         return { student, summary };
       })
       .filter((x) => x.summary.total > 0)
@@ -182,6 +200,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
       .slice(0, 3);
   }, [
     classMonthAttendance,
+    classMonthSessions,
     activeClassStudentsMonth,
     selectedMonth,
     attendanceConfig.restWeekdays,
@@ -385,19 +404,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
           <div className="text-xs text-[#86868b]">
             អវត្តមានថ្ងៃនេះ {currentClass ? `(ថ្នាក់ទី ${currentClass.name})` : ''}
           </div>
-          <div className="mt-1 flex items-baseline justify-between gap-2 flex-wrap">
-            <span
-              data-testid="today-absences-count"
-              className={`text-2xl font-bold ${
-                todayAbsences.length > 0 ? 'text-[#ff3b30]' : 'text-[#34c759]'
-              }`}
-            >
-              {fmtNum(todayAbsences.length)} នាក់
-            </span>
-            <span className="text-xs text-[#6e6e73] dark:text-[#98989d]">
-              ក្នុងសិស្សសកម្ម {fmtNum(activeClassStudentsToday.length)} នាក់
-            </span>
-          </div>
+          {!currentClass || !todaySession ? (
+            <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap">
+              <span
+                data-testid="today-absences-untaken"
+                className="text-sm font-semibold text-[#86868b] dark:text-[#98989d]"
+              >
+                មិនទាន់ហៅឈ្មោះ
+              </span>
+              {currentClass && (
+                <AppleButton
+                  variant="primary"
+                  size="sm"
+                  onClick={() => requestOpenRollCall(todayKey)}
+                >
+                  ហៅឈ្មោះថ្ងៃនេះ
+                </AppleButton>
+              )}
+            </div>
+          ) : (
+            <div className="mt-1 flex items-baseline justify-between gap-2 flex-wrap">
+              <span
+                data-testid="today-absences-count"
+                className={`text-2xl font-bold ${
+                  todayAbsences.length > 0 ? 'text-[#ff3b30]' : 'text-[#34c759]'
+                }`}
+              >
+                {fmtNum(todayAbsences.length)} នាក់
+              </span>
+              <span className="text-xs text-[#6e6e73] dark:text-[#98989d]">
+                ក្នុងសិស្សសកម្ម {fmtNum(activeClassStudentsToday.length)} នាក់
+              </span>
+            </div>
+          )}
         </AppleCard>
       </div>
 
@@ -479,15 +518,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
                 <AppleButton
                   variant="secondary"
                   size="sm"
-                  onClick={() => setActiveView('attendance')}
+                  onClick={() => requestOpenRollCall(todayKey)}
                 >
                   កត់វត្តមាន
                 </AppleButton>
               }
             >
-              {todayAbsences.length === 0 ? (
-                <div className="py-6 text-center text-xs text-[#86868b] dark:text-[#98989d]">
-                  គ្មានសិស្សអវត្តមានត្រូវបានកត់ត្រាសម្រាប់ថ្ងៃនេះទេ។
+              {!todaySession ? (
+                <div className="py-6 flex flex-col items-center gap-2.5 text-center">
+                  <div className="text-xs text-[#86868b] dark:text-[#98989d]">
+                    មិនទាន់ហៅឈ្មោះសម្រាប់ថ្ងៃនេះទេ។
+                  </div>
+                  <AppleButton
+                    variant="primary"
+                    size="sm"
+                    onClick={() => requestOpenRollCall(todayKey)}
+                  >
+                    ហៅឈ្មោះថ្ងៃនេះ
+                  </AppleButton>
+                </div>
+              ) : todayAbsences.length === 0 ? (
+                <div className="py-6 text-center text-xs text-[#34c759] font-medium">
+                  គ្មានសិស្សអវត្តមានទេ — មករៀនគ្រប់គ្នា!
                 </div>
               ) : (
                 <div className="divide-y divide-black/[0.05] dark:divide-white/[0.06]">

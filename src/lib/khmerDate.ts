@@ -52,6 +52,15 @@ export function formatKhmerMonthYear(ym: string, useKhmerDigits = false): string
   return `${monthName} ${yearStr}`;
 }
 
+export function formatDateKhmer(dateKey: string, useKhmerDigits = false): string {
+  const [yStr, mStr, dStr] = dateKey.split('-');
+  const year = Number(yStr) || new Date().getFullYear();
+  const month = Math.min(12, Math.max(1, Number(mStr) || 1));
+  const day = Number(dStr) || 1;
+  const raw = `ថ្ងៃទី ${day} ${getKhmerMonthName(month)} ${year}`;
+  return useKhmerDigits ? toKhmerNumerals(raw) : raw;
+}
+
 export function formatDateTimeKm(timestamp: number, useKhmerDigits = false): string {
   const d = new Date(timestamp);
   const day = d.getDate();

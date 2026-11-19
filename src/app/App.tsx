@@ -11,6 +11,7 @@ import { MobileBottomNav } from '../components/layout/MobileBottomNav';
 import { OnboardingView } from '../components/layout/OnboardingView';
 import { AppleModal } from '../components/common/AppleModal';
 import { AppleButton } from '../components/common/AppleButton';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { MOEYS_EMBLEM_DATA_URI } from '../utils/moeysEmblemDataUri';
 
 const DashboardView = lazy(() =>
@@ -147,6 +148,11 @@ const AppInner: React.FC<{
   const [provinceDismissed, setProvinceDismissed] = useState(false);
   const [selectedProvince, setSelectedProvince] = useState('កណ្ដាល');
   const [savingProvince, setSavingProvince] = useState(false);
+  const {
+    pendingViewAfterLeaveConfirm,
+    confirmLeaveUnsavedAttendance,
+    cancelLeaveUnsavedAttendance,
+  } = useAppStore();
 
   if (!isReady) {
     return (
@@ -284,6 +290,17 @@ const AppInner: React.FC<{
           </select>
         </div>
       </AppleModal>
+
+      <ConfirmDialog
+        isOpen={pendingViewAfterLeaveConfirm !== null}
+        onClose={cancelLeaveUnsavedAttendance}
+        onConfirm={confirmLeaveUnsavedAttendance}
+        title="មិនទាន់បានរក្សាទុកការហៅឈ្មោះ"
+        message="អ្នកមានការកែប្រែវត្តមានដែលមិនទាន់បានចុច «រក្សាទុក» ទេ។ តើអ្នកពិតជាចង់ចាកចេញដោយបោះបង់ការកែប្រែទាំងនោះមែនទេ?"
+        confirmLabel="ចាកចេញដោយមិនរក្សាទុក"
+        cancelLabel="ត្រឡប់ក្រោយ"
+        variant="danger"
+      />
     </div>
   );
 };

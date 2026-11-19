@@ -13,6 +13,7 @@ import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 export interface AttendanceMonthRenderData {
   month: string; // YYYY-MM
   lookup: Map<string, AbsenceCode>;
+  takenDates: Set<string>;
 }
 
 interface AttendanceSheetProps {
@@ -68,8 +69,11 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
           restWeekdays: attendanceConfig.restWeekdays,
           holidayDates,
           todayKey,
+          takenDates: mData.takenDates,
         });
         const dailyTotals = computeDailyAbsenceTotals(activeStudents, mData.lookup, dayInfos);
+        const isShadedDay = (d: (typeof dayInfos)[number]) =>
+          d.isNonSchoolDay || (!d.isFuture && !d.isTaken);
 
         const rowCount = Math.max(1, studentPages[0].items.length);
         const isDense = rowCount > 36;
@@ -186,7 +190,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                           rowSpan={2}
                           className="border border-black text-center font-bold"
                           style={{
-                            backgroundColor: d.isNonSchoolDay ? '#e2e8f0' : undefined,
+                            backgroundColor: isShadedDay(d) ? '#e2e8f0' : undefined,
                             fontSize: '7.5pt',
                             padding: 0,
                           }}
@@ -251,7 +255,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                           </td>
                           {dayInfos.map((d) => {
                             const code =
-                              !d.isNonSchoolDay && !d.isFuture && s.id !== undefined
+                              d.isTaken && s.id !== undefined
                                 ? mData.lookup.get(makeAttendanceCellKey(s.id, d.dateKey))
                                 : undefined;
                             return (
@@ -259,7 +263,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                                 key={d.day}
                                 className="border border-black text-center leading-none"
                                 style={{
-                                  backgroundColor: d.isNonSchoolDay ? '#e2e8f0' : undefined,
+                                  backgroundColor: isShadedDay(d) ? '#e2e8f0' : undefined,
                                   fontSize: '7pt',
                                   padding: 0,
                                 }}
@@ -297,7 +301,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                             key={d.day}
                             className="border border-black text-center leading-none"
                             style={{
-                              backgroundColor: d.isNonSchoolDay ? '#e2e8f0' : undefined,
+                              backgroundColor: isShadedDay(d) ? '#e2e8f0' : undefined,
                               fontSize: '7pt',
                               padding: 0,
                             }}

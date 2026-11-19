@@ -81,9 +81,10 @@ export async function duplicateClassStructure(sourceClassId: number): Promise<nu
 export async function deleteClassCascade(classId: number): Promise<void> {
   await db.transaction(
     'rw',
-    [db.classes, db.students, db.attendance, db.monthlyScores, db.semesterExams],
+    [db.classes, db.students, db.attendance, db.attendanceSessions, db.monthlyScores, db.semesterExams],
     async () => {
       await db.attendance.where('classId').equals(classId).delete();
+      await db.attendanceSessions.where('classId').equals(classId).delete();
       await db.monthlyScores
         .where('[classId+month]')
         .between([classId, Dexie.minKey], [classId, Dexie.maxKey])

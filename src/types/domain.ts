@@ -59,6 +59,12 @@ export interface Attendance {
   status: AbsenceCode;
 }
 
+export interface AttendanceSession {
+  classId: number;
+  date: string; // YYYY-MM-DD
+  savedAt: number;
+}
+
 export interface Holiday {
   id?: number;
   date: string; // YYYY-MM-DD
