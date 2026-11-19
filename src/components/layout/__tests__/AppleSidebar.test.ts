@@ -2,13 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { NAV_ITEMS } from '../AppleSidebar';
 
 describe('AppleSidebar NAV_ITEMS', () => {
-  it('places roster («បញ្ជីហៅឈ្មោះ») right after students and renames attendance to «បញ្ជីវត្តមាន»', () => {
+  it('has the exact sidebar order and Khmer labels including monthlyResults, honorRoll, and certificates', () => {
     expect(NAV_ITEMS.map((item) => item.id)).toEqual([
       'dashboard',
       'students',
       'roster',
       'attendance',
       'scores',
+      'monthlyResults',
+      'honorRoll',
+      'certificates',
       'cards',
       'settings',
     ]);
@@ -18,6 +21,9 @@ describe('AppleSidebar NAV_ITEMS', () => {
       'បញ្ជីហៅឈ្មោះ',
       'បញ្ជីវត្តមាន',
       'បញ្ជីពិន្ទុ',
+      'លទ្ធផលប្រចាំខែ',
+      'តារាងកិត្តិយស',
+      'ប័ណ្ណសរសើរ',
       'កាតសិស្ស',
       'ការកំណត់',
     ]);

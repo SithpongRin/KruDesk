@@ -36,7 +36,7 @@ import {
   computeCompetitionRanks,
   computeScoreRow,
   computeSemesterAnnualSummary,
-  formatScoreDecimal,
+  formatAverage,
   isSubjectActive,
   isSubjectBonus,
   parseScoreInput,
@@ -97,6 +97,7 @@ interface ScoreGridRowProps {
   grade: ScoreGrade | null;
   noteVal: string;
   useKhmerNumerals: boolean;
+  averageDecimalMode?: 'truncate' | 'round';
   onCellChange: (studentRef: number, subj: Subject, rawText: string) => void;
   onCellBlur: (studentRef: number, subj: Subject) => void;
   onCellPaste: (
@@ -127,6 +128,7 @@ const ScoreGridRow = memo<ScoreGridRowProps>(
     grade,
     noteVal,
     useKhmerNumerals,
+    averageDecimalMode,
     onCellChange,
     onCellBlur,
     onCellPaste,
@@ -202,7 +204,7 @@ const ScoreGridRow = memo<ScoreGridRowProps>(
                 : 'text-[#86868b]'
           }`}
         >
-          {average !== null ? fmt(formatScoreDecimal(average)) : '—'}
+          {average !== null ? fmt(formatAverage(average, averageDecimalMode)) : '—'}
         </td>
         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1 text-center font-bold text-[#0071e3] bg-[#f7faff] dark:bg-blue-500/[0.04]">
           {rank !== null ? fmt(rank) : '—'}
@@ -1296,7 +1298,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                 </AppleBadge>
                 {gridStats.classAvg !== null && (
                   <AppleBadge variant="blue" size="sm">
-                    មធ្យមថ្នាក់ {fmtNum(formatScoreDecimal(gridStats.classAvg))}
+                    មធ្យមថ្នាក់ {fmtNum(formatAverage(gridStats.classAvg, scoreConfig.averageDecimalMode))}
                   </AppleBadge>
                 )}
               </div>
@@ -1397,6 +1399,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                         grade={summary?.grade ?? null}
                         noteVal={notesByStudent.get(studentRef) ?? ''}
                         useKhmerNumerals={useKhmerNumerals}
+                        averageDecimalMode={scoreConfig.averageDecimalMode}
                         onCellChange={handleCellChange}
                         onCellBlur={handleCellBlur}
                         onCellPaste={handleCellPaste}
@@ -1438,7 +1441,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
               <div className="text-xs text-[#86868b]">មធ្យមភាគប្រចាំឆ្នាំថ្នាក់</div>
               <div className="text-2xl font-bold text-[#0071e3] mt-1">
                 {semesterStats.meanAnnual !== null
-                  ? fmtNum(formatScoreDecimal(semesterStats.meanAnnual))
+                  ? fmtNum(formatAverage(semesterStats.meanAnnual, scoreConfig.averageDecimalMode))
                   : '—'}
               </div>
             </AppleCard>
@@ -1621,17 +1624,17 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                         </td>
                         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center">
                           {row.sem1MonthlyAvg !== null
-                            ? fmtNum(formatScoreDecimal(row.sem1MonthlyAvg))
+                            ? fmtNum(formatAverage(row.sem1MonthlyAvg, scoreConfig.averageDecimalMode))
                             : '—'}
                         </td>
                         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center">
                           {row.sem1ExamAvg !== null
-                            ? fmtNum(formatScoreDecimal(row.sem1ExamAvg))
+                            ? fmtNum(formatAverage(row.sem1ExamAvg, scoreConfig.averageDecimalMode))
                             : '—'}
                         </td>
                         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center font-bold">
                           {row.sem1Avg !== null
-                            ? fmtNum(formatScoreDecimal(row.sem1Avg))
+                            ? fmtNum(formatAverage(row.sem1Avg, scoreConfig.averageDecimalMode))
                             : '—'}
                         </td>
                         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center font-bold text-[#0071e3]">
@@ -1668,17 +1671,17 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                         </td>
                         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center">
                           {row.sem2MonthlyAvg !== null
-                            ? fmtNum(formatScoreDecimal(row.sem2MonthlyAvg))
+                            ? fmtNum(formatAverage(row.sem2MonthlyAvg, scoreConfig.averageDecimalMode))
                             : '—'}
                         </td>
                         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center">
                           {row.sem2ExamAvg !== null
-                            ? fmtNum(formatScoreDecimal(row.sem2ExamAvg))
+                            ? fmtNum(formatAverage(row.sem2ExamAvg, scoreConfig.averageDecimalMode))
                             : '—'}
                         </td>
                         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center font-bold">
                           {row.sem2Avg !== null
-                            ? fmtNum(formatScoreDecimal(row.sem2Avg))
+                            ? fmtNum(formatAverage(row.sem2Avg, scoreConfig.averageDecimalMode))
                             : '—'}
                         </td>
                         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center font-bold text-[#0071e3]">
@@ -1696,7 +1699,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                           }`}
                         >
                           {row.annualAvg !== null
-                            ? fmtNum(formatScoreDecimal(row.annualAvg))
+                            ? fmtNum(formatAverage(row.annualAvg, scoreConfig.averageDecimalMode))
                             : '—'}
                         </td>
                         <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2 py-1.5 text-center font-bold text-[#0071e3]">

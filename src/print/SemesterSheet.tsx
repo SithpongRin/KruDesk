@@ -2,7 +2,7 @@ import React from 'react';
 import type { Profile, SchoolClass, ScoreConfig } from '../types/domain';
 import {
   collapseGroupedSubjects,
-  formatScoreDecimal,
+  formatAverage,
   type SemesterStudentSummary,
 } from '../lib/grading';
 import type { PaperSize } from '../services/pdfExport';
@@ -34,7 +34,9 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
   const fmtScore = (val: number | null | undefined, digits = 2) => {
     if (val === null || val === undefined || Number.isNaN(val)) return '';
     if (digits === 0) return fmt(Math.round(val));
-    return fmt(digits === 2 ? formatScoreDecimal(val) : val.toFixed(digits));
+    return fmt(
+      digits === 2 ? formatAverage(val, scoreConfig.averageDecimalMode) : val.toFixed(digits)
+    );
   };
 
   const fmtRawScore = (val: number | null | undefined) => {

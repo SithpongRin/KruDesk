@@ -5,7 +5,7 @@ import {
   buildSubjectHeaderSpans,
   computeCompetitionRanks,
   computeScoreRow,
-  formatScoreDecimal,
+  formatAverage,
   isSubjectActive,
   sortSubjects,
 } from '../lib/grading';
@@ -392,7 +392,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                             }`}
                           >
                             {ranked?.average !== null && ranked?.average !== undefined
-                              ? fmt(formatScoreDecimal(ranked.average))
+                              ? fmt(formatAverage(ranked.average, scoreConfig.averageDecimalMode))
                               : ''}
                           </td>
                           <td className="border border-black text-center font-bold leading-none">

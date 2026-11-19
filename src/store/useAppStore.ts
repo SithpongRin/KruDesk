@@ -9,6 +9,9 @@ export type ActiveView =
   | 'roster'
   | 'attendance'
   | 'scores'
+  | 'monthlyResults'
+  | 'honorRoll'
+  | 'certificates'
   | 'cards'
   | 'settings';
 

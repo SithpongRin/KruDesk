@@ -32,6 +32,11 @@ const AttendanceView = lazy(() =>
 const ScoresView = lazy(() =>
   import('../features/scores/ScoresView').then((m) => ({ default: m.ScoresView }))
 );
+const MonthlyResultsView = lazy(() =>
+  import('../features/results/MonthlyResultsView').then((m) => ({
+    default: m.MonthlyResultsView,
+  }))
+);
 const CardsView = lazy(() =>
   import('../features/cards/CardsView').then((m) => ({ default: m.CardsView }))
 );
@@ -204,6 +209,15 @@ const AppInner: React.FC<{
         return <AttendanceView profile={profile} />;
       case 'scores':
         return <ScoresView profile={profile} />;
+      case 'monthlyResults':
+        return <MonthlyResultsView profile={profile} />;
+      case 'honorRoll':
+      case 'certificates':
+        return (
+          <div className="p-8 text-center text-sm text-[#86868b]">
+            កំពុងរៀបចំទំព័រ...
+          </div>
+        );
       case 'cards':
         return <CardsView profile={profile} />;
       case 'settings':

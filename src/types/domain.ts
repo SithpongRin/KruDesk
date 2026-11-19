@@ -97,9 +97,12 @@ export interface AppSetting {
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
+export type AverageDecimalMode = 'truncate' | 'round';
+
 export interface ScoreConfig {
   scale: 10 | 20 | 50 | 100;
   countBlankAsZero: boolean;
+  averageDecimalMode?: AverageDecimalMode;
   wMonthly: number;
   wExam: number;
   wSem1: number;
@@ -115,6 +118,7 @@ export interface AttendanceConfig {
 export const DEFAULT_SCORE_CONFIG: ScoreConfig = {
   scale: 50,
   countBlankAsZero: false,
+  averageDecimalMode: 'truncate',
   wMonthly: 1,
   wExam: 1,
   wSem1: 1,

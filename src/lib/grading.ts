@@ -1,4 +1,5 @@
 import type {
+  AverageDecimalMode,
   MonthlyScore,
   ScoreConfig,
   SemesterExam,
@@ -373,9 +374,23 @@ export function computeWeightedAverage(
   return (a * wA + b * wB) / totalWeight;
 }
 
-export function formatScoreDecimal(value: number | null): string {
+export function formatAverage(
+  value: number | null,
+  mode: AverageDecimalMode = 'truncate'
+): string {
   if (value === null || !Number.isFinite(value)) return '';
-  return value.toFixed(2);
+  if (mode === 'round') {
+    return value.toFixed(2);
+  }
+  const truncated = Math.floor(value * 100 + 1e-9) / 100;
+  return truncated.toFixed(2);
+}
+
+export function formatScoreDecimal(
+  value: number | null,
+  mode: AverageDecimalMode = 'truncate'
+): string {
+  return formatAverage(value, mode);
 }
 
 /**

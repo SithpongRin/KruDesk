@@ -12,6 +12,9 @@ const VIEW_TITLES: Record<ActiveView, string> = {
   roster: 'បញ្ជីហៅឈ្មោះ',
   attendance: 'បញ្ជីវត្តមាន',
   scores: 'បញ្ជីពិន្ទុ',
+  monthlyResults: 'លទ្ធផលប្រចាំខែ',
+  honorRoll: 'តារាងកិត្តិយស',
+  certificates: 'ប័ណ្ណសរសើរ',
   cards: 'កាតសិស្ស',
   settings: 'ការកំណត់',
 };

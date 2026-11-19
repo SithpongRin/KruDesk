@@ -101,9 +101,9 @@ describe('ScoresView Excel paste, validation & persistence', () => {
     expect(cell20.title).toContain('0 ដល់ 50');
     expect(cell20.className).toContain('ring-[#ff3b30]');
 
-    // Verify Row 1 (125 / 41.67 / Rank 2) & Row 2 (135 / 45.00 / Rank 1) in table text
+    // Verify Row 1 (125 / 41.66 truncated / Rank 2) & Row 2 (135 / 45.00 / Rank 1) in table text
     await waitFor(() => {
-      expect(container.textContent).toContain('41.67');
+      expect(container.textContent).toContain('41.66');
       expect(container.textContent).toContain('45.00');
     });
 
