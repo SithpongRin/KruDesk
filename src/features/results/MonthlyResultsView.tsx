@@ -235,6 +235,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
       });
       addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
     } catch (err) {
+      console.error('MonthlyResults export failed:', err);
       addToast({
         type: 'error',
         title: 'នាំចេញមិនបានសម្រេច',

@@ -93,6 +93,13 @@ export const RosterView: React.FC<RosterViewProps> = ({ profile }) => {
         pixelRatio: 3,
       });
       addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+    } catch (err) {
+      console.error('Roster PDF export failed:', err);
+      addToast({
+        type: 'error',
+        title: 'នាំចេញមិនបានសម្រេច',
+        message: err instanceof Error ? err.message : undefined,
+      });
     } finally {
       setPrintData(null);
       setIsExporting(false);
@@ -111,6 +118,13 @@ export const RosterView: React.FC<RosterViewProps> = ({ profile }) => {
         useKhmerNumerals
       );
       addToast({ type: 'success', title: 'នាំចេញ Excel ជោគជ័យ!', message: fileName });
+    } catch (err) {
+      console.error('Roster Excel export failed:', err);
+      addToast({
+        type: 'error',
+        title: 'នាំចេញមិនបានសម្រេច',
+        message: err instanceof Error ? err.message : undefined,
+      });
     } finally {
       setIsExporting(false);
     }

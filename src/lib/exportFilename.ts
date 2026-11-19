@@ -14,7 +14,7 @@ export interface ExportFileNameOptions {
 function sanitizeSegment(input: string): string {
   return input
     .trim()
-    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/[\\/:*?"<>|]/g, '_')
     .replace(/\s+/g, '_');
 }
 

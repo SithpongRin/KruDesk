@@ -165,6 +165,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
       });
       addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
     } catch (err) {
+      console.error('Certificates export failed:', err);
       addToast({
         type: 'error',
         title: 'នាំចេញមិនបានសម្រេច',

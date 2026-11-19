@@ -33,6 +33,24 @@ import {
 import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
 import { formatMinistryProvince } from '../print/DocumentHeader';
 import { formatDocumentGregorianDate, type DocumentSignOptions } from '../print/DocumentSignature';
+
+/**
+ * Sanitizes an Excel worksheet name:
+ * replaces \ / * ? : [ ] with '_', trims, caps at 31 UTF-16 code units without
+ * splitting surrogate pairs, and falls back if empty.
+ */
+export function safeSheetName(name: string, fallback = 'Sheet'): string {
+  const cleaned = name.replace(/[\\/*?:[\]]/g, '_').trim();
+  if (!cleaned) return fallback;
+  if (cleaned.length <= 31) return cleaned;
+  let end = 31;
+  const code = cleaned.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) {
+    end = 30;
+  }
+  const sliced = cleaned.slice(0, end).trim();
+  return sliced || fallback;
+}
 import { buildExportFileName } from '../lib/exportFilename';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 
@@ -61,7 +79,7 @@ export async function exportStudentListExcel(
   const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'KruDesk';
-  const sheet = workbook.addWorksheet(`សិស្ស_${cls.name}`, {
+  const sheet = workbook.addWorksheet(safeSheetName(`សិស្ស_${cls.name}`, 'សិស្ស'), {
     pageSetup: {
       paperSize: 9, // A4
       orientation: 'landscape',
@@ -235,7 +253,7 @@ export async function exportRosterExcel(
   const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'KruDesk';
-  const sheet = workbook.addWorksheet(`បញ្ជីហៅឈ្មោះ_${cls.name}`, {
+  const sheet = workbook.addWorksheet(safeSheetName(`បញ្ជីហៅឈ្មោះ_${cls.name}`, 'បញ្ជីហៅឈ្មោះ'), {
     pageSetup: {
       paperSize: 9,
       orientation: 'landscape',
@@ -449,7 +467,7 @@ export async function exportAttendanceExcel(params: {
 
     const daysCount = dayInfos.length;
     const totalCols = 3 + daysCount + 4; // ល.រ, អត្តលេខ, ឈ្មោះ + days + ច្ប, អច្ប, សរុប, ផ្សេងៗ
-    const sheetName = `${monthName}_${fmt(year)}`.slice(0, 31);
+    const sheetName = safeSheetName(`${monthName}_${fmt(year)}`, 'Month');
     const sheet = workbook.addWorksheet(sheetName, {
       pageSetup: {
         paperSize: 9,
@@ -737,7 +755,7 @@ export async function exportMonthlyScoreExcel(params: {
     );
 
     const totalCols = 4 + sortedSubjects.length + 4;
-    const safeTabName = `${shData.periodLabel}`.replace(/[\\/*?:[\]]/g, '_').slice(0, 31) || `Sheet_${sIdx + 1}`;
+    const safeTabName = safeSheetName(shData.periodLabel, `Sheet_${sIdx + 1}`);
     const sheet = workbook.addWorksheet(safeTabName, {
       pageSetup: {
         paperSize: 9,
@@ -1039,7 +1057,7 @@ export async function exportSemesterSummaryExcel(params: {
     fgColor: { argb: 'FFF1F5F9' },
   };
 
-  const sheet = workbook.addWorksheet(`ឆមាស_${cls.name}`.slice(0, 31), {
+  const sheet = workbook.addWorksheet(safeSheetName(`ឆមាស_${cls.name}`, 'ឆមាស'), {
     pageSetup: {
       paperSize: 9,
       orientation: 'landscape',
@@ -1317,7 +1335,7 @@ export async function exportMonthlyResultsExcel(params: {
   const { month: mNum } = parseYearMonth(month);
   const monthName = getKhmerMonthName(mNum);
 
-  const sheet = workbook.addWorksheet(`លទ្ធផល_${monthName}`, {
+  const sheet = workbook.addWorksheet(safeSheetName(`លទ្ធផល_${monthName}`, 'លទ្ធផល'), {
     pageSetup: {
       paperSize: 9,
       orientation: 'portrait',

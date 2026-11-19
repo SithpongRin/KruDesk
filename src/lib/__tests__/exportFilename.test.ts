@@ -50,5 +50,14 @@ describe('buildExportFileName', () => {
         ext: 'pdf',
       })
     ).toBe('បញ្ជីហៅឈ្មោះ_៧ក_2026-2027.pdf');
+
+    expect(
+      buildExportFileName({
+        document: 'បញ្ជីហៅឈ្មោះ',
+        className: '8/A:1*?"<>|\\',
+        year: '2026-2027',
+        ext: 'xlsx',
+      })
+    ).toBe('បញ្ជីហៅឈ្មោះ_8_A_1________2026-2027.xlsx');
   });
 });

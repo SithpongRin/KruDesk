@@ -989,6 +989,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
     const students = await db.students.where('classId').equals(classId).toArray();
     const sortedClsStudents = [...students].sort((a, b) => a.order - b.order);
 
+    try {
     if (activeTab === 'semester') {
       const [mRows, eRows] = await Promise.all([
         db.monthlyScores
@@ -1164,8 +1165,17 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
         pageSize: 'A4',
         pixelRatio: 3,
       });
-      setPrintStage(null);
       addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+    }
+    } catch (err) {
+      console.error('Scores export failed:', err);
+      addToast({
+        type: 'error',
+        title: 'នាំចេញមិនបានសម្រេច',
+        message: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      if (format !== 'print') setPrintStage(null);
     }
   };
 

@@ -264,51 +264,61 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ profile }) => {
       .filter((s) => s.classId === classId)
       .sort((a, b) => a.order - b.order);
 
-    if (format === 'excel') {
-      const fileName = await exportStudentListExcel(cls, clsStudents, profile, useKhmerNumerals);
+    try {
+      if (format === 'excel') {
+        const fileName = await exportStudentListExcel(cls, clsStudents, profile, useKhmerNumerals);
+        addToast({
+          type: 'success',
+          title: 'នាំចេញ Excel ជោគជ័យ!',
+          message: fileName,
+        });
+        return;
+      }
+
+      // Mount print sheet for PDF or window.print()
+      setPrintPayload({ cls, students: clsStudents });
+
+      // Wait for React commit + layout
+      await new Promise((r) => setTimeout(r, 80));
+      await nextPaint();
+
+      if (format === 'print') {
+        await ensurePrintFontsReady();
+        window.print();
+        return;
+      }
+
+      if (format === 'pdf') {
+        const stage = pdfStageRef.current;
+        if (!stage) return;
+        const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
+        const fileName = buildExportFileName({
+          document: 'បញ្ជីឈ្មោះសិស្ស',
+          className: cls.name,
+          year: cls.academicYear,
+          ext: 'pdf',
+          useKhmerDigits: useKhmerNumerals,
+        });
+        await exportPrintNodesToPdf(pageNodes, {
+          fileName,
+          orientation: 'landscape',
+          pixelRatio: 3,
+        });
+        addToast({
+          type: 'success',
+          title: 'នាំចេញ PDF ជោគជ័យ!',
+          message: fileName,
+        });
+      }
+    } catch (err) {
+      console.error('Students export failed:', err);
       addToast({
-        type: 'success',
-        title: 'នាំចេញ Excel ជោគជ័យ!',
-        message: fileName,
+        type: 'error',
+        title: 'នាំចេញមិនបានសម្រេច',
+        message: err instanceof Error ? err.message : undefined,
       });
-      return;
-    }
-
-    // Mount print sheet for PDF or window.print()
-    setPrintPayload({ cls, students: clsStudents });
-
-    // Wait for React commit + layout
-    await new Promise((r) => setTimeout(r, 80));
-    await nextPaint();
-
-    if (format === 'print') {
-      await ensurePrintFontsReady();
-      window.print();
-      return;
-    }
-
-    if (format === 'pdf') {
-      const stage = pdfStageRef.current;
-      if (!stage) return;
-      const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
-      const fileName = buildExportFileName({
-        document: 'បញ្ជីឈ្មោះសិស្ស',
-        className: cls.name,
-        year: cls.academicYear,
-        ext: 'pdf',
-        useKhmerDigits: useKhmerNumerals,
-      });
-      await exportPrintNodesToPdf(pageNodes, {
-        fileName,
-        orientation: 'landscape',
-        pixelRatio: 3,
-      });
-      setPrintPayload(null);
-      addToast({
-        type: 'success',
-        title: 'នាំចេញ PDF ជោគជ័យ!',
-        message: fileName,
-      });
+    } finally {
+      if (format !== 'print') setPrintPayload(null);
     }
   };
 

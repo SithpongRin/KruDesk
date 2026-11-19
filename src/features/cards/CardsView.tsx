@@ -235,10 +235,10 @@ export const CardsView: React.FC<CardsViewProps> = ({ profile }) => {
         message: `${fileName} (${fmtUi(cardsPerPage)} កាត/ទំព័រ)`,
       });
     } catch (err: unknown) {
-      console.error(err);
+      console.error('Cards PDF export failed:', err);
       addToast({
         type: 'error',
-        title: 'មិនអាចបង្កើត PDF កាតសិស្សបានទេ',
+        title: 'នាំចេញមិនបានសម្រេច',
         message: err instanceof Error ? err.message : undefined,
       });
     } finally {

@@ -143,6 +143,7 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
       });
       addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
     } catch (err) {
+      console.error('HonorRoll export failed:', err);
       addToast({
         type: 'error',
         title: 'នាំចេញមិនបានសម្រេច',

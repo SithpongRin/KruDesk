@@ -43,5 +43,7 @@ output
 *.csv
 KruDesk_Backup_*.json
 downloads/
+# Teacher's real sample documents (names/photos) used only as layout reference — never commit
+private_samples/
 # ...except the empty Excel import template that the tests and the app use
 !/គម្រូទិន្នន័យសិស្សក្នុងការបញ្ជូលសិស្សតាម Excel.xlsx

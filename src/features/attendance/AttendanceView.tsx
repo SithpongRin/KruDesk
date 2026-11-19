@@ -657,59 +657,69 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ profile }) => {
       });
     }
 
-    if (format === 'excel') {
-      const fileName = await exportAttendanceExcel({
-        cls,
-        students,
-        profile,
-        monthsData,
-        attendanceConfig,
-        holidayDates,
-        todayKey,
-        useKhmerDigits: useKhmerNumerals,
+    try {
+      if (format === 'excel') {
+        const fileName = await exportAttendanceExcel({
+          cls,
+          students,
+          profile,
+          monthsData,
+          attendanceConfig,
+          holidayDates,
+          todayKey,
+          useKhmerDigits: useKhmerNumerals,
+        });
+        addToast({ type: 'success', title: 'នាំចេញ Excel ជោគជ័យ!', message: fileName });
+        return;
+      }
+
+      setPrintData({ cls, students, monthsData });
+      await new Promise((r) => setTimeout(r, 80));
+      await nextPaint();
+
+      if (format === 'print') {
+        await ensurePrintFontsReady();
+        window.print();
+        return;
+      }
+
+      if (format === 'pdf') {
+        const stage = pdfStageRef.current;
+        if (!stage) return;
+        const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
+        const fileName =
+          months.length === 1
+            ? buildExportFileName({
+                document: 'បញ្ជីវត្តមាន',
+                className: cls.name,
+                month: months[0],
+                ext: 'pdf',
+                useKhmerDigits: useKhmerNumerals,
+              })
+            : buildExportFileName({
+                document: 'បញ្ជីវត្តមាន',
+                className: cls.name,
+                month: `${months.length}ខែ`,
+                year: cls.academicYear,
+                ext: 'pdf',
+                useKhmerDigits: useKhmerNumerals,
+              });
+        await exportPrintNodesToPdf(pageNodes, {
+          fileName,
+          orientation: 'landscape',
+          pixelRatio: 3,
+        });
+        addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+      }
+    } catch (err) {
+      console.error('Attendance export failed:', err);
+      addToast({
+        type: 'error',
+        title: 'នាំចេញមិនបានសម្រេច',
+        message: err instanceof Error ? err.message : undefined,
       });
-      addToast({ type: 'success', title: 'នាំចេញ Excel ជោគជ័យ!', message: fileName });
-      return;
-    }
-
-    setPrintData({ cls, students, monthsData });
-    await new Promise((r) => setTimeout(r, 80));
-    await nextPaint();
-
-    if (format === 'print') {
-      await ensurePrintFontsReady();
-      window.print();
-      return;
-    }
-
-    if (format === 'pdf') {
-      const stage = pdfStageRef.current;
-      if (!stage) return;
-      const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
-      const fileName =
-        months.length === 1
-          ? buildExportFileName({
-              document: 'បញ្ជីវត្តមាន',
-              className: cls.name,
-              month: months[0],
-              ext: 'pdf',
-              useKhmerDigits: useKhmerNumerals,
-            })
-          : buildExportFileName({
-              document: 'បញ្ជីវត្តមាន',
-              className: cls.name,
-              month: `${months.length}ខែ`,
-              year: cls.academicYear,
-              ext: 'pdf',
-              useKhmerDigits: useKhmerNumerals,
-            });
-      await exportPrintNodesToPdf(pageNodes, {
-        fileName,
-        orientation: 'landscape',
-        pixelRatio: 3,
-      });
-      setPrintData(null);
-      addToast({ type: 'success', title: 'នាំចេញ PDF ជោគជ័យ!', message: fileName });
+    } finally {
+      if (format !== 'print') setPrintData(null);
     }
   };
 
