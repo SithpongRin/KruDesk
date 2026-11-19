@@ -37,6 +37,7 @@ import { AppleBadge } from '../../components/common/AppleBadge';
 import { AppleSegmentedControl } from '../../components/common/AppleSegmentedControl';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { BackupRestoreModal } from '../../components/common/BackupRestoreModal';
+import { AboutAppCard } from './AboutAppCard';
 import {
   downloadBackupJson,
   parseAndValidateBackup,
@@ -989,7 +990,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
         </div>
       </AppleCard>
 
-      {/* Section 4: Danger Zone */}
+      {/* Section 4: About / app updates */}
+      <AboutAppCard />
+
+      {/* Section 5: Danger Zone */}
       <div className="p-6 rounded-2xl border border-red-200 dark:border-red-500/30 bg-red-50/50 dark:bg-red-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h4 className="text-sm font-semibold text-red-900 dark:text-red-200 flex items-center gap-2">

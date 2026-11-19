@@ -72,6 +72,10 @@ interface AppState {
   requestOpenRollCall: (dateKey?: string) => void;
   clearPendingRollCallDate: () => void;
 
+  /** A new app version has been downloaded and is waiting to be applied. */
+  appUpdateReady: boolean;
+  setAppUpdateReady: (ready: boolean) => void;
+
   hasUnsavedAttendance: boolean;
   setHasUnsavedAttendance: (dirty: boolean) => void;
   pendingViewAfterLeaveConfirm: ActiveView | null;
@@ -150,6 +154,9 @@ export const useAppStore = create<AppState>((set) => ({
       isMobileSidebarOpen: false,
     }),
   clearPendingRollCallDate: () => set({ pendingRollCallDate: null }),
+
+  appUpdateReady: false,
+  setAppUpdateReady: (ready) => set({ appUpdateReady: ready }),
 
   hasUnsavedAttendance: false,
   setHasUnsavedAttendance: (dirty) => set({ hasUnsavedAttendance: dirty }),

@@ -5,6 +5,12 @@ import App from './app/App';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { flushAllPendingSaves } from './lib/pendingSaves';
 import { clearChunkReloadGuard, tryReloadOnceForStaleChunk } from './lib/chunkReload';
+import {
+  applyAppUpdate,
+  installAutoUpdateChecks,
+  setApplyUpdate,
+  setUpdateRegistration,
+} from './lib/appUpdate';
 import { useAppStore } from './store/useAppStore';
 import './index.css';
 
@@ -25,27 +31,37 @@ if (typeof caches !== 'undefined') {
 
 let updateSW: (reloadPage?: boolean) => Promise<void> = async () => {};
 
+let updateToastShown = false;
+
 updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
-    useAppStore.getState().addToast({
+    const store = useAppStore.getState();
+    store.setAppUpdateReady(true);
+    if (updateToastShown) return;
+    updateToastShown = true;
+    store.addToast({
       type: 'info',
       title: 'មានកំណែថ្មី — ចុចដើម្បីធ្វើបច្ចុប្បន្នភាព',
       duration: 0,
       actionLabel: 'ធ្វើបច្ចុប្បន្នភាព',
-      onAction: async () => {
-        await flushAllPendingSaves();
-        await updateSW(true);
-      },
+      onAction: () => void applyAppUpdate(),
     });
   },
   onRegisteredSW(_swUrl, registration) {
+    setUpdateRegistration(registration);
     if (registration) {
       setInterval(() => {
         registration.update().catch(() => {});
       }, 30 * 60 * 1000);
+      installAutoUpdateChecks();
     }
   },
+});
+
+setApplyUpdate(async (reloadPage) => {
+  await flushAllPendingSaves();
+  await updateSW(reloadPage);
 });
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
