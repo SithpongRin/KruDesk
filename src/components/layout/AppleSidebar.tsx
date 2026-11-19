@@ -7,8 +7,8 @@ import {
   ClipboardList,
   CreditCard,
   Settings,
+  Wifi,
   WifiOff,
-  Check,
   X,
 } from 'lucide-react';
 import { useAppStore, type ActiveView } from '../../store/useAppStore';
@@ -35,7 +35,8 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export const AppleSidebar: React.FC<AppleSidebarProps> = ({ profile }) => {
-  const { activeView, setActiveView, isMobileSidebarOpen, setIsMobileSidebarOpen } = useAppStore();
+  const { activeView, setActiveView, isMobileSidebarOpen, setIsMobileSidebarOpen, isOnline } =
+    useAppStore();
 
   const renderNavContent = (isMobile = false) => (
     <>
@@ -119,16 +120,26 @@ export const AppleSidebar: React.FC<AppleSidebarProps> = ({ profile }) => {
                 {profile.schoolName}
               </div>
             </div>
-            <WifiOff size={13} className="text-[#86868b] shrink-0 mt-0.5" />
+            {isOnline ? (
+              <Wifi size={13} className="text-[#86868b] shrink-0 mt-0.5" />
+            ) : (
+              <WifiOff size={13} className="text-[#34c759] shrink-0 mt-0.5" />
+            )}
           </div>
 
-          <div className="mt-2 pt-2 border-t border-black/[0.04] dark:border-white/[0.06] flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#34c759]">
-              <span className="w-2 h-2 rounded-full bg-[#34c759]" />
-              <span>Offline</span>
-              <Check size={12} strokeWidth={2.5} />
-            </span>
-            <span className="text-[10px] text-[#86868b] truncate">
+          <div className="mt-2 pt-2 border-t border-black/[0.04] dark:border-white/[0.06] flex items-center justify-between gap-2">
+            {isOnline ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#6e6e73] dark:text-[#98989d] truncate">
+                <span className="w-2 h-2 rounded-full bg-[#86868b] shrink-0" />
+                <span className="truncate">អនឡាញ</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#34c759] truncate">
+                <span className="w-2 h-2 rounded-full bg-[#34c759] shrink-0" />
+                <span className="truncate">ក្រៅបណ្ដាញ — ប្រើបានធម្មតា</span>
+              </span>
+            )}
+            <span className="text-[10px] text-[#86868b] shrink-0">
               {profile.academicYear}
             </span>
           </div>

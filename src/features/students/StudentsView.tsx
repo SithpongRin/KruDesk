@@ -24,6 +24,7 @@ import {
   type ClassCascadeCounts,
 } from '../../db/classStudentRepo';
 import { compareKhmerNames } from '../../lib/khmerSort';
+import { buildExportFileName } from '../../lib/exportFilename';
 import { useAppStore } from '../../store/useAppStore';
 import type { Profile, SchoolClass, Student, StudentStatus } from '../../types/domain';
 import { AppleCard } from '../../components/common/AppleCard';
@@ -76,7 +77,14 @@ const StudentPhotoThumb: React.FC<{ blob?: Blob; name: string }> = ({ blob, name
 };
 
 export const StudentsView: React.FC<StudentsViewProps> = ({ profile }) => {
-  const { selectedClassId, setSelectedClassId, useKhmerNumerals, addToast } = useAppStore();
+  const {
+    selectedClassId,
+    setSelectedClassId,
+    useKhmerNumerals,
+    pendingOpenCreateClass,
+    clearPendingOpenCreateClass,
+    addToast,
+  } = useAppStore();
 
   const classes = useLiveQuery(async () => {
     const list = await db.classes.toArray();
@@ -108,6 +116,14 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ profile }) => {
   // Table filter/sort state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | StudentStatus>('all');
+
+  useEffect(() => {
+    if (pendingOpenCreateClass) {
+      setClassToEdit(null);
+      setIsClassModalOpen(true);
+      clearPendingOpenCreateClass();
+    }
+  }, [pendingOpenCreateClass, clearPendingOpenCreateClass]);
   const [sortBy, setSortBy] = useState<SortKey>('order');
 
   // Print / PDF stage
@@ -275,7 +291,13 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ profile }) => {
       const stage = pdfStageRef.current;
       if (!stage) return;
       const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
-      const fileName = `បញ្ជីឈ្មោះសិស្ស_${cls.name}_${fmtNum(cls.academicYear)}.pdf`;
+      const fileName = buildExportFileName({
+        document: 'បញ្ជីឈ្មោះសិស្ស',
+        className: cls.name,
+        year: cls.academicYear,
+        ext: 'pdf',
+        useKhmerDigits: useKhmerNumerals,
+      });
       await exportPrintNodesToPdf(pageNodes, {
         fileName,
         orientation: 'landscape',

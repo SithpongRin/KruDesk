@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   KHMER_MONTHS,
   daysAgo,
+  formatDateTimeKm,
   formatKhmerMonthYear,
   getKhmerMonthName,
   parseYearMonth,
@@ -25,5 +26,11 @@ describe('khmerDate helpers', () => {
     const now = 1731900000000;
     expect(daysAgo(now, now)).toBe(0);
     expect(daysAgo(now - 3 * 86400 * 1000, now)).toBe(3);
+  });
+
+  it('formats date/time in Khmer respecting numeral setting', () => {
+    const dt = new Date(2026, 10, 19, 7, 40).getTime();
+    expect(formatDateTimeKm(dt, false)).toBe('ថ្ងៃទី 19 វិច្ឆិកា 2026 ម៉ោង 07:40');
+    expect(formatDateTimeKm(dt, true)).toBe('ថ្ងៃទី ១៩ វិច្ឆិកា ២០២៦ ម៉ោង ០៧:៤០');
   });
 });

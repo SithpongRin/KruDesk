@@ -23,6 +23,7 @@ import {
   toCardStudent,
 } from '../../lib/cardAdapter';
 import { getActiveStudentsOrdered } from '../../lib/attendance';
+import { buildExportFileName } from '../../lib/exportFilename';
 import { PREDEFINED_TEMPLATES } from '../../db/defaultTemplates';
 import { CARD_SIZE_PRESETS } from '../../utils/cardSizes';
 import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
@@ -218,9 +219,14 @@ export const CardsView: React.FC<CardsViewProps> = ({ profile }) => {
         (p) => setProgress(p)
       );
 
-      const fileName = `កាតសិស្ស_${currentClass.name}_${fmtUi(currentClass.academicYear)}_${fmtUi(
-        selectedCardStudents.length
-      )}កាត.pdf`;
+      const fileName = buildExportFileName({
+        document: 'កាតសិស្ស',
+        className: currentClass.name,
+        year: currentClass.academicYear,
+        suffix: `${selectedCardStudents.length}កាត`,
+        ext: 'pdf',
+        useKhmerDigits: useKhmerNumerals,
+      });
       downloadPdf(pdfBytes, fileName);
 
       addToast({

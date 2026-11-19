@@ -60,6 +60,10 @@ interface AppState {
   setIsMobileSidebarOpen: (open: boolean) => void;
   toggleMobileSidebar: () => void;
 
+  pendingOpenCreateClass: boolean;
+  requestOpenCreateClass: () => void;
+  clearPendingOpenCreateClass: () => void;
+
   hydratePreferences: () => Promise<void>;
 }
 
@@ -112,6 +116,11 @@ export const useAppStore = create<AppState>((set) => ({
   setIsMobileSidebarOpen: (open) => set({ isMobileSidebarOpen: open }),
   toggleMobileSidebar: () =>
     set((state) => ({ isMobileSidebarOpen: !state.isMobileSidebarOpen })),
+
+  pendingOpenCreateClass: false,
+  requestOpenCreateClass: () =>
+    set({ activeView: 'students', pendingOpenCreateClass: true, isMobileSidebarOpen: false }),
+  clearPendingOpenCreateClass: () => set({ pendingOpenCreateClass: false }),
 
   hydratePreferences: async () => {
     const [savedClassId, savedMonth, savedTheme, savedKhmerNumerals] = await Promise.all([

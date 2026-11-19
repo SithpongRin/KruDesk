@@ -25,6 +25,7 @@ import {
 } from '../lib/grading';
 import type { MonthlyScoreSheetPageData } from '../print/MonthlyScoreSheet';
 import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
+import { buildExportFileName } from '../lib/exportFilename';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 
 export function triggerBlobDownload(blob: Blob, fileName: string): void {
@@ -201,7 +202,13 @@ export async function exportStudentListExcel(
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-  const fileName = `បញ្ជីឈ្មោះសិស្ស_${cls.name}_${fmt(cls.academicYear)}.xlsx`;
+  const fileName = buildExportFileName({
+    document: 'បញ្ជីឈ្មោះសិស្ស',
+    className: cls.name,
+    year: cls.academicYear,
+    ext: 'xlsx',
+    useKhmerDigits,
+  });
   triggerBlobDownload(blob, fileName);
   return fileName;
 }
@@ -459,14 +466,23 @@ export async function exportAttendanceExcel(params: {
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-  const suffix =
+  const fileName =
     monthsData.length === 1
-      ? (() => {
-          const { year, month } = parseYearMonth(monthsData[0].month);
-          return `${getKhmerMonthName(month)}_${fmt(year)}`;
-        })()
-      : `${fmt(monthsData.length)}ខែ`;
-  const fileName = `បញ្ជីហៅឈ្មោះ_${cls.name}_${suffix}.xlsx`;
+      ? buildExportFileName({
+          document: 'បញ្ជីហៅឈ្មោះ',
+          className: cls.name,
+          month: monthsData[0].month,
+          ext: 'xlsx',
+          useKhmerDigits,
+        })
+      : buildExportFileName({
+          document: 'បញ្ជីហៅឈ្មោះ',
+          className: cls.name,
+          month: `${monthsData.length}ខែ`,
+          year: cls.academicYear,
+          ext: 'xlsx',
+          useKhmerDigits,
+        });
   triggerBlobDownload(blob, fileName);
   return fileName;
 }
@@ -776,11 +792,31 @@ export async function exportMonthlyScoreExcel(params: {
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-  const suffix =
-    sheets.length === 1
-      ? sheets[0].periodLabel.replace(/\s+/g, '_')
-      : `${fmt(sheets.length)}ខែ`;
-  const fileName = `${fileNamePrefix}_${cls.name}_${suffix}.xlsx`;
+  const fileName =
+    sheets.length === 1 && sheets[0].monthKey
+      ? buildExportFileName({
+          document: fileNamePrefix,
+          className: cls.name,
+          month: sheets[0].monthKey,
+          ext: 'xlsx',
+          useKhmerDigits,
+        })
+      : sheets.length > 1
+        ? buildExportFileName({
+            document: fileNamePrefix,
+            className: cls.name,
+            month: `${sheets.length}ខែ`,
+            year: cls.academicYear,
+            ext: 'xlsx',
+            useKhmerDigits,
+          })
+        : buildExportFileName({
+            document: fileNamePrefix,
+            className: cls.name,
+            year: cls.academicYear,
+            ext: 'xlsx',
+            useKhmerDigits,
+          });
   triggerBlobDownload(blob, fileName);
   return fileName;
 }
@@ -1070,7 +1106,13 @@ export async function exportSemesterSummaryExcel(params: {
   const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
-  const fileName = `តារាងស្រង់ពិន្ទុឆមាស_${cls.name}_${fmt(cls.academicYear)}_${fmt(scoreConfig.scale)}.xlsx`;
+  const fileName = buildExportFileName({
+    document: 'តារាងស្រង់ពិន្ទុឆមាស',
+    className: cls.name,
+    year: cls.academicYear,
+    ext: 'xlsx',
+    useKhmerDigits,
+  });
   triggerBlobDownload(blob, fileName);
   return fileName;
 }

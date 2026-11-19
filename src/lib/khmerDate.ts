@@ -52,14 +52,15 @@ export function formatKhmerMonthYear(ym: string, useKhmerDigits = false): string
   return `${monthName} ${yearStr}`;
 }
 
-export function formatDateTimeKm(timestamp: number): string {
-  return new Date(timestamp).toLocaleString('km-KH', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+export function formatDateTimeKm(timestamp: number, useKhmerDigits = false): string {
+  const d = new Date(timestamp);
+  const day = d.getDate();
+  const monthName = getKhmerMonthName(d.getMonth() + 1);
+  const year = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const raw = `ថ្ងៃទី ${day} ${monthName} ${year} ម៉ោង ${hh}:${mm}`;
+  return useKhmerDigits ? toKhmerNumerals(raw) : raw;
 }
 
 export function daysAgo(timestamp: number, now: number = Date.now()): number {

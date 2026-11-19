@@ -26,10 +26,10 @@ import {
 } from '../../lib/attendance';
 import {
   formatKhmerMonthYear,
-  getKhmerMonthName,
   parseYearMonth,
   toLocalDateKey,
 } from '../../lib/khmerDate';
+import { buildExportFileName } from '../../lib/exportFilename';
 import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
 import { AppleCard } from '../../components/common/AppleCard';
 import { AppleButton } from '../../components/common/AppleButton';
@@ -553,14 +553,23 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ profile }) => {
       const stage = pdfStageRef.current;
       if (!stage) return;
       const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
-      const suffix =
+      const fileName =
         months.length === 1
-          ? (() => {
-              const p = parseYearMonth(months[0]);
-              return `${getKhmerMonthName(p.month)}_${fmtNum(p.year)}`;
-            })()
-          : `${fmtNum(months.length)}ខែ`;
-      const fileName = `បញ្ជីហៅឈ្មោះ_${cls.name}_${suffix}.pdf`;
+          ? buildExportFileName({
+              document: 'បញ្ជីហៅឈ្មោះ',
+              className: cls.name,
+              month: months[0],
+              ext: 'pdf',
+              useKhmerDigits: useKhmerNumerals,
+            })
+          : buildExportFileName({
+              document: 'បញ្ជីហៅឈ្មោះ',
+              className: cls.name,
+              month: `${months.length}ខែ`,
+              year: cls.academicYear,
+              ext: 'pdf',
+              useKhmerDigits: useKhmerNumerals,
+            });
       await exportPrintNodesToPdf(pageNodes, {
         fileName,
         orientation: 'landscape',
@@ -641,7 +650,9 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ profile }) => {
         <AppleBadge variant="blue" size="sm">ច្ប មានច្បាប់ (១)</AppleBadge>
         <AppleBadge variant="red" size="sm">អច្ប អត់ច្បាប់ (២)</AppleBadge>
         <AppleBadge variant="orange" size="sm">ឈ ឈឺ — រាប់ក្នុង ច្ប (៣)</AppleBadge>
-        <AppleBadge variant="gray" size="sm">0 / Backspace = មក</AppleBadge>
+        <span className="hide-on-touch">
+          <AppleBadge variant="gray" size="sm">0 / Backspace = មក</AppleBadge>
+        </span>
       </div>
 
       {activeStudents.length === 0 ? (

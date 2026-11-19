@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
 import React from 'react';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import { db, clearAllAppData, setSetting } from '../../../db/database';
 import { useAppStore } from '../../../store/useAppStore';
 import { toLocalDateKey } from '../../../lib/khmerDate';
@@ -86,7 +86,39 @@ describe('DashboardView stats & backup reminder', () => {
       const card = screen.getByTestId('backup-reminder-card');
       expect(card.className).toContain('bg-orange-50');
       expect(card.textContent).toContain('10 ថ្ងៃមុន');
+      expect(card.textContent).toContain('ថ្ងៃទី ');
+      expect(card.textContent).toContain('ម៉ោង ');
       expect(screen.getAllByText('កែវ ម៉ាលី').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByTestId('today-absences-count').className).toContain('text-[#ff3b30]');
+    });
+  });
+
+  it('shows 0 today absences in green and displays storage persistence helper when persisted() is false', async () => {
+    const persistMock = vi.fn().mockResolvedValue(true);
+    const persistedMock = vi.fn().mockResolvedValue(false);
+    Object.defineProperty(navigator, 'storage', {
+      configurable: true,
+      value: { persisted: persistedMock, persist: persistMock },
+    });
+
+    useAppStore.setState({
+      selectedClassId: null,
+      useKhmerNumerals: false,
+    });
+
+    render(<DashboardView profile={TEST_PROFILE} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('today-absences-count').className).toContain('text-[#34c759]');
+      expect(screen.getByTestId('storage-persist-warning').textContent).toContain(
+        'Chrome → Install KruDesk'
+      );
+    });
+
+    fireEvent.click(screen.getByText('ស្នើសុំរក្សាទុកអចិន្ត្រៃយ៍'));
+    await waitFor(() => {
+      expect(persistMock).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('storage-persist-warning')).toBeNull();
     });
   });
 });

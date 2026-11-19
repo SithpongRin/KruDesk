@@ -52,6 +52,12 @@ body {
   background: rgba(255, 255, 255, 0.35);
 }
 
+@media (max-width: 768px), (pointer: coarse) {
+  .hide-on-touch {
+    display: none !important;
+  }
+}
+
 @media print {
   @page {
     size: A4 landscape;

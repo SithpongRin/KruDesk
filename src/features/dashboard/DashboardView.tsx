@@ -50,6 +50,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
     selectedMonth,
     useKhmerNumerals,
     setActiveView,
+    requestOpenCreateClass,
     addToast,
   } = useAppStore();
 
@@ -58,6 +59,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
 
   const todayKey = toLocalDateKey();
   const [isBackingUp, setIsBackingUp] = useState(false);
+  const [storagePersisted, setStoragePersisted] = useState<boolean | null>(null);
+  const [isRequestingPersist, setIsRequestingPersist] = useState(false);
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.storage?.persisted) {
+      navigator.storage
+        .persisted()
+        .then((val) => setStoragePersisted(val))
+        .catch(() => setStoragePersisted(false));
+    }
+  }, []);
 
   const classes = useLiveQuery(async () => {
     const list = await db.classes.toArray();
@@ -193,6 +205,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
     }
   };
 
+  const handleRequestPersist = async () => {
+    if (typeof navigator === 'undefined' || !navigator.storage?.persist) return;
+    setIsRequestingPersist(true);
+    try {
+      const granted = await navigator.storage.persist();
+      setStoragePersisted(granted);
+      addToast({
+        type: granted ? 'success' : 'info',
+        title: granted
+          ? 'បានអនុញ្ញាតការរក្សាទុកអចិន្ត្រៃយ៍ហើយ!'
+          : 'Browser មិនទាន់អនុញ្ញាតនៅឡើយទេ',
+        message: granted
+          ? 'ទិន្នន័យត្រូវបានការពារពីការលុបដោយស្វ័យប្រវត្តិ។'
+          : 'សូមដំឡើងកម្មវិធី (Chrome → Install KruDesk) ដើម្បីរក្សាទុកទិន្នន័យឱ្យមានសុវត្ថិភាព។',
+      });
+    } finally {
+      setIsRequestingPersist(false);
+    }
+  };
+
   const ministrySubtitle = formatMinistryDepartment(profile.province);
 
   return (
@@ -285,9 +317,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
             </div>
             <p className="text-xs text-[#6e6e73] dark:text-[#d1d1d6] mt-0.5">
               {lastBackupAt
-                ? `បម្រុងទុកចុងក្រោយ៖ ${formatDateTimeKm(lastBackupAt)}`
+                ? `បម្រុងទុកចុងក្រោយ៖ ${formatDateTimeKm(lastBackupAt, useKhmerNumerals)}`
                 : 'ទិន្នន័យទាំងអស់រក្សាទុកក្នុងកម្មវិធីរុករក — សូមទាញយក .json ទុករាល់សប្ដាហ៍ដើម្បីកុំឱ្យបាត់បង់។'}
             </p>
+            {storagePersisted === false && (
+              <div
+                data-testid="storage-persist-warning"
+                className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#6e6e73] dark:text-[#d1d1d6]"
+              >
+                <span>
+                  ការរក្សាទុកអចិន្ត្រៃយ៍មិនទាន់បានបើកទេ — ការដំឡើងកម្មវិធី (Chrome → Install KruDesk) ជួយរក្សាទិន្នន័យឱ្យមានសុវត្ថិភាព។
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRequestPersist}
+                  disabled={isRequestingPersist}
+                  className="px-2 py-0.5 rounded-lg bg-black/[0.06] dark:bg-white/[0.1] hover:bg-black/[0.12] dark:hover:bg-white/[0.18] text-[#1d1d1f] dark:text-[#f5f5f7] font-semibold transition-colors disabled:opacity-50"
+                >
+                  {isRequestingPersist ? 'កំពុងស្នើសុំ...' : 'ស្នើសុំរក្សាទុកអចិន្ត្រៃយ៍'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -336,7 +386,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
             អវត្តមានថ្ងៃនេះ {currentClass ? `(ថ្នាក់ទី ${currentClass.name})` : ''}
           </div>
           <div className="mt-1 flex items-baseline justify-between gap-2 flex-wrap">
-            <span className="text-2xl font-bold text-[#ff3b30]">
+            <span
+              data-testid="today-absences-count"
+              className={`text-2xl font-bold ${
+                todayAbsences.length > 0 ? 'text-[#ff3b30]' : 'text-[#34c759]'
+              }`}
+            >
               {fmtNum(todayAbsences.length)} នាក់
             </span>
             <span className="text-xs text-[#6e6e73] dark:text-[#98989d]">
@@ -353,7 +408,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
           title="មិនទាន់មានថ្នាក់រៀន"
           hint="ចាប់ផ្ដើមដោយបង្កើតថ្នាក់រៀនដំបូង និងនាំចូលបញ្ជីឈ្មោះសិស្សពី Excel ។"
           actionLabel="បង្កើតថ្នាក់រៀន"
-          onAction={() => setActiveView('students')}
+          onAction={requestOpenCreateClass}
         />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

@@ -47,6 +47,7 @@ import {
   resolveAcademicMonthKey,
 } from '../../lib/khmerDate';
 import { registerPendingSaveFlusher } from '../../lib/pendingSaves';
+import { buildExportFileName } from '../../lib/exportFilename';
 import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
 import { AppleCard } from '../../components/common/AppleCard';
 import { AppleButton } from '../../components/common/AppleButton';
@@ -969,7 +970,13 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
         const stage = pdfStageRef.current;
         if (!stage) return;
         const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
-        const fileName = `តារាងស្រង់ពិន្ទុឆមាស_${cls.name}_${fmtNum(cls.academicYear)}_${paperSize}.pdf`;
+        const fileName = buildExportFileName({
+          document: 'តារាងស្រង់ពិន្ទុឆមាស',
+          className: cls.name,
+          year: cls.academicYear,
+          ext: 'pdf',
+          useKhmerDigits: useKhmerNumerals,
+        });
         await exportPrintNodesToPdf(pageNodes, {
           fileName,
           orientation: 'landscape',
@@ -1060,16 +1067,31 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
       const stage = pdfStageRef.current;
       if (!stage) return;
       const pageNodes = Array.from(stage.querySelectorAll<HTMLElement>('[data-print-page]'));
-      const suffix =
+      const fileName =
         activeTab === 'exam'
-          ? fmtNum(cls.academicYear)
+          ? buildExportFileName({
+              document: filePrefix,
+              className: cls.name,
+              year: cls.academicYear,
+              ext: 'pdf',
+              useKhmerDigits: useKhmerNumerals,
+            })
           : months.length === 1
-            ? (() => {
-                const p = parseYearMonth(months[0]);
-                return `${getKhmerMonthName(p.month)}_${fmtNum(p.year)}`;
-              })()
-            : `${fmtNum(months.length)}ខែ`;
-      const fileName = `${filePrefix}_${cls.name}_${suffix}.pdf`;
+            ? buildExportFileName({
+                document: filePrefix,
+                className: cls.name,
+                month: months[0],
+                ext: 'pdf',
+                useKhmerDigits: useKhmerNumerals,
+              })
+            : buildExportFileName({
+                document: filePrefix,
+                className: cls.name,
+                month: `${months.length}ខែ`,
+                year: cls.academicYear,
+                ext: 'pdf',
+                useKhmerDigits: useKhmerNumerals,
+              });
       await exportPrintNodesToPdf(pageNodes, {
         fileName,
         orientation: 'landscape',
