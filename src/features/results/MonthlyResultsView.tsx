@@ -1,4 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Dexie from 'dexie';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { BarChart3, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { db } from '../../db/database';
@@ -130,6 +131,29 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
     const order = [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9];
     return order.map((m) => resolveAcademicMonthKey(yearStr, m));
   }, [currentClass?.academicYear, profile.academicYear]);
+
+  // If the current month is outside the class academic year, pick the latest month with scores
+  useEffect(() => {
+    if (!currentClass?.id) return;
+    if (academicMonthOptions.includes(selectedMonth)) return;
+    let cancelled = false;
+    db.monthlyScores
+      .where('[classId+month]')
+      .between([currentClass.id, Dexie.minKey], [currentClass.id, Dexie.maxKey])
+      .toArray()
+      .then((rows) => {
+        if (cancelled || rows.length === 0) return;
+        const latest = rows
+          .map((r) => r.month)
+          .sort()
+          .pop();
+        if (latest) setSelectedMonth(latest);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currentClass?.id, academicMonthOptions, selectedMonth, setSelectedMonth]);
 
   const [pendingExportType, setPendingExportType] = useState<
     'pdf' | 'excel' | 'report-all' | 'report-one' | null

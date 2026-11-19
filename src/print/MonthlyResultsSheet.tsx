@@ -77,23 +77,26 @@ export const MonthlyResultsSheet: React.FC<MonthlyResultsSheetProps> = ({
               pageBreakAfter: !isLastPage ? 'always' : 'auto',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
             }}
           >
             <div>
-              <DocumentHeader profile={profile} compact />
+              {pageIdx === 0 && (
+                <>
+                  <DocumentHeader profile={profile} compact />
 
-              <div className="text-center mb-2">
-                <h2
-                  style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
-                  className="text-[10.5pt] font-normal"
-                >
-                  តារាងលទ្ធផលពិន្ទុសិស្សថ្នាក់ទី {cls.name} ប្រចាំខែ{monthName}
-                </h2>
-                <div className="text-[9pt] mt-0.5">
-                  ឆ្នាំសិក្សា {fmtHdr(cls.academicYear)}
-                </div>
-              </div>
+                  <div className="text-center mb-2">
+                    <h2
+                      style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
+                      className="text-[10.5pt] font-normal"
+                    >
+                      តារាងលទ្ធផលពិន្ទុសិស្សថ្នាក់ទី {cls.name} ប្រចាំខែ{monthName}
+                    </h2>
+                    <div className="text-[9pt] mt-0.5">
+                      ឆ្នាំសិក្សា {fmtHdr(cls.academicYear)}
+                    </div>
+                  </div>
+                </>
+              )}
 
               <table className="w-full border-collapse text-[8.2pt]">
                 <thead>
@@ -175,13 +178,13 @@ export const MonthlyResultsSheet: React.FC<MonthlyResultsSheetProps> = ({
                         {r.passed === true ? 'ជាប់' : r.passed === false ? 'ធ្លាក់' : ''}
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center">
-                        {r.attendance.excused > 0 ? fmt(r.attendance.excused) : ''}
+                        {fmt(r.attendance.excused)}
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center">
-                        {r.attendance.unexcused > 0 ? fmt(r.attendance.unexcused) : ''}
+                        {fmt(r.attendance.unexcused)}
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center font-medium">
-                        {r.attendance.total > 0 ? fmt(r.attendance.total) : ''}
+                        {fmt(r.attendance.total)}
                       </td>
                       <td className="border border-black px-1 py-0.5 truncate max-w-[18mm]">
                         {r.note}
@@ -192,34 +195,35 @@ export const MonthlyResultsSheet: React.FC<MonthlyResultsSheetProps> = ({
               </table>
 
               {isLastPage && (
-                <div className="mt-2.5 text-[8.5pt] leading-relaxed">
-                  <div className="font-bold">
-                    ចំនួនសិស្សសរុប: {fmt(summary.totalStudents)} នាក់, ស្រី:{' '}
-                    {fmt(summary.femaleStudents)} នាក់
+                <div className="mt-2.5">
+                  <div className="text-[8.5pt] leading-relaxed">
+                    <div className="font-bold">
+                      ចំនួនសិស្សសរុប: {fmt(summary.totalStudents)} នាក់, ស្រី:{' '}
+                      {fmt(summary.femaleStudents)} នាក់
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-8 mt-1 max-w-[130mm]">
+                      {GRADE_ORDER.map((g) => (
+                        <div key={g}>
+                          -និទ្ទេស {g}: {fmt(summary.gradeCounts[g].total)} នាក់, ស្រី{' '}
+                          {fmt(summary.gradeCounts[g].female)} នាក់
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-1">
+                      សិស្សមិនមករៀនសោះក្នុងខែ: {fmt(summary.absentAllMonth.total)} នាក់, ស្រី{' '}
+                      {fmt(summary.absentAllMonth.female)} នាក់
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-8 mt-1 max-w-[130mm]">
-                    {GRADE_ORDER.map((g) => (
-                      <div key={g}>
-                        -និទ្ទេស {g}: {fmt(summary.gradeCounts[g].total)} នាក់, ស្រី{' '}
-                        {fmt(summary.gradeCounts[g].female)} នាក់
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-1">
-                    សិស្សមិនមករៀនសោះក្នុងខែ: {fmt(summary.absentAllMonth.total)} នាក់, ស្រី{' '}
-                    {fmt(summary.absentAllMonth.female)} នាក់
+
+                  <div className="mt-2">
+                    <DocumentSignature profile={profile} signOptions={signOptions} gapMm={13} />
                   </div>
                 </div>
               )}
             </div>
 
-            <div>
-              {isLastPage && (
-                <DocumentSignature profile={profile} signOptions={signOptions} gapMm={13} />
-              )}
-              <div className="text-center text-[8pt] text-slate-500 mt-1">
-                ទំព័រ {fmtHdr(pageIdx + 1)} / {fmtHdr(pages.length)}
-              </div>
+            <div className="mt-auto text-center text-[8pt] text-slate-500 pt-1">
+              ទំព័រ {fmtHdr(pageIdx + 1)} / {fmtHdr(pages.length)}
             </div>
           </div>
         );

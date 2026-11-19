@@ -16,11 +16,16 @@ export function formatMinistryProvince(province?: string): string {
 interface DocumentHeaderProps {
   profile: Profile;
   compact?: boolean;
+  color?: string;
 }
 
-export const DocumentHeader: React.FC<DocumentHeaderProps> = ({ profile, compact = false }) => {
+export const DocumentHeader: React.FC<DocumentHeaderProps> = ({
+  profile,
+  compact = false,
+  color = '#000000',
+}) => {
   return (
-    <div className={compact ? 'mb-1.5' : 'mb-2.5'}>
+    <div className={compact ? 'mb-1.5' : 'mb-2.5'} style={{ color }}>
       <div className="text-center leading-tight">
         <div
           style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}

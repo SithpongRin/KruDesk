@@ -119,16 +119,38 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
     return order.map((m) => resolveAcademicMonthKey(yearStr, m));
   }, [currentClass?.academicYear, profile.academicYear]);
 
+  const savedPlaceRow = useLiveQuery(() => db.settings.get('documentPlace'), []);
+  const savedLunarRow = useLiveQuery(() => db.settings.get('documentLunarDate'), []);
+
   const [pendingTarget, setPendingTarget] = useState<'all' | MonthlyResultRow | null>(null);
   const [printPayload, setPrintPayload] = useState<{
     items: MonthlyResultRow[];
     signOptions: DocumentSignOptions;
   } | null>(null);
   const pdfStageRef = useRef<HTMLDivElement>(null);
+  const previewWrapRef = useRef<HTMLDivElement>(null);
+  const [previewScale, setPreviewScale] = useState(0.62);
+
+  useEffect(() => {
+    const el = previewWrapRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const CERT_W_PX = 1122.52; // 297mm at 96dpi
+    const updateScale = () => {
+      const avail = Math.max(240, el.clientWidth - 24);
+      setPreviewScale(Math.min(0.85, avail / CERT_W_PX));
+    };
+    updateScale();
+    const ro = new ResizeObserver(updateScale);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [top3.length]);
 
   const previewSignOptions = useMemo(
-    () => createDefaultSignOptions(selectedMonth),
-    [selectedMonth]
+    () => ({
+      ...createDefaultSignOptions(selectedMonth, (savedPlaceRow?.value as string) ?? ''),
+      lunarDate: (savedLunarRow?.value as string) ?? '',
+    }),
+    [selectedMonth, savedPlaceRow, savedLunarRow]
   );
 
   const handleConfirmExport = async (signOptions: DocumentSignOptions) => {
@@ -295,19 +317,36 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
             </div>
           </AppleCard>
 
-          <AppleCard className="lg:col-span-2 overflow-x-auto flex justify-center bg-[#f5f5f7] dark:bg-white/[0.02]">
-            {safePreviewItem && (
-              <div className="shadow-lg origin-top scale-[0.52] sm:scale-[0.68] xl:scale-[0.78]">
-                <CertificateSheet
-                  cls={currentClass}
-                  profile={profile}
-                  month={selectedMonth}
-                  items={[safePreviewItem]}
-                  signOptions={previewSignOptions}
-                  gradeWords={gradeWords}
-                />
-              </div>
-            )}
+          <AppleCard className="lg:col-span-2 bg-[#f5f5f7] dark:bg-white/[0.02]">
+            <div ref={previewWrapRef} className="w-full overflow-hidden flex justify-center">
+              {safePreviewItem && (
+                <div
+                  style={{
+                    width: `${Math.round(1122.52 * previewScale)}px`,
+                    height: `${Math.round(793.7 * previewScale)}px`,
+                    position: 'relative',
+                  }}
+                >
+                  <div
+                    className="shadow-lg origin-top-left"
+                    style={{
+                      width: '297mm',
+                      height: '210mm',
+                      transform: `scale(${previewScale})`,
+                    }}
+                  >
+                    <CertificateSheet
+                      cls={currentClass}
+                      profile={profile}
+                      month={selectedMonth}
+                      items={[safePreviewItem]}
+                      signOptions={previewSignOptions}
+                      gradeWords={gradeWords}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </AppleCard>
         </div>
       )}

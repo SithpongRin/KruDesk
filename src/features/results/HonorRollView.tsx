@@ -109,13 +109,19 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
     return order.map((m) => resolveAcademicMonthKey(yearStr, m));
   }, [currentClass?.academicYear, profile.academicYear]);
 
+  const savedPlaceRow = useLiveQuery(() => db.settings.get('documentPlace'), []);
+  const savedLunarRow = useLiveQuery(() => db.settings.get('documentLunarDate'), []);
+
   const [isSignOpen, setIsSignOpen] = useState(false);
   const [printSignOptions, setPrintSignOptions] = useState<DocumentSignOptions | null>(null);
   const pdfStageRef = useRef<HTMLDivElement>(null);
 
   const previewSignOptions = useMemo(
-    () => createDefaultSignOptions(selectedMonth),
-    [selectedMonth]
+    () => ({
+      ...createDefaultSignOptions(selectedMonth, (savedPlaceRow?.value as string) ?? ''),
+      lunarDate: (savedLunarRow?.value as string) ?? '',
+    }),
+    [selectedMonth, savedPlaceRow, savedLunarRow]
   );
 
   const handleConfirmExport = async (signOptions: DocumentSignOptions) => {

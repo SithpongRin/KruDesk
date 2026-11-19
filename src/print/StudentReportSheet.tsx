@@ -98,7 +98,7 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
                 </div>
               </div>
 
-              <table className="w-full border-collapse text-[9pt] mb-3">
+              <table className="w-full border-collapse text-[9pt]">
                 <thead>
                   <tr className="bg-slate-100">
                     <th className="border border-black px-2 py-1 text-center w-10">ល.រ</th>
@@ -110,7 +110,7 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
                 </thead>
                 <tbody>
                   {subjectRows.map((sr) => (
-                    <tr key={sr.subjectId} style={{ height: '6mm' }}>
+                    <tr key={sr.subjectId} style={{ height: '5.8mm' }}>
                       <td className="border border-black px-2 py-0.5 text-center">
                         {fmt(sr.orderNum)}
                       </td>
@@ -136,64 +136,57 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
                 </tbody>
               </table>
 
-              {/* Summary Grid */}
-              <table className="w-full border-collapse text-[9pt] mb-2">
+              {/* Summary Grid (4 rows x 4 cells, flush beneath subject table) */}
+              <table className="w-full border-collapse text-[9pt] -mt-[1px] mb-2">
                 <tbody>
                   <tr>
-                    <td className="border border-black px-2.5 py-1 w-1/2">
-                      ពិន្ទុសរុប:{' '}
-                      <strong className="font-bold">
-                        {row.total !== null
-                          ? fmt(Number.isInteger(row.total) ? row.total : row.total.toFixed(1))
-                          : '—'}
-                      </strong>
+                    <td className="border border-black px-2.5 py-1 w-[24%]">ពិន្ទុសរុប</td>
+                    <td className="border border-black px-2.5 py-1 text-center font-bold w-[26%]">
+                      {row.total !== null
+                        ? fmt(Number.isInteger(row.total) ? row.total : row.total.toFixed(1))
+                        : '—'}
                     </td>
-                    <td className="border border-black px-2.5 py-1 w-1/2">
-                      ក្នុងចំណោមសិស្ស <strong className="font-bold">{fmt(totalStudents)}</strong>{' '}
-                      នាក់
+                    <td className="border border-black px-2.5 py-1 w-[26%]">ក្នុងចំណោមសិស្ស</td>
+                    <td className="border border-black px-2.5 py-1 text-center font-bold w-[24%]">
+                      {fmt(totalStudents)} នាក់
                     </td>
                   </tr>
                   <tr>
-                    <td className="border border-black px-2.5 py-1">
-                      មធ្យមភាគ:{' '}
-                      <strong className="font-bold">
-                        {row.average !== null
-                          ? fmt(formatAverage(row.average, scoreConfig.averageDecimalMode))
-                          : '—'}
-                      </strong>
+                    <td className="border border-black px-2.5 py-1">មធ្យមភាគ</td>
+                    <td className="border border-black px-2.5 py-1 text-center font-bold">
+                      {row.average !== null
+                        ? fmt(formatAverage(row.average, scoreConfig.averageDecimalMode))
+                        : '—'}
                     </td>
-                    <td className="border border-black px-2.5 py-1">
-                      អវត្តមាន៖ មានច្បាប់{' '}
-                      <strong className="font-bold">{fmt(row.attendance.excused)}</strong> ដង
+                    <td className="border border-black px-2.5 py-1">អវត្តមាន ៖ មានច្បាប់</td>
+                    <td className="border border-black px-2.5 py-1 text-center font-bold">
+                      {fmt(row.attendance.excused)} ដង
                     </td>
                   </tr>
                   <tr>
-                    <td className="border border-black px-2.5 py-1">
-                      ចំណាត់ថ្នាក់:{' '}
-                      <strong className="font-bold" style={{ color: '#dc2626' }}>
-                        {row.rank !== null ? fmt(row.rank) : '—'}
-                      </strong>
+                    <td className="border border-black px-2.5 py-1">ចំណាត់ថ្នាក់</td>
+                    <td
+                      className="border border-black px-2.5 py-1 text-center font-bold"
+                      style={{ color: '#dc2626' }}
+                    >
+                      {row.rank !== null ? fmt(row.rank) : '—'}
                     </td>
-                    <td className="border border-black px-2.5 py-1">
-                      អវត្តមាន៖ អត់ច្បាប់{' '}
-                      <strong className="font-bold">{fmt(row.attendance.unexcused)}</strong> ដង
+                    <td className="border border-black px-2.5 py-1">អវត្តមាន ៖ អត់ច្បាប់</td>
+                    <td className="border border-black px-2.5 py-1 text-center font-bold">
+                      {fmt(row.attendance.unexcused)} ដង
                     </td>
                   </tr>
                   <tr>
-                    <td className="border border-black px-2.5 py-1">
-                      និទ្ទេស:{' '}
-                      <strong
-                        className="font-bold"
-                        style={{ color: row.grade ? GRADE_PRINT_COLORS[row.grade] : '#111827' }}
-                      >
-                        {row.grade ?? '—'}
-                      </strong>
+                    <td className="border border-black px-2.5 py-1">និទ្ទេស</td>
+                    <td
+                      className="border border-black px-2.5 py-1 text-center font-bold"
+                      style={{ color: row.grade ? GRADE_PRINT_COLORS[row.grade] : '#111827' }}
+                    >
+                      {row.grade ?? '—'}
                     </td>
-                    <td className="border border-black px-2.5 py-1">
-                      លទ្ធផល:{' '}
-                      <strong className="font-bold">
-                        {row.passed === true ? 'ជាប់' : row.passed === false ? 'ធ្លាក់' : '—'}
-                      </strong>
+                    <td className="border border-black px-2.5 py-1">លទ្ធផល</td>
+                    <td className="border border-black px-2.5 py-1 text-center font-bold">
+                      {row.passed === true ? 'ជាប់' : row.passed === false ? 'ធ្លាក់' : '—'}
                     </td>
                   </tr>
                 </tbody>
@@ -203,13 +196,15 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
             <div>
               <DocumentSignature profile={profile} signOptions={signOptions} gapMm={12} />
 
-              <div className="mt-3 pt-2 border-t border-dashed border-slate-400 text-[9pt]">
-                <div className="font-bold mb-1.5">មតិរបស់មាតាបិតា-អាណាព្យាបាលសិស្ស</div>
+              <div className="mt-3 text-[9pt]">
+                <div className="font-bold text-center mb-1.5">
+                  មតិរបស់មាតាបិតា-អាណាព្យាបាលសិស្ស
+                </div>
                 <div className="space-y-3 pt-1">
-                  <div className="border-b border-dotted border-slate-600 h-3" />
-                  <div className="border-b border-dotted border-slate-600 h-3" />
-                  <div className="border-b border-dotted border-slate-600 h-3" />
-                  <div className="border-b border-dotted border-slate-600 h-3" />
+                  <div className="border-b border-dotted border-slate-700 h-3" />
+                  <div className="border-b border-dotted border-slate-700 h-3" />
+                  <div className="border-b border-dotted border-slate-700 h-3" />
+                  <div className="border-b border-dotted border-slate-700 h-3" />
                 </div>
               </div>
             </div>
