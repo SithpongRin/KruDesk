@@ -200,4 +200,25 @@ describe('Backup validation & helpers', () => {
     expect(nov18?.migrated).toBe(true);
     expect(nov19?.migrated).toBeUndefined();
   });
+
+  it('marks sessions sharing one savedAt as migrated when restoring a pre-v3 v2 backup', async () => {
+    const payload = makeValidBackup();
+    payload.data.attendanceSessions = [
+      { classId: 1, date: '2026-11-10', savedAt: 1731800000000 },
+      { classId: 1, date: '2026-11-11', savedAt: 1731800000000 },
+      { classId: 1, date: '2026-11-12', savedAt: 1731800000000 },
+      { classId: 1, date: '2026-11-15', savedAt: 1731900000000 },
+    ];
+    const parsed = parseAndValidateBackup(JSON.stringify(payload));
+    await restoreBackupPayload(parsed, 'replace');
+
+    const sessions = await db.attendanceSessions.toArray();
+    expect(sessions.filter((s) => s.migrated === true).map((s) => s.date).sort()).toEqual([
+      '2026-11-10',
+      '2026-11-11',
+      '2026-11-12',
+    ]);
+    const unique = sessions.find((s) => s.date === '2026-11-15');
+    expect(unique?.migrated).toBeUndefined();
+  });
 });

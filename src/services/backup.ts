@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { db, deriveSessionsFromAbsenceRows, setSetting } from '../db/database';
+import {
+  db,
+  deriveSessionsFromAbsenceRows,
+  markMigratedSessionsInBatch,
+  setSetting,
+} from '../db/database';
 import { toLocalDateKey } from '../lib/khmerDate';
 import type {
   AppSetting,
@@ -139,6 +144,16 @@ export interface RestoreSummary {
   monthlyScoresCount: number;
   semesterExamsCount: number;
   holidaysCount: number;
+}
+
+function applyMigratedFlagToRestoredSessions(sessions: AttendanceSession[]): AttendanceSession[] {
+  const toFlag = new Set(
+    markMigratedSessionsInBatch(sessions).map((s) => `${s.classId}|${s.date}`)
+  );
+  if (toFlag.size === 0) return sessions;
+  return sessions.map((s) =>
+    toFlag.has(`${s.classId}|${s.date}`) ? { ...s, migrated: true } : s
+  );
 }
 
 export async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -358,10 +373,12 @@ export async function restoreBackupPayload(
         const sessionRows: AttendanceSession[] =
           validated.schemaVersion === 1 || data.attendanceSessions === undefined
             ? deriveSessionsFromAbsenceRows(attendanceRows, validated.exportedAt)
-            : data.attendanceSessions.map((s) => ({
-                ...s,
-                classId: classIdMap.get(s.classId) ?? s.classId,
-              }));
+            : applyMigratedFlagToRestoredSessions(
+                data.attendanceSessions.map((s) => ({
+                  ...s,
+                  classId: classIdMap.get(s.classId) ?? s.classId,
+                }))
+              );
         if (sessionRows.length > 0) await db.attendanceSessions.bulkPut(sessionRows);
 
         const holidayRows: Holiday[] = data.holidays.map(({ id: _id, ...h }) => h);
@@ -438,10 +455,12 @@ export async function restoreBackupPayload(
         const sessionRows: AttendanceSession[] =
           validated.schemaVersion === 1 || data.attendanceSessions === undefined
             ? deriveSessionsFromAbsenceRows(attendanceRows, validated.exportedAt)
-            : data.attendanceSessions.map((s) => ({
-                ...s,
-                classId: classIdMap.get(s.classId) ?? s.classId,
-              }));
+            : applyMigratedFlagToRestoredSessions(
+                data.attendanceSessions.map((s) => ({
+                  ...s,
+                  classId: classIdMap.get(s.classId) ?? s.classId,
+                }))
+              );
         if (sessionRows.length > 0) await db.attendanceSessions.bulkPut(sessionRows);
 
         for (const h of data.holidays) {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, RotateCw, HardDriveDownload } from 'lucide-react';
+import { isStaleChunkError, tryReloadOnceForStaleChunk } from '../../lib/chunkReload';
 import { downloadBackupJson } from '../../services/backup';
 import { AppleButton } from './AppleButton';
 
@@ -29,6 +30,9 @@ export class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    if (isStaleChunkError(error) && tryReloadOnceForStaleChunk()) {
+      return;
+    }
     console.error('KruDesk ErrorBoundary caught error:', error, info);
   }
 
