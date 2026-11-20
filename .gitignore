@@ -47,3 +47,6 @@ downloads/
 private_samples/
 # ...except the empty Excel import template that the tests and the app use
 !/គម្រូទិន្នន័យសិស្សក្នុងការបញ្ជូលសិស្សតាម Excel.xlsx
+
+# Local prompt with the admin email — never commit
+GEMINI_FIREBASE_PROMPT.md

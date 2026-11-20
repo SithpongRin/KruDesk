@@ -27,11 +27,12 @@ function listSourceFiles(dir: string): string[] {
 }
 
 describe('asset paths', () => {
-  it('getAssetUrl prefixes the app base path (/KruDesk/)', () => {
+  it('getAssetUrl prefixes the app base path (/ or /KruDesk/)', () => {
+    const base = import.meta.env.BASE_URL || '/KruDesk/';
     expect(getAssetUrl('images/flourishes/flourish_1_clean.png')).toBe(
-      '/KruDesk/images/flourishes/flourish_1_clean.png'
+      `${base}images/flourishes/flourish_1_clean.png`
     );
-    expect(getAssetUrl('/images/a.png')).toBe('/KruDesk/images/a.png');
+    expect(getAssetUrl('/images/a.png')).toBe(`${base}images/a.png`);
     expect(getAssetUrl('data:image/png;base64,AA')).toBe('data:image/png;base64,AA');
   });
 

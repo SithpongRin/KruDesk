@@ -9,8 +9,10 @@ const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'ut
   version: string;
 };
 
+const appBase = process.env.VERCEL ? '/' : '/KruDesk/';
+
 function resolveCommit(): string {
-  const fromCi = process.env.GITHUB_SHA?.slice(0, 7);
+  const fromCi = (process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA)?.slice(0, 7);
   if (fromCi) return fromCi;
   try {
     return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
@@ -22,7 +24,7 @@ function resolveCommit(): string {
 }
 
 export default defineConfig({
-  base: '/KruDesk/',
+  base: appBase,
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __APP_COMMIT__: JSON.stringify(resolveCommit()),
@@ -50,6 +52,8 @@ export default defineConfig({
         background_color: '#f5f5f7',
         display: 'standalone',
         orientation: 'any',
+        start_url: appBase,
+        scope: appBase,
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -67,7 +71,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,ttf,woff,woff2}'],
-        navigateFallbackDenylist: [/^\/KruDesk\/sw\.js$/, /^\/KruDesk\/workbox-/],
+        navigateFallbackDenylist: [/^\/(?:KruDesk\/)?sw\.js$/, /^\/(?:KruDesk\/)?workbox-/],
       },
     }),
   ],
