@@ -584,9 +584,9 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
               onClick={() =>
                 setPendingExportType(periodMode === 'monthly' ? 'report-all' : 'sem-report-all')
               }
-              title="ទាញយកសិក្សាប័ត្ររបស់សិស្សទាំងអស់ (១ ទំព័រ ១ នាក់)"
+              title="ទាញយកសិក្សាបត្ររបស់សិស្សទាំងអស់ (១ ទំព័រ ១ នាក់)"
             >
-              ទាញយកសិក្សាប័ត្រទាំងអស់
+              ទាញយកសិក្សាបត្រទាំងអស់
             </AppleButton>
           )}
           <AppleButton
@@ -807,7 +807,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                       ផ្សេងៗ
                     </th>
                     <th rowSpan={2} className="border-b border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
-                      សិក្សាប័ត្រ
+                      សិក្សាបត្រ
                     </th>
                   </tr>
                   <tr className="bg-[#fafafa] dark:bg-white/[0.04] text-[11px]">
@@ -941,7 +941,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
                       ផ្សេងៗ
                     </th>
                     <th rowSpan={2} className="border-b border-black/[0.08] dark:border-white/[0.1] px-2.5 py-2 text-center">
-                      សិក្សាប័ត្រ
+                      សិក្សាបត្រ
                     </th>
                   </tr>
                   <tr className="bg-[#fafafa] dark:bg-white/[0.04] text-[11px]">
@@ -1069,7 +1069,7 @@ export const MonthlyResultsView: React.FC<MonthlyResultsViewProps> = ({ profile 
               : pendingExportType === 'sem-report-one'
                 ? `លទ្ធផលឆមាស — ${targetSemReportRow?.student.nameKm ?? ''}`
                 : pendingExportType === 'report-all' || pendingExportType === 'sem-report-all'
-                  ? 'ទាញយកសិក្សាប័ត្រទាំងអស់ (PDF)'
+                  ? 'ទាញយកសិក្សាបត្រទាំងអស់ (PDF)'
                   : 'នាំចេញលទ្ធផល (PDF)'
         }
         month={selectedMonth}

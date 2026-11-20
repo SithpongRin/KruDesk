@@ -251,7 +251,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
       isOpen={Boolean(file)}
       onClose={onCancel}
       title={title}
-      subtitle="អូសប្រអប់ពណ៌ខៀវឲ្យនៅជុំវិញត្រា ឬហត្ថលេខា — រូបខាងស្ដាំជាលទ្ធផលដែលនឹងបោះពុម្ព"
+      subtitle="អូសប្រអប់ពណ៌ខៀវឱ្យនៅជុំវិញត្រា ឬហត្ថលេខា — រូបខាងស្ដាំជាលទ្ធផលដែលនឹងបោះពុម្ព"
       maxWidth="2xl"
       footer={
         <>
@@ -330,7 +330,7 @@ export const ImageCropModal: React.FC<ImageCropModalProps> = ({
                 onChange={(e) => setClean((c) => ({ ...c, enhance: e.target.checked }))}
                 className="w-4 h-4 accent-[#0071e3]"
               />
-              ធ្វើឲ្យច្បាស់ (ពណ៌ដិត)
+              ធ្វើឱ្យច្បាស់ (ពណ៌ដិត)
             </label>
             <div>
               <div className="flex justify-between text-[11px] text-[#86868b] mb-1">

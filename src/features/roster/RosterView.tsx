@@ -255,10 +255,10 @@ export const RosterView: React.FC<RosterViewProps> = ({ profile }) => {
                     មុខរបរ (ឪពុក)
                   </th>
                   <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-3 py-2.5 text-left whitespace-nowrap">
-                    ឈ្មោះម្តាយ
+                    ឈ្មោះម្ដាយ
                   </th>
                   <th className="border-b border-r border-black/[0.08] dark:border-white/[0.1] px-3 py-2.5 text-left whitespace-nowrap">
-                    មុខរបរ (ម្តាយ)
+                    មុខរបរ (ម្ដាយ)
                   </th>
                   <th className="border-b border-black/[0.08] dark:border-white/[0.1] px-3 py-2.5 text-left min-w-[180px] whitespace-nowrap">
                     ទីកន្លែងរស់នៅបច្ចុប្បន្ន

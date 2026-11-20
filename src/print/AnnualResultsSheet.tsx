@@ -196,7 +196,7 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
                 <div className="mt-2.5">
                   <div className="text-[8.5pt] leading-relaxed">
                     <div className="font-bold">
-                      ចំនួនសិស្សសរុប: {fmt(summary.totalStudents)} នាក់, ស្រី:{' '}
+                      បញ្ឈប់បញ្ជីចំនួនសិស្សសរុប: {fmt(summary.totalStudents)} នាក់, ស្រី:{' '}
                       {fmt(summary.femaleStudents)} នាក់
                     </div>
                     <div className="grid grid-cols-2 gap-x-8 mt-1 max-w-[130mm]">

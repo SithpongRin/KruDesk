@@ -1031,7 +1031,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
     setDeleteSubjPrompt(null);
     addToast({
       type: 'success',
-      title: `បានលុបមុខវិជ្ជា "${subject.name}"`,
+      title: `បានលុបមុខវិជ្ជា «${subject.name}»`,
     });
   };
 
@@ -1066,7 +1066,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
       }
       if (deactivatedSubjects.length > 0) {
         messageParts.push(
-          `បានបិទ៖ ${deactivatedSubjects.map((d) => d.name).join(', ')} (ពិន្ទុនៅរក្សាទុក — អាចបើកវិញនៅផ្ទាំង "មុខវិជ្ជា")។`
+          `បានបិទ៖ ${deactivatedSubjects.map((d) => d.name).join(', ')} (ពិន្ទុនៅរក្សាទុក — អាចបើកវិញនៅផ្ទាំង «មុខវិជ្ជា»)។`
         );
       }
       if (keptMaxScores.length > 0) {
@@ -2233,12 +2233,12 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
         message={
           deleteSubjPrompt
             ? deleteSubjPrompt.totalCount > 0
-              ? `មុខវិជ្ជា "${deleteSubjPrompt.subject.name}" មានពិន្ទុចំនួន ${fmtNum(
+              ? `មុខវិជ្ជា «${deleteSubjPrompt.subject.name}» មានពិន្ទុចំនួន ${fmtNum(
                   deleteSubjPrompt.totalCount
                 )} កំណត់ត្រា (${fmtNum(deleteSubjPrompt.monthlyCount)} ប្រចាំខែ, ${fmtNum(
                   deleteSubjPrompt.examCount
                 )} ប្រឡងឆមាស)។ តើអ្នកពិតជាចង់លុបមុខវិជ្ជា និងពិន្ទុទាំងនោះមែនទេ?`
-              : `តើអ្នកចង់លុបមុខវិជ្ជា "${deleteSubjPrompt.subject.name}" ចេញពីថ្នាក់នេះមែនទេ?`
+              : `តើអ្នកចង់លុបមុខវិជ្ជា «${deleteSubjPrompt.subject.name}» ចេញពីថ្នាក់នេះមែនទេ?`
             : ''
         }
       />
@@ -2276,7 +2276,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                   <span className="font-semibold text-[#ff9500]">នឹងត្រូវបិទ៖ </span>
                   {presetPreview.deactivatedSubjects.map((d) => d.name).join(', ')}{' '}
                   <span className="text-[#86868b]">
-                    (ពិន្ទុនៅរក្សាទុក — អាចបើកវិញនៅផ្ទាំង &quot;មុខវិជ្ជា&quot;)
+                    (ពិន្ទុនៅរក្សាទុក — អាចបើកវិញនៅផ្ទាំង «មុខវិជ្ជា»)
                   </span>
                 </p>
               )}

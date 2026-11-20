@@ -128,7 +128,7 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
                       ថ្ងៃខែឆ្នាំកំណើត
                     </th>
                     <th className="border border-black px-2 py-1 text-left">ឪពុកឈ្មោះ</th>
-                    <th className="border border-black px-2 py-1 text-left">ម្តាយឈ្មោះ</th>
+                    <th className="border border-black px-2 py-1 text-left">ម្ដាយឈ្មោះ</th>
                     <th className="border border-black px-1.5 py-1 text-center w-24">
                       លេខទូរស័ព្ទ
                     </th>

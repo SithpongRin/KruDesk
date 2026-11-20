@@ -445,7 +445,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
         <EmptyState
           icon={<GraduationCap size={28} />}
           title="មិនទាន់មានថ្នាក់រៀន"
-          hint="ចាប់ផ្ដើមដោយបង្កើតថ្នាក់រៀនដំបូង និងនាំចូលបញ្ជីឈ្មោះសិស្សពី Excel ។"
+          hint="ចាប់ផ្ដើមដោយបង្កើតថ្នាក់រៀនដំបូង និងនាំចូលបញ្ជីឈ្មោះសិស្សពី Excel។"
           actionLabel="បង្កើតថ្នាក់រៀន"
           onAction={requestOpenCreateClass}
         />

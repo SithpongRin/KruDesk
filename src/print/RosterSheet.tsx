@@ -128,8 +128,8 @@ export const RosterSheet: React.FC<RosterSheetProps> = ({
                     </th>
                     <th className="border border-black px-2 py-1 text-left">ឈ្មោះឪពុក</th>
                     <th className="border border-black px-1.5 py-1 text-left">មុខរបរ (ឪពុក)</th>
-                    <th className="border border-black px-2 py-1 text-left">ឈ្មោះម្តាយ</th>
-                    <th className="border border-black px-1.5 py-1 text-left">មុខរបរ (ម្តាយ)</th>
+                    <th className="border border-black px-2 py-1 text-left">ឈ្មោះម្ដាយ</th>
+                    <th className="border border-black px-1.5 py-1 text-left">មុខរបរ (ម្ដាយ)</th>
                     <th className="border border-black px-2 py-1 text-left">
                       ទីកន្លែងរស់នៅបច្ចុប្បន្ន
                     </th>

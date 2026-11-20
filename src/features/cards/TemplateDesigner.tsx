@@ -84,8 +84,8 @@ export const TemplateDesigner: React.FC<TemplateDesignerProps> = ({
     await selectTemplate(tpl.id);
     addToast({
       type: 'info',
-      title: 'បានប្តូរគំរូ',
-      message: `បានជ្រើសរើស: ${tpl.name}`,
+      title: 'បានប្ដូរគំរូ',
+      message: `បានជ្រើសរើស៖ ${tpl.name}`,
     });
   };
 
@@ -95,7 +95,7 @@ export const TemplateDesigner: React.FC<TemplateDesignerProps> = ({
     addToast({
       type: 'info',
       title: 'បានកំណត់ឡើងវិញ',
-      message: 'គំរូកាតត្រូវបានស្តារទៅកាន់គំរូដើមផ្លូវការ',
+      message: 'គំរូកាតត្រូវបានស្ដារទៅកាន់គំរូដើមផ្លូវការ',
     });
   };
 
@@ -128,7 +128,7 @@ export const TemplateDesigner: React.FC<TemplateDesignerProps> = ({
             icon={<RotateCcw size={14} />}
             onClick={() => setResetConfirmOpen(true)}
           >
-            ស្តារគំរូដើម
+            ស្ដារគំរូដើម
           </AppleButton>
 
           <AppleButton
@@ -201,7 +201,7 @@ export const TemplateDesigner: React.FC<TemplateDesignerProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-6 space-y-4">
           <AppleCard
-            title="ទិដ្ឋភាពជាក់ស្តែង (Live Preview)"
+            title="ទិដ្ឋភាពជាក់ស្ដែង (Live Preview)"
             subtitle="កាតនឹងបង្ហាញបែបនេះពេលបោះពុម្ព PDF 300 DPI"
             headerAction={
               <AppleSegmentedControl
@@ -251,7 +251,7 @@ export const TemplateDesigner: React.FC<TemplateDesignerProps> = ({
 
             <div className="mt-4 flex items-center justify-between text-xs text-[#86868b] pt-3 border-t border-black/[0.05] dark:border-white/[0.08]">
               <span>
-                ទិន្នន័យតេស្ត: {sampleStudent.nameKm} (ថ្នាក់ {sampleStudent.class})
+                ទិន្នន័យតេស្ត៖ {sampleStudent.nameKm} (ថ្នាក់ {sampleStudent.class})
               </span>
               {sampleList.length > 1 && (
                 <button
@@ -259,7 +259,7 @@ export const TemplateDesigner: React.FC<TemplateDesignerProps> = ({
                   onClick={() => setSampleIndex((i) => (i + 1) % sampleList.length)}
                   className="text-[#0071e3] font-medium hover:underline"
                 >
-                  ប្តូរសិស្សតេស្តផ្សេង
+                  ប្ដូរសិស្សតេស្តផ្សេង
                 </button>
               )}
             </div>
@@ -651,9 +651,9 @@ export const TemplateDesigner: React.FC<TemplateDesignerProps> = ({
         isOpen={resetConfirmOpen}
         onClose={() => setResetConfirmOpen(false)}
         onConfirm={() => void handleConfirmReset()}
-        title="ស្តារគំរូដើមផ្លូវការ?"
+        title="ស្ដារគំរូដើមផ្លូវការ?"
         variant="primary"
-        confirmLabel="ស្តារគំរូដើម"
+        confirmLabel="ស្ដារគំរូដើម"
         message="ការកែប្រែលើគំរូបច្ចុប្បន្ននឹងត្រឡប់ទៅតាមគំរូដើមផ្លូវការរបស់ក្រសួង។"
       />
     </div>

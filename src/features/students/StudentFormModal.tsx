@@ -127,7 +127,7 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({
         studentToEdit?.id
       );
       if (!unique) {
-        nextErrors.studentId = `អត្តលេខ "${trimmedId}" មានរួចហើយក្នុងថ្នាក់នេះ`;
+        nextErrors.studentId = `អត្តលេខ «${trimmedId}» មានរួចហើយក្នុងថ្នាក់នេះ`;
       }
     }
 
@@ -459,7 +459,7 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({
               htmlFor="student-motherName"
               className="block text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
             >
-              ម្តាយឈ្មោះ
+              ម្ដាយឈ្មោះ
             </label>
             <input
               id="student-motherName"
@@ -475,7 +475,7 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({
               htmlFor="student-motherOccupation"
               className="block text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] mb-1"
             >
-              មុខរបរម្តាយ
+              មុខរបរម្ដាយ
             </label>
             <input
               id="student-motherOccupation"

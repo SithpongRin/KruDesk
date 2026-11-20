@@ -800,7 +800,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ profile }) => {
         onClose={() => setStudentToDelete(null)}
         onConfirm={handleConfirmDeleteStudent}
         title={`លុបសិស្ស ${studentToDelete?.nameKm || ''}`}
-        message={`តើអ្នកពិតជាចង់លុបសិស្ស "${studentToDelete?.nameKm}" (អត្តលេខ ${studentToDelete?.studentId}) មែនទេ? កំណត់ត្រាវត្តមាន និងពិន្ទុរបស់សិស្សនេះនឹងត្រូវលុបផងដែរ ហើយលេខរៀងសិស្សនឹងតម្រៀបឡើងវិញ ១..n។`}
+        message={`តើអ្នកពិតជាចង់លុបសិស្ស «${studentToDelete?.nameKm}» (អត្តលេខ ${studentToDelete?.studentId}) មែនទេ? កំណត់ត្រាវត្តមាន និងពិន្ទុរបស់សិស្សនេះនឹងត្រូវលុបផងដែរ ហើយលេខរៀងសិស្សនឹងតម្រៀបឡើងវិញ ១..n។`}
         confirmLabel={isDeletingStudent ? 'កំពុងលុប...' : 'លុបសិស្ស'}
         isLoading={isDeletingStudent}
       />

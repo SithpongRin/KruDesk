@@ -75,7 +75,7 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
 
               <div className="flex flex-wrap items-center justify-between text-[9pt] mb-1.5 px-1">
                 <div>
-                  ឈ្មោះសិស្ស: {row.student.nameKm}
+                  ឈ្មោះសិស្ស៖ {row.student.nameKm}
                 </div>
                 <div>
                   ថ្នាក់៖ {cls.name}
@@ -144,7 +144,7 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                 </colgroup>
                 <tbody>
                   <tr>
-                    <td className="border border-black px-2 py-0.5">សរុបពិន្ទុប្រលងឆមាស៖</td>
+                    <td className="border border-black px-2 py-0.5">សរុបពិន្ទុប្រឡងឆមាស៖</td>
                     <td className="border border-black px-2 py-0.5 text-center font-bold">
                       {row.examTotal !== null
                         ? fmt(
@@ -165,7 +165,7 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                     </td>
                   </tr>
                   <tr>
-                    <td className="border border-black px-2 py-0.5">មធ្យមភាគប្រលងឆមាស៖</td>
+                    <td className="border border-black px-2 py-0.5">មធ្យមភាគប្រឡងឆមាស៖</td>
                     <td className="border border-black px-2 py-0.5 text-center font-bold">
                       {row.examAvg !== null
                         ? fmt(formatAverage(row.examAvg, scoreConfig.averageDecimalMode))

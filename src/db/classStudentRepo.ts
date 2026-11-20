@@ -125,7 +125,7 @@ export async function addStudentToClass(
   const trimmedId = input.studentId.trim();
   const unique = await isStudentIdUniqueInClass(input.classId, trimmedId);
   if (!unique) {
-    throw new Error(`អត្តលេខ "${trimmedId}" មានរួចហើយក្នុងថ្នាក់នេះ`);
+    throw new Error(`អត្តលេខ «${trimmedId}» មានរួចហើយក្នុងថ្នាក់នេះ`);
   }
   const now = Date.now();
   const order = await getNextStudentOrder(input.classId);
@@ -154,7 +154,7 @@ export async function updateStudentInClass(
 
   const unique = await isStudentIdUniqueInClass(targetClassId, targetStudentId, id);
   if (!unique) {
-    throw new Error(`អត្តលេខ "${targetStudentId}" មានរួចហើយក្នុងថ្នាក់នេះ`);
+    throw new Error(`អត្តលេខ «${targetStudentId}» មានរួចហើយក្នុងថ្នាក់នេះ`);
   }
 
   const statusChanged = patch.status !== undefined && patch.status !== existing.status;

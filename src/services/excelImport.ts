@@ -524,10 +524,10 @@ export function buildStudentImportPreview(
     const errors: string[] = [];
     if (!nameKm) errors.push('ខ្វះ គោត្តនាម និងនាម');
     if (mapping.gender && !parsedGender) {
-      errors.push(`ភេទមិនត្រឹមត្រូវ ("${rawGender || 'ទទេ'}")`);
+      errors.push(`ភេទមិនត្រឹមត្រូវ («${rawGender || 'ទទេ'}»)`);
     }
     if (!parsedDob.valid) {
-      errors.push(`ថ្ងៃកំណើតមិនត្រឹមត្រូវ ("${excelValueToText(rawDob)}")`);
+      errors.push(`ថ្ងៃកំណើតមិនត្រឹមត្រូវ («${excelValueToText(rawDob)}»)`);
     }
 
     const isDuplicate = existingLower.has(idLower) || seenInFileLower.has(idLower);
@@ -636,8 +636,8 @@ export async function downloadStudentImportTemplate(
     { header: 'ឆ្នាំសិក្សា', key: 'academicYear', width: 16 },
     { header: 'ឪពុកឈ្មោះ', key: 'fatherName', width: 20 },
     { header: 'មុខរបរឪពុក', key: 'fatherOccupation', width: 16 },
-    { header: 'ម្តាយឈ្មោះ', key: 'motherName', width: 20 },
-    { header: 'មុខរបរម្តាយ', key: 'motherOccupation', width: 16 },
+    { header: 'ម្ដាយឈ្មោះ', key: 'motherName', width: 20 },
+    { header: 'មុខរបរម្ដាយ', key: 'motherOccupation', width: 16 },
     { header: 'ទីលំនៅបច្ចុប្បន្ន', key: 'address', width: 30 },
     { header: 'លេខទូរស័ព្ទ', key: 'phone', width: 16 },
     { header: 'លេខកាត', key: 'cardNumber', width: 12 },
@@ -702,7 +702,7 @@ export async function downloadStudentImportTemplate(
   try {
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'គម្រូទិន្នន័យសិស្ស_KruDesk.xlsx';
+    a.download = 'គំរូទិន្នន័យសិស្ស_KruDesk.xlsx';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

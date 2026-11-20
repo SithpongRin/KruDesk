@@ -148,7 +148,7 @@ export async function exportStudentListExcel(
     'ថ្ងៃខែឆ្នាំកំណើត',
     'ទីកន្លែងកំណើត',
     'ឪពុកឈ្មោះ',
-    'ម្តាយឈ្មោះ',
+    'ម្ដាយឈ្មោះ',
     'លេខទូរស័ព្ទ',
     'ទីលំនៅបច្ចុប្បន្ន',
     'លេខកាត',
@@ -310,8 +310,8 @@ export async function exportRosterExcel(
     'ថ្ងៃខែឆ្នាំកំណើត',
     'ឈ្មោះឪពុក',
     'មុខរបរ (ឪពុក)',
-    'ឈ្មោះម្តាយ',
-    'មុខរបរ (ម្តាយ)',
+    'ឈ្មោះម្ដាយ',
+    'មុខរបរ (ម្ដាយ)',
     'ទីកន្លែងរស់នៅបច្ចុប្បន្ន',
   ];
 
@@ -1472,7 +1472,7 @@ export async function exportMonthlyResultsExcel(params: {
 
   sheet.addRow([]);
   sheet.addRow([
-    `ចំនួនសិស្សសរុប: ${fmt(summary.totalStudents)} នាក់, ស្រី: ${fmt(summary.femaleStudents)} នាក់`,
+    `បញ្ឈប់បញ្ជីចំនួនសិស្សសរុប: ${fmt(summary.totalStudents)} នាក់, ស្រី: ${fmt(summary.femaleStudents)} នាក់`,
   ]);
   for (let i = 0; i < GRADE_ORDER.length; i += 2) {
     const g1 = GRADE_ORDER[i];
@@ -1832,7 +1832,7 @@ export async function exportAnnualResultsExcel(params: {
 
   sheet.addRow([]);
   sheet.addRow([
-    `ចំនួនសិស្សសរុប: ${fmt(summary.totalStudents)} នាក់, ស្រី: ${fmt(summary.femaleStudents)} នាក់`,
+    `បញ្ឈប់បញ្ជីចំនួនសិស្សសរុប: ${fmt(summary.totalStudents)} នាក់, ស្រី: ${fmt(summary.femaleStudents)} នាក់`,
   ]);
   for (let i = 0; i < GRADE_ORDER.length; i += 2) {
     const g1 = GRADE_ORDER[i];
