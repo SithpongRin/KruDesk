@@ -87,6 +87,31 @@ describe('document border images', () => {
     expect(page.style.padding).toBe('24mm 30mm');
   });
 
+  it('without chosen images: certificate uses the default kbach frame, honor roll the gold plaque', () => {
+    const cert = render(
+      <CertificateSheet
+        cls={cls}
+        profile={profile}
+        month="2026-11"
+        items={[row]}
+        signOptions={signOptions}
+      />
+    );
+    expect(
+      cert.container.querySelector('img[src$="images/frames/certificate-kbach.jpg"]')
+    ).not.toBeNull();
+    const roll = render(
+      <HonorRollSheet
+        cls={cls}
+        profile={profile}
+        month="2026-11"
+        items={[row]}
+        signOptions={signOptions}
+      />
+    );
+    expect(roll.container.querySelector('img[src$="images/frames/name-plaque.png"]')).not.toBeNull();
+  });
+
   it('honor roll keeps the built-in frame without an image and shows the month only', () => {
     const { container } = render(
       <HonorRollSheet

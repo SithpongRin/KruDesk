@@ -3,7 +3,7 @@
  * They are stored only in this browser (settings table, so they also travel in backups) —
  * never shipped with the app, because such artwork usually belongs to someone else.
  */
-export type DocumentBorderKey = 'certificateBorder' | 'honorRollNameBanner';
+export type DocumentBorderKey = 'certificateBorder' | 'honorRollBorder' | 'honorRollNameBanner';
 
 export interface DocumentBorderImage {
   /** JPEG (or PNG for name banners) data URL, already turned to the page's orientation. */
@@ -17,6 +17,7 @@ export interface DocumentBorderImage {
 /** Page orientation of each document that can carry a border image. */
 export const DOCUMENT_BORDER_ORIENTATION: Record<DocumentBorderKey, 'landscape' | 'portrait'> = {
   certificateBorder: 'landscape',
+  honorRollBorder: 'portrait',
   honorRollNameBanner: 'landscape',
 };
 
@@ -29,6 +30,7 @@ export const DOCUMENT_BORDER_FORMAT: Record<
   { transparent: boolean; maxLongSide: number }
 > = {
   certificateBorder: { transparent: false, maxLongSide: 2400 },
+  honorRollBorder: { transparent: false, maxLongSide: 2400 },
   honorRollNameBanner: { transparent: true, maxLongSide: 1200 },
 };
 

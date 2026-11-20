@@ -16,53 +16,16 @@ interface CertificateSheetProps {
   items: MonthlyResultRow[];
   signOptions: DocumentSignOptions;
   gradeWords?: Partial<Record<ScoreGrade, string>>;
-  /** Frame image chosen by the teacher (stretched over the whole page); built-in frame if absent. */
+  /** Frame image chosen by the teacher (stretched over the whole page); the default kbach frame if absent. */
   borderImage?: DocumentBorderImage;
 }
 
-const OrnateCertificateBorder: React.FC = () => (
-  <svg
-    className="absolute inset-0 w-full h-full pointer-events-none"
-    viewBox="0 0 297 210"
-    preserveAspectRatio="none"
-  >
-    {/* Thick ornate red/orange frame */}
-    <rect x="6" y="6" width="285" height="198" fill="none" stroke="#dc2626" strokeWidth="3.2" />
-    <rect x="9.5" y="9.5" width="278" height="191" fill="none" stroke="#f97316" strokeWidth="1.4" />
-    <rect
-      x="12"
-      y="12"
-      width="273"
-      height="186"
-      fill="none"
-      stroke="#ea580c"
-      strokeWidth="0.9"
-      strokeDasharray="2.5 1.8"
-    />
-    <rect x="14" y="14" width="269" height="182" fill="none" stroke="#dc2626" strokeWidth="0.8" />
-
-    {/* Corner floral rosettes */}
-    {[
-      [10, 10, 1, 1],
-      [287, 10, -1, 1],
-      [10, 200, 1, -1],
-      [287, 200, -1, -1],
-    ].map(([cx, cy, sx, sy], idx) => (
-      <g key={idx} transform={`translate(${cx}, ${cy}) scale(${sx}, ${sy})`}>
-        <path
-          d="M0,0 L16,0 C11,4 4,11 0,16 Z"
-          fill="#ea580c"
-          opacity="0.9"
-        />
-        <path
-          d="M2,2 C6,2 10,6 10,10 C6,10 2,6 2,2 Z"
-          fill="#dc2626"
-        />
-        <circle cx="5" cy="5" r="1.5" fill="#fef3c7" />
-      </g>
-    ))}
-  </svg>
-);
+/** Default frame: orange Khmer «ក្បាច់» border from the teacher's templates (public/images/frames). */
+const DEFAULT_CERTIFICATE_FRAME: DocumentBorderImage = {
+  dataUrl: getAssetUrl('images/frames/certificate-kbach.jpg'),
+  width: 2400,
+  height: 1644,
+};
 
 export const CertificateSheet: React.FC<CertificateSheetProps> = ({
   cls,
@@ -90,8 +53,8 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
             style={{
               width: '297mm',
               height: '210mm',
-              // An image frame (e.g. Khmer «ក្បាច់») is wider than the built-in lines.
-              padding: borderImage ? '24mm 30mm' : '17mm 20mm',
+              // Room for the Khmer «ក្បាច់» frame image around the text.
+              padding: '24mm 30mm',
               boxSizing: 'border-box',
               backgroundColor: '#ffffff',
               color: '#000000',
@@ -102,16 +65,12 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
               justifyContent: 'center',
             }}
           >
-            {borderImage ? (
-              <img
-                src={borderImage.dataUrl}
-                alt=""
-                className="absolute inset-0 w-full h-full pointer-events-none select-none"
-                style={{ objectFit: 'fill' }}
-              />
-            ) : (
-              <OrnateCertificateBorder />
-            )}
+            <img
+              src={(borderImage ?? DEFAULT_CERTIFICATE_FRAME).dataUrl}
+              alt=""
+              className="absolute inset-0 w-full h-full pointer-events-none select-none"
+              style={{ objectFit: 'fill' }}
+            />
 
             <div className="relative z-10">
               <DocumentHeader profile={profile} color="#1d4ed8" />

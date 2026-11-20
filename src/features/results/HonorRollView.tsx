@@ -45,6 +45,7 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
     setActiveView,
     addToast,
   } = useAppStore();
+  const honorRollBorder = useDocumentBorder('honorRollBorder');
   const honorRollNameBanner = useDocumentBorder('honorRollNameBanner');
 
   const fmt = (val: number | string) =>
@@ -220,6 +221,7 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
             ))}
           </select>
 
+          <DocumentBorderButton borderKey="honorRollBorder" current={honorRollBorder} />
           <DocumentBorderButton
             borderKey="honorRollNameBanner"
             current={honorRollNameBanner}
@@ -252,6 +254,7 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
           <div className="shadow-lg origin-top scale-[0.72] sm:scale-[0.85] lg:scale-100">
             <HonorRollSheet
               nameBanner={honorRollNameBanner}
+              borderImage={honorRollBorder}
               cls={currentClass}
               profile={profile}
               month={selectedMonth}
@@ -278,6 +281,7 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
         >
           <HonorRollSheet
             nameBanner={honorRollNameBanner}
+            borderImage={honorRollBorder}
             cls={currentClass}
             profile={profile}
             month={selectedMonth}

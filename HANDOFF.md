@@ -171,15 +171,15 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
       closed; every caller shows the success toast only `if (exported)`. Card PDFs (`pdfService.ts`)
       keep their own `CardPreviewModal`. Tests: `src/services/__tests__/pdfPreview.test.tsx`.
 
-- [x] **Document frames (2026-11-20):** «ប័ណ្ណសរសើរ» has «ប្ដូរស៊ុម» / «ស៊ុមដើម»: the teacher picks a frame
-      image (e.g. a Khmer «ក្បាច់» border); it is turned to landscape, scaled to ≤ 2400 px JPEG
-      (`src/utils/documentBorder.ts`) and stored only in IndexedDB settings (`certificateBorder`, so it
-      travels in backups). «តារាងកិត្តិយស» keeps its built-in frame (thick indigo band like sample 03 —
-      **teacher: no kbach page frame on the honor roll**) but has «ប្ដូរស៊ុមឈ្មោះ» (`honorRollNameBanner`):
-      a transparent PNG plaque for the students' names (≤ 1200 px, white patch behind its open middle so
-      the photo never shows through). **Never commit such frame images** — they are other people's artwork.
-      The honor-roll title shows the month only (teacher, 2026-11-20); a semester honor roll would get
-      its own title.
+- [x] **Document frames (2026-11-20):** defaults chosen by the teacher from their own templates, shipped in
+      `public/images/frames/` (teacher's decision 2026-11-20, despite the images coming from other artists —
+      remove them if an artist objects): certificate = orange Khmer «ក្បាច់» border (`certificate-kbach.jpg`),
+      honor-roll names = gold plaque (`name-plaque.png`, white patch behind its open middle); honor-roll page =
+      built-in indigo band like sample 03. Each can be replaced per device: «ប្ដូរស៊ុម» (certificate,
+      honor roll) and «ប្ដូរស៊ុមឈ្មោះ» (honor roll) store a picked image in IndexedDB settings
+      (`certificateBorder`, `honorRollBorder`, `honorRollNameBanner`; travels in backups; turned to the page's
+      orientation, ≤ 2400 px JPEG / ≤ 1200 px PNG for the plaque). «ស៊ុមដើម» / «ស៊ុមឈ្មោះដើម» go back to the
+      defaults. The honor-roll title shows the month only; no crowns.
 
 ## 7. «បញ្ជីពិន្ទុ» vs the MoEYS standard (checked 2026-11-20)
 

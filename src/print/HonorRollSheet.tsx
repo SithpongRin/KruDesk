@@ -6,6 +6,7 @@ import { toKhmerNumerals } from '../utils/khmerNumerals';
 import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
 import type { DocumentBorderImage } from '../utils/documentBorder';
+import { getAssetUrl } from '../utils/assets';
 
 interface HonorRollSheetProps {
   cls: SchoolClass;
@@ -13,8 +14,10 @@ interface HonorRollSheetProps {
   month: string;
   items: MonthlyResultRow[];
   signOptions: DocumentSignOptions;
-  /** Plaque image for the students' names (transparent PNG); built-in scroll if absent. */
+  /** Plaque image for the students' names (transparent PNG); the default gold plaque if absent. */
   nameBanner?: DocumentBorderImage;
+  /** Page frame image chosen by the teacher (already portrait); built-in indigo frame if absent. */
+  borderImage?: DocumentBorderImage;
 }
 
 /** Built-in frame after the school's sample 03: a thick indigo band between two thin black lines. */
@@ -58,21 +61,11 @@ const HonorRollBorderSvg: React.FC = () => (
   </svg>
 );
 
-/** Gilded scroll banner with curled ends, laid over the bottom of the photo (sample 03). */
-const NameBannerSvg: React.FC = () => {
-  // Body with scroll-curl ends (top and bottom edges curl outward), like sample 03.
-  const d =
-    'M40 10 L180 10 C192 10 196 4 204 4 C212 4 216 10 212 15 C209 19 203 17 204 13 C198 15 196 20 206 23 C196 26 198 31 204 33 C203 29 209 27 212 31 C216 36 212 42 204 42 C196 42 192 36 180 36 L40 36 C28 36 24 42 16 42 C8 42 4 36 8 31 C11 27 17 29 16 33 C22 31 24 26 14 23 C24 20 22 15 16 13 C17 17 11 19 8 15 C4 10 8 4 16 4 C24 4 28 10 40 10 Z';
-  return (
-    <svg
-      className="absolute inset-0 w-full h-full pointer-events-none"
-      viewBox="0 0 220 47"
-      preserveAspectRatio="none"
-    >
-      <path d={d} fill="#ffffff" stroke="#b7791f" strokeWidth="4.5" strokeLinejoin="round" />
-      <path d={d} fill="none" stroke="#f6d365" strokeWidth="1.6" strokeLinejoin="round" />
-    </svg>
-  );
+/** Default name plaque (gold Khmer frame chosen by the teacher, public/images/frames). */
+const DEFAULT_NAME_PLAQUE: DocumentBorderImage = {
+  dataUrl: getAssetUrl('images/frames/name-plaque.png'),
+  width: 1200,
+  height: 347,
 };
 
 const SilhouetteSvg: React.FC = () => (
@@ -113,11 +106,10 @@ const PyramidCard: React.FC<{
   item: MonthlyResultRow;
   nameBanner?: DocumentBorderImage;
 }> = ({ item, nameBanner }) => {
-  // A teacher's plaque image keeps its own proportions; its open middle is about half its width.
-  const bannerWidthMm = nameBanner ? 54 : 50;
-  const bannerHeightMm = nameBanner
-    ? Math.min(22, Math.max(10, (bannerWidthMm * nameBanner.height) / nameBanner.width))
-    : 11;
+  // The plaque keeps its own proportions; its open middle is about half its width.
+  const plaque = nameBanner ?? DEFAULT_NAME_PLAQUE;
+  const bannerWidthMm = 54;
+  const bannerHeightMm = Math.min(22, Math.max(10, (bannerWidthMm * plaque.height) / plaque.width));
   return (
     <div className="flex flex-col items-center text-center w-[56mm]">
       <div
@@ -136,27 +128,21 @@ const PyramidCard: React.FC<{
           marginTop: nameBanner ? '-6mm' : '-4mm',
         }}
       >
-        {nameBanner ? (
-          <>
-            {/* White behind the plaque's open middle so the photo never shows through the name. */}
-            <div
-              className="absolute bg-white"
-              style={{ left: '20%', right: '20%', top: '16%', bottom: '16%' }}
-            />
-            <img
-              src={nameBanner.dataUrl}
-              alt=""
-              className="absolute inset-0 w-full h-full pointer-events-none select-none"
-              style={{ objectFit: 'fill' }}
-            />
-          </>
-        ) : (
-          <NameBannerSvg />
-        )}
+        {/* White behind the plaque's open middle so the photo never shows through the name. */}
+        <div
+          className="absolute bg-white"
+          style={{ left: '20%', right: '20%', top: '16%', bottom: '16%' }}
+        />
+        <img
+          src={plaque.dataUrl}
+          alt=""
+          className="absolute inset-0 w-full h-full pointer-events-none select-none"
+          style={{ objectFit: 'fill' }}
+        />
         <span
           className="relative z-10 text-[11pt] text-[#1d4ed8] block truncate leading-none"
           style={{
-            maxWidth: nameBanner ? `${bannerWidthMm * 0.54}mm` : '34mm',
+            maxWidth: `${bannerWidthMm * 0.54}mm`,
           }}
         >
           {item.student.nameKm}
@@ -173,6 +159,7 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
   items,
   signOptions,
   nameBanner,
+  borderImage,
 }) => {
   const { month: monthNum } = parseYearMonth(month);
   const monthName = getKhmerMonthName(monthNum);
@@ -190,7 +177,8 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
         style={{
           width: '210mm',
           height: '297mm',
-          padding: '15mm 17mm 14mm',
+          // An image frame (e.g. Khmer «ក្បាច់») is wider than the built-in band.
+          padding: borderImage ? '20mm 21mm 16mm' : '15mm 17mm 14mm',
           boxSizing: 'border-box',
           backgroundColor: '#ffffff',
           color: '#1e3a8a',
@@ -200,7 +188,16 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
           justifyContent: 'flex-start',
         }}
       >
-        <HonorRollBorderSvg />
+        {borderImage ? (
+          <img
+            src={borderImage.dataUrl}
+            alt=""
+            className="absolute inset-0 w-full h-full pointer-events-none select-none"
+            style={{ objectFit: 'fill' }}
+          />
+        ) : (
+          <HonorRollBorderSvg />
+        )}
 
         <div className="relative z-10">
           <DocumentHeader profile={profile} color="#1e3a8a" />
