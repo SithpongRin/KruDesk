@@ -243,7 +243,6 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
               profile={profile}
               month={selectedMonth}
               items={honor.items}
-              scoreConfig={scoreConfig}
               signOptions={previewSignOptions}
             />
           </div>
@@ -269,7 +268,6 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
             profile={profile}
             month={selectedMonth}
             items={honor.items}
-            scoreConfig={scoreConfig}
             signOptions={printSignOptions}
           />
         </div>

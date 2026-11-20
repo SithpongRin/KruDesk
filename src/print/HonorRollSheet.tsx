@@ -1,10 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import type { Profile, SchoolClass, ScoreConfig } from '../types/domain';
+import type { Profile, SchoolClass } from '../types/domain';
 import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
-import {
-  resolveSemesterForMonth,
-  type MonthlyResultRow,
-} from '../lib/monthlyResults';
+import type { MonthlyResultRow } from '../lib/monthlyResults';
 import { toKhmerNumerals } from '../utils/khmerNumerals';
 import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
@@ -14,7 +11,6 @@ interface HonorRollSheetProps {
   profile: Profile;
   month: string;
   items: MonthlyResultRow[];
-  scoreConfig: ScoreConfig;
   signOptions: DocumentSignOptions;
 }
 
@@ -120,12 +116,10 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
   profile,
   month,
   items,
-  scoreConfig,
   signOptions,
 }) => {
   const { month: monthNum } = parseYearMonth(month);
   const monthName = getKhmerMonthName(monthNum);
-  const semester = resolveSemesterForMonth(month, scoreConfig);
 
   const row1 = items.slice(0, 1);
   const row2 = items.slice(1, 3);
@@ -160,8 +154,8 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
               style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
               className="text-[12.5pt] font-normal text-[#dc2626]"
             >
+              {/* Monthly honor roll: the month only (a semester honor roll would get its own title). */}
               តារាងកិត្តិយសប្រចាំខែ {monthName}
-              {semester ? ` - ឆមាសទី ${toKhmerNumerals(semester)}` : ''}
             </h2>
             <div
               className="text-[10pt] text-[#1e3a8a] mt-0.5"
