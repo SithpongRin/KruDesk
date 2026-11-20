@@ -12,6 +12,8 @@ import {
   setUpdateRegistration,
 } from './lib/appUpdate';
 import { useAppStore } from './store/useAppStore';
+import { APP_COMMIT, consumeAppUpdatedNotice } from './lib/appVersion';
+import { getProfile } from './db/database';
 import './index.css';
 
 window.addEventListener('vite:preloadError', (event) => {
@@ -58,6 +60,28 @@ updateSW = registerSW({
     }
   },
 });
+
+// The browser may switch to a new version by itself (app closed and reopened, Ctrl+Shift+R);
+// then no «មានកំណែថ្មី» prompt appears, so say once that the update is done. On the first
+// recorded start, only a teacher who already has data (a profile) is told.
+const showUpdatedNotice = () =>
+  useAppStore.getState().addToast({
+    type: 'success',
+    title: 'បានធ្វើបច្ចុប្បន្នភាពរួចហើយ',
+    message: `ឥឡូវកំពុងប្រើកំណែថ្មី (${APP_COMMIT})។ ទិន្នន័យរបស់អ្នកនៅដដែល។`,
+    // stays until closed: the app is often still loading when it appears
+    duration: 0,
+  });
+const updatedNotice = consumeAppUpdatedNotice();
+if (updatedNotice === 'updated') {
+  showUpdatedNotice();
+} else if (updatedNotice === 'first') {
+  getProfile()
+    .then((profile) => {
+      if (profile) showUpdatedNotice();
+    })
+    .catch(() => {});
+}
 
 setApplyUpdate(async (reloadPage) => {
   await flushAllPendingSaves();
