@@ -25,6 +25,23 @@ body {
   color: #f5f5f7;
 }
 
+/*
+ * Drop-down lists: the open list of a <select> takes the select's light text colour but paints
+ * its own white background on Windows, so in dark mode the choices were white on white.
+ * Give every option an explicit background and text colour in both themes.
+ */
+select option,
+select optgroup {
+  background-color: #ffffff;
+  color: #1d1d1f;
+}
+
+.dark select option,
+.dark select optgroup {
+  background-color: #1c1c1e;
+  color: #f5f5f7;
+}
+
 /* Custom sleek Apple scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
