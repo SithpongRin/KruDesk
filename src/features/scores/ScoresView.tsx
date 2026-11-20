@@ -19,7 +19,9 @@ import {
   mergeSubjectsWithPreset,
   subjectsDifferFromPreset,
   type PresetKey,
+  type PresetMergeResult,
 } from '../../db/presets';
+import { updateSchoolClass } from '../../db/classStudentRepo';
 import {
   countSubjectScoreEntries,
   createPermanentSubjectId,
@@ -34,6 +36,7 @@ import {
   type SchoolClass,
   type ScoreConfig,
   type Student,
+  type StudyTrack,
   type Subject,
 } from '../../types/domain';
 import { getActiveStudentsOrdered } from '../../lib/attendance';
@@ -891,6 +894,36 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
   const [newSubjMax, setNewSubjMax] = useState('50');
   const [deleteSubjPrompt, setDeleteSubjPrompt] = useState<DeleteSubjectPromptState | null>(null);
   const [presetReplaceConfirm, setPresetReplaceConfirm] = useState<PresetKey | null>(null);
+  const [presetTrackChoice, setPresetTrackChoice] = useState<StudyTrack>('science');
+  const [presetPreview, setPresetPreview] = useState<PresetMergeResult | null>(null);
+
+  useEffect(() => {
+    if (!presetReplaceConfirm || !currentClass?.id) {
+      setPresetPreview(null);
+      return;
+    }
+    let cancelled = false;
+    const effectiveTrack =
+      presetReplaceConfirm === 'upper-secondary' &&
+      (currentClass.gradeLevel === 11 || currentClass.gradeLevel === 12)
+        ? presetTrackChoice
+        : undefined;
+    void getHighestScoresBySubject(currentClass.id).then((highest) => {
+      if (cancelled) return;
+      const preview = mergeSubjectsWithPreset(
+        currentClass.subjects ?? [],
+        getPresetSubjects(presetReplaceConfirm, currentClass.gradeLevel, effectiveTrack),
+        highest
+      );
+      setPresetPreview(preview);
+    }).catch(() => {
+      /* preview is optional — the dialog still shows the general message */
+      if (!cancelled) setPresetPreview(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [presetReplaceConfirm, presetTrackChoice, currentClass]);
   const [presetHintDismissed, setPresetHintDismissed] = useState<Record<number, boolean>>(() => {
     try {
       return JSON.parse(localStorage.getItem('krudesk.presetHintDismissed') ?? '{}') as Record<
@@ -1002,24 +1035,53 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
     });
   };
 
-  const handleApplyPreset = async (presetKey: PresetKey) => {
+  const handleApplyPreset = async (presetKey: PresetKey, track?: StudyTrack) => {
     if (!currentClass?.id) return;
     try {
+      const effectiveTrack =
+        presetKey === 'upper-secondary' &&
+        (currentClass.gradeLevel === 11 || currentClass.gradeLevel === 12)
+          ? (track ?? currentClass.track ?? 'science')
+          : undefined;
       const highest = await getHighestScoresBySubject(currentClass.id);
-      const { subjects: merged, keptMaxScores } = mergeSubjectsWithPreset(
+      const {
+        subjects: merged,
+        keptMaxScores,
+        deactivatedSubjects,
+        migratedSubjects,
+      } = mergeSubjectsWithPreset(
         currentClass.subjects ?? [],
-        getPresetSubjects(presetKey, currentClass.gradeLevel),
+        getPresetSubjects(presetKey, currentClass.gradeLevel, effectiveTrack),
         highest
       );
       await saveClassSubjects(currentClass.id, merged);
+      if (effectiveTrack && effectiveTrack !== currentClass.track) {
+        await updateSchoolClass(currentClass.id, { track: effectiveTrack });
+      }
+      const messageParts: string[] = [];
+      if (migratedSubjects.length > 0) {
+        messageParts.push(
+          migratedSubjects.map((m) => `${m.fromName} → ${m.toName}`).join(', ') + '។'
+        );
+      }
+      if (deactivatedSubjects.length > 0) {
+        messageParts.push(
+          `បានបិទ៖ ${deactivatedSubjects.map((d) => d.name).join(', ')} (ពិន្ទុនៅរក្សាទុក — អាចបើកវិញនៅផ្ទាំង "មុខវិជ្ជា")។`
+        );
+      }
+      if (keptMaxScores.length > 0) {
+        messageParts.push(
+          `មិនបានបន្ថយពិន្ទុអតិបរមារបស់៖ ${keptMaxScores
+            .map((k) => `${k.name} (មានពិន្ទុ ${k.highestScore})`)
+            .join(', ')} — សូមពិនិត្យពិន្ទុទាំងនោះ។`
+        );
+      }
       addToast({
         type: 'success',
         title: 'បានអនុវត្តគំរូមុខវិជ្ជា',
         message:
-          keptMaxScores.length > 0
-            ? `ពិន្ទុដែលបានបញ្ចូលនៅដដែល។ មិនបានបន្ថយពិន្ទុអតិបរមារបស់៖ ${keptMaxScores
-                .map((k) => `${k.name} (មានពិន្ទុ ${k.highestScore})`)
-                .join(', ')} — សូមពិនិត្យពិន្ទុទាំងនោះ។`
+          messageParts.length > 0
+            ? messageParts.join(' ')
             : 'ពិន្ទុដែលបានបញ្ចូលនៅដដែល។ កំណែនេះអនុវត្តសម្រាប់តែថ្នាក់នេះប៉ុណ្ណោះ។',
       });
     } catch (err) {
@@ -1324,7 +1386,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
             <p className="leading-relaxed">
               {currentClass?.gradeLevel === 9
                 ? 'មុខវិជ្ជារបស់ថ្នាក់នេះមិនទាន់ត្រូវតាមគំរូថ្នាក់ទី ៩ របស់ក្រសួងទេ (១០ មុខវិជ្ជា ពិន្ទុសរុប ៤២០ + ភាសាបរទេសជាពិន្ទុបន្ថែម)។ ពិន្ទុដែលបានបញ្ចូលរួចនៅដដែល។'
-                : 'មុខវិជ្ជារបស់ថ្នាក់នេះមិនទាន់ត្រូវតាមគំរូសាលាទេ (១៥ មុខវិជ្ជា៖ សរសេរតាមអាន ៤០ · តែងសេចក្ដី ៦០ · គណិតវិទ្យា ១០០ · មុខវិជ្ជាផ្សេង ៥០)។ ពិន្ទុដែលបានបញ្ចូលរួចនៅដដែល។'}
+                : 'មុខវិជ្ជារបស់ថ្នាក់នេះមិនទាន់ត្រូវតាមគំរូក្រសួងទេ (១៤ មុខវិជ្ជា · សរុប ៧៥០៖ តែងសេចក្ដី ៦០ · សរសេរតាមអាន ៤០ · គណិតវិទ្យា ១០០ · មុខវិជ្ជាផ្សេង ៥០)។ ពិន្ទុដែលបានបញ្ចូលរួចនៅដដែល។'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2 shrink-0">
@@ -1334,7 +1396,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
               icon={<Sparkles size={14} />}
               onClick={() => setPresetReplaceConfirm('lower-secondary')}
             >
-              ប្ដូរតាមគំរូសាលា
+              ប្ដូរតាមគំរូក្រសួង
             </AppleButton>
             <AppleButton size="sm" variant="secondary" onClick={dismissPresetHint}>
               កុំបង្ហាញទៀត
@@ -1914,7 +1976,10 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                   size="sm"
                   variant="secondary"
                   icon={<Sparkles size={14} />}
-                  onClick={() => setPresetReplaceConfirm('upper-secondary')}
+                  onClick={() => {
+                    setPresetTrackChoice(currentClass.track ?? 'science');
+                    setPresetReplaceConfirm('upper-secondary');
+                  }}
                 >
                   គំរូវិទ្យាល័យ
                 </AppleButton>
@@ -2182,12 +2247,75 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
       <ConfirmDialog
         isOpen={Boolean(presetReplaceConfirm)}
         onClose={() => setPresetReplaceConfirm(null)}
-        onConfirm={() => presetReplaceConfirm && void handleApplyPreset(presetReplaceConfirm)}
+        onConfirm={() =>
+          presetReplaceConfirm &&
+          void handleApplyPreset(
+            presetReplaceConfirm,
+            presetReplaceConfirm === 'upper-secondary' ? presetTrackChoice : undefined
+          )
+        }
         title="កែបញ្ជីមុខវិជ្ជាតាមគំរូ?"
         variant="primary"
         confirmLabel="យល់ព្រមប្រើគំរូ"
-        message="ឈ្មោះ ពិន្ទុអតិបរមា និងលំដាប់មុខវិជ្ជានឹងត្រូវកែតាមគំរូ សម្រាប់តែថ្នាក់នេះ។ ពិន្ទុដែលបានបញ្ចូលរួចមិនបាត់ទេ ហើយមុខវិជ្ជាដែលអ្នកបន្ថែមខ្លួនឯងនៅដដែល។ ចំណាំ៖ ពិន្ទុដែលបានបញ្ចូលរួច (ឧ. គណិតវិទ្យាលើ ៥០) នឹងត្រូវគិតលើពិន្ទុអតិបរមាថ្មី — សូមពិនិត្យពិន្ទុទាំងនោះឡើងវិញ។"
-      />
+        message="ឈ្មោះ ពិន្ទុអតិបរមា និងលំដាប់មុខវិជ្ជានឹងត្រូវកែតាមគំរូ សម្រាប់តែថ្នាក់នេះ។ មុខវិជ្ជាដែលមិនមានក្នុងគំរូ (រួមទាំងមុខវិជ្ជាបន្ថែម) នឹងត្រូវបិទ ប៉ុន្តែពិន្ទុនៅរក្សាទុក — អាចបើកវិញនៅផ្ទាំង «មុខវិជ្ជា»។ ចំណាំ៖ ពិន្ទុដែលបានបញ្ចូលរួច (ឧ. គណិតវិទ្យាលើ ៥០) នឹងត្រូវគិតលើពិន្ទុអតិបរមាថ្មី — សូមពិនិត្យពិន្ទុទាំងនោះឡើងវិញ។"
+      >
+        {presetPreview &&
+          (presetPreview.migratedSubjects.length > 0 ||
+            presetPreview.deactivatedSubjects.length > 0) && (
+            <div className="mt-3 p-3 rounded-xl bg-[#f5f5f7] dark:bg-white/[0.06] border border-black/[0.06] dark:border-white/[0.08] space-y-1.5 text-xs text-[#1d1d1f] dark:text-[#e5e5ea]">
+              {presetPreview.migratedSubjects.length > 0 && (
+                <p>
+                  <span className="font-semibold text-[#0071e3]">ផ្ទេរពិន្ទុ៖ </span>
+                  {presetPreview.migratedSubjects
+                    .map((m) => `${m.fromName} → ${m.toName}`)
+                    .join(', ')}
+                </p>
+              )}
+              {presetPreview.deactivatedSubjects.length > 0 && (
+                <p>
+                  <span className="font-semibold text-[#ff9500]">នឹងត្រូវបិទ៖ </span>
+                  {presetPreview.deactivatedSubjects.map((d) => d.name).join(', ')}{' '}
+                  <span className="text-[#86868b]">
+                    (ពិន្ទុនៅរក្សាទុក — អាចបើកវិញនៅផ្ទាំង &quot;មុខវិជ្ជា&quot;)
+                  </span>
+                </p>
+              )}
+            </div>
+          )}
+        {presetReplaceConfirm === 'upper-secondary' &&
+          currentClass &&
+          (currentClass.gradeLevel === 11 || currentClass.gradeLevel === 12) && (
+            <div className="mt-3 pt-3 border-t border-black/[0.06] dark:border-white/[0.08]">
+              <span className="block text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] mb-2">
+                ជ្រើសរើសប្រភេទថ្នាក់ទី {fmtNum(currentClass.gradeLevel)}
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPresetTrackChoice('science')}
+                  className={`px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                    presetTrackChoice === 'science'
+                      ? 'border-[#0071e3] bg-[#e8f2ff]/70 dark:bg-blue-500/15 text-[#0071e3]'
+                      : 'border-black/[0.08] dark:border-white/[0.1] text-[#1d1d1f] dark:text-[#f5f5f7]'
+                  }`}
+                >
+                  ថ្នាក់វិទ្យាសាស្ត្រ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPresetTrackChoice('social')}
+                  className={`px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                    presetTrackChoice === 'social'
+                      ? 'border-[#0071e3] bg-[#e8f2ff]/70 dark:bg-blue-500/15 text-[#0071e3]'
+                      : 'border-black/[0.08] dark:border-white/[0.1] text-[#1d1d1f] dark:text-[#f5f5f7]'
+                  }`}
+                >
+                  ថ្នាក់វិទ្យាសាស្ត្រសង្គម
+                </button>
+              </div>
+            </div>
+          )}
+      </ConfirmDialog>
 
       {/* Export Dialog */}
       <ExportDialog

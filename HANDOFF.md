@@ -7,6 +7,53 @@
 
 ---
 
+## 0. ⚠️ Current state — read this first (2026-11-20, end of the Claude chat)
+
+**Live = `eb31a41`.** The working tree has **uncommitted work by Gemini** (13 files, on top of `eb31a41`):
+- Task 1: ministry presets for grades 10, 11, 12 (`createGrade10/11/12Subjects`, `track?: 'science' | 'social'`
+  on `SchoolClass`, track choice in `ClassFormModal` and the «គំរូវិទ្យាល័យ» confirm dialog, Excel column
+  width for 3-digit maxima).
+- Grades 7–8 switched to the **ministry preset** (teacher's decision 2026-11-20: «យកតាមក្រសួងជាចម្បង ហើយ
+  អ្នកប្រើប្រាស់អាចកែឈ្មោះវាតាមក្រោយ — សាលាខ្លះគ្មានម៉ោង ICT»): 14 subjects, 750 (÷ 15); arts, ict,
+  agriculture, extra_2/3 off. Banner/button now «ប្ដូរតាមគំរូក្រសួង».
+- Fix for the duplicate `ict` id in `mergeSubjectsWithPreset` (`presetIds` guard + `used` check).
+
+**Update 2026-11-20 (later): the problem below is FIXED in the working tree (still uncommitted).**
+`mergeSubjectsWithPreset` promotes the first scored «សិល្បៈ» (`arts`, default-named `subj_14`, or hand-typed)
+into the life-skills row (id kept, empty old `life_skills` dropped), turns off every subject that is off / not
+in the preset even if scored, and returns `migratedSubjects` + `deactivatedSubjects`; the confirm dialog
+previews both and the toast repeats them. Tests in `presetMerge.test.ts` cover decision 5. `npm test` 149/149,
+build OK. Checked in the browser on a fake 15-subject class (scores in arts + ict): dialog listed
+«សិល្បៈ → បំណិនជីវិតតាមមូលដ្ឋាន» and ICT off, after merging 14 active / 750, banner gone, ICT scores still in
+the DB, class average matched (sum of 14) ÷ 750 × 50. Waiting for the teacher's OK to commit.
+
+Original note — Claude reviewed it: every max score/total matches the ministry PDF, `npm test` 147/147, build OK, PDFs and
+«មើលមុន» print fine. One problem was left, found by applying «ប្ដូរតាមគំរូក្រសួង» to a
+fake class shaped like the teacher's real 8A (old 15-subject school preset with scores in `arts` and `ict`):
+- `life_skills` is added as a new EMPTY subject → blank = 0 → every average drops (e.g. 40.46 → 38.08);
+- `arts` and `ict` stay active because they have scores → 16 subjects, 850 (÷ 17), not the ministry 14 / 750;
+- the orange banner is still shown after pressing the button.
+
+**Teacher's decisions for the fix (2026-11-20, replace the old rule «scored subjects stay on»):**
+1. **សិល្បៈ → បំណិនជីវិត.** The ministry subject is «បំណិនជីវិតតាមមូលដ្ឋាន (សិល្បៈ កសិកម្ម …)». When merging
+   the lower-secondary preset into a class whose `arts` (or a hand-typed «សិល្បៈ») has scores and whose
+   `life_skills` has none, use the existing `arts` subject (keep id `'arts'` so its scores stay) as the
+   life-skills row (name / max / order / active from the preset). Do not add the preset `arts` row again
+   with the same id, and an unscored old `life_skills` must not become active or duplicated.
+2. **Subjects that are off in the preset are switched off even if they have scores** (ict, agriculture,
+   extra_*, teacher-added subjects) — scores stay in the DB, the teacher can turn them on again in the
+   «មុខវិជ្ជា» tab. Applies to all presets (grades 7–12).
+3. The confirm dialog and the toast after merging say which subjects were switched off («ពិន្ទុនៅរក្សាទុក —
+   អាចបើកវិញនៅផ្ទាំង "មុខវិជ្ជា"») and «សិល្បៈ → បំណិនជីវិតតាមមូលដ្ឋាន».
+4. After merging, the banner must disappear (`subjectsDifferFromPreset` → false).
+5. Test: a class with the old 15-subject school preset and scores in `arts` + `ict` → merge the ministry
+   preset → 14 active, total 750, `arts` carries the life-skills name, `ict` off, no duplicate ids,
+   `subjectsDifferFromPreset` false, one student's average = (sum of the 14) ÷ 750 × 50.
+
+Then: `npm test` + `npm run build`, update §3 «Subjects» below (the merge rules there are now outdated),
+report to the teacher, and commit/push only when the teacher says so. After deploying, the teacher's real
+8A needs «ប្ដូរតាមគំរូក្រសួង» and a check of its math scores (typed on /50 earlier, now /100).
+
 ## 1. What KruDesk is
 
 An offline-first web app for Cambodian homeroom teachers (គ្រូបន្ទុកថ្នាក់): classes & students,
@@ -48,7 +95,7 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 | Student order | automatic Khmer alphabetical ក–អ (no drag reorder) |
 | Attendance | Called **«បញ្ជីវត្តមាន»** (not «បញ្ជីហៅឈ្មោះ»; action words stay «ហៅឈ្មោះ»). **Only days where the teacher took roll call and pressed «រក្សាទុក» count** (`attendanceSessions`). Untaken days: blank on screen, grey on paper. Codes ច្ប / អច្ប / ឈ; **ឈ is counted inside ច្ប** in totals. Paper columns: ច្ប · អច្ប · សរុប. On screen only: «ចំនួនថ្ងៃបានហៅឈ្មោះ» and per-student «មក» |
 | Roster | **«បញ្ជីហៅឈ្មោះ»** is a read-only class roster with parents' names/occupations & address (`RosterView` + `RosterSheet`), showing active students in ក–អ order |
-| Subjects | editable per class; presets for grades 7–9 and 10–12. Grades 7–9 preset follows the **teacher's school documents** (`private_samples/01`, `05`): **សរសេរតាមអាន 40 + តែងសេចក្ដី 60**, **គណិតវិទ្យា 100**, others 50; 15 active subjects (… គេហវិទ្យា · សិល្បៈ · បច្ចេកវិទ្យាគមនាគមន៍និងព័ត៌មាន), divisor 16 (allowed by the MoEYS note «i = total ÷ 50» for schools with extra subjects). **Grade 9** classes get `createGrade9Subjects()` instead (MoEYS §2): 10 subjects, total 420 (÷ 8.4), ភាសាបរទេស `isBonus` (only the part above 25 counts), other subjects off; `getPresetSubjects(preset, gradeLevel)`. ការងារកសិកម្ម, បំណិនជីវិតតាមមូលដ្ឋាន, extra_2/3 stay off but keep their scorebook column positions. The «គំរូអនុវិទ្យាល័យ / គំរូវិទ្យាល័យ» buttons **merge** (`mergeSubjectsWithPreset`): ids kept (scores safe), legacy ids `subj_4/13/14`, `extra_1` mapped when still default-named, maxScore never lowered below an entered score, scored subjects stay on, teacher-added subjects kept. `isActive` / `isBonus` per subject. Score-grid headers are single-line (no wrap, no truncation). Grades A–F shown on screen only (not on paper). Averages not capped at 50 (pending teacher decision) |
+| Subjects | editable per class; presets follow **MoEYS instruction ៦៧ អយក.សណន (2026-2027)** for all grades 7–12. **Grades 7–8** (`createLowerSecondarySubjects()`, MoEYS §4.1): 14 active subjects totalling 750 (÷ 15) — **តែងសេចក្ដី 60 + សរសេរតាមអាន 40** (group `អក្សរសាស្ត្រខ្មែរ`), **គណិតវិទ្យា 100**, others 50 (`រូបវិទ្យា`, `គីមីវិទ្យា`, `ជីវវិទ្យា`, `ផែនដី និងបរិស្ថានវិទ្យា`, `សីលធម៌-ពលរដ្ឋវិជ្ជា`, `ភូមិវិទ្យា`, `ប្រវត្តិវិទ្យា`, `ភាសាបរទេស`, `គេហវិទ្យា`, `អប់រំកាយ កីឡា និងសុខភាព`, `បំណិនជីវិតតាមមូលដ្ឋាន (សិល្បៈ កសិកម្ម គេហកិច្ច…)`). Optional school subjects (`arts`, `ict`, `agriculture`, `extra_2/3`) stay in the list with `isActive: false` so teachers can turn them on if taught. **Grade 9** (`createGrade9Subjects()`, MoEYS §2): 10 subjects totalling 420 (÷ 8.4), `ភាសាបរទេស` `isBonus` (only > 25 counts), others off. **Grades 10–12** (MoEYS §3, §5): `createGrade10Subjects()` (13 subjects, 800 ÷ 16), `createGrade11Subjects(track)` (13 subjects, 825 ÷ 16.5, science/social), `createGrade12Subjects(track)` (9 regular subjects, 625 ÷ 12.5 + `ភាសាបរទេស` `isBonus`, others off); optional `track?: 'science' | 'social'` stored on `SchoolClass`; `getPresetSubjects(preset, gradeLevel, track)`. The «គំរូអនុវិទ្យាល័យ / គំរូវិទ្យាល័យ» buttons **merge** (`mergeSubjectsWithPreset`): ids kept (scores safe), legacy ids `subj_4/13/14`, `extra_1`, `ict` mapped when still default-named and not already in the target preset, maxScore never lowered below an entered score, **non-preset / inactive subjects (including teacher-added ones) are turned off (`isActive: false`) even if scored** (scores stay in IndexedDB; teacher can re-enable them in «មុខវិជ្ជា»), and when migrating to the lower-secondary ministry preset, a scored `arts` (or hand-typed «សិល្បៈ») subject is promoted into `life_skills` (keeping its id) if `life_skills` has no scores yet. `isActive` / `isBonus` per subject. Score-grid headers are single-line (no wrap, no truncation). Grades A–F shown on screen only (not on paper). Averages not capped at 50 (pending teacher decision) |
 | Khmer group | monthly sheet: two part columns under number 1, no total column. Semester summary: ONE «អក្សរសាស្ត្រខ្មែរ» column (sum of parts) with one rank |
 | Averages | (sum of scores ÷ sum of max) × 50; **blank = 0 by default** (MoEYS divides by the full total; configurable); ties share rank (1,2,2,4). Display defaults to **truncation** (`កាត់ចោល`, e.g. `44.625 → 44.62`, configurable in Settings); **ranking, grade, and pass/fail use the 2-decimal displayed value** (`displayedAverage`) so equal printed averages share a rank |
 | Documents & Sidebar | Sidebar order: `ផ្ទាំងដើម · សិស្ស · បញ្ជីហៅឈ្មោះ · បញ្ជីវត្តមាន · បញ្ជីពិន្ទុ · លទ្ធផលប្រចាំខែ · តារាងកិត្តិយស · ប័ណ្ណសរសើរ · កាតសិស្ស · ការកំណត់` (mobile nav shows 4 primary + «ច្រើនទៀត»). «លទ្ធផលប្រចាំខែ» has a `ប្រចាំខែ \| ឆមាសទី ១ \| ឆមាសទី ២ \| ប្រចាំឆ្នាំ` period switch (`SemesterResultsSheet`, `SemesterReportSheet`, `AnnualResultsSheet`, `exportSemesterResultsExcel`, `exportAnnualResultsExcel`). Annual pass/fail: fails if `annualAvg < 25` OR counted absences `> absenceFailLimit` (default `30`, `absenceFailCountType: 'unexcused'`, `0` = off; `អវត្តមានលើសកំណត់` in ផ្សេងៗ when failing by absence only). Shared `DocumentSignDialog` prompts for lunar date (free text typed by teacher), place (remembered), and Gregorian date; Certificate grade words (`A: ល្អប្រសើរ`, `B: ល្អណាស់`, `C: ល្អ`, `D: ល្អបង្គួរ`, `E: មធ្យម`, `F: ខ្សោយ`) are editable and remembered |
@@ -98,14 +145,12 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 - [x] **App updates (done in `82d7218`):** the installed app also checks for a new version when the
       window regains focus / becomes visible (max once a minute). Settings → «អំពីកម្មវិធី» shows
       version + commit + build time and has «ពិនិត្យរកកំណែថ្មី». Compare the commit there with `git log`.
-- [x] **School-preset reminder:** on «បញ្ជីពិន្ទុ», a grade 7–9 class whose active subjects differ
-      from the school preset shows an orange banner «ប្ដូរតាមគំរូសាលា» (one click → merge) with
+- [x] **Ministry-preset reminder:** on «បញ្ជីពិន្ទុ», a grade 7–9 class whose active subjects differ
+      from the ministry preset shows an orange banner «ប្ដូរតាមគំរូក្រសួង» (one click → merge) with
       «កុំបង្ហាញទៀត» (per class, `localStorage['krudesk.presetHintDismissed']`). The merge also
       matches hand-typed subjects **by name** (ignores spaces, hyphens, «(…)»), so no duplicates.
-      Checked on the live site (2026-11-19, fake class with the old 11 subjects): banner shown →
-      merge → 15 active subjects, ids and scores kept, banner gone.
 - [ ] **Teacher's 8A still has the old 11 subjects (math /50, Khmer 50+50)** until they click
-      «ប្ដូរតាមគំរូសាលា». Math scores already typed on /50 then count on /100 — teacher must re-check them.
+      «ប្ដូរតាមគំរូក្រសួង». Math scores already typed on /50 then count on /100 — teacher must re-check them.
 - [x] **Real PWA update flow (verified on the live site 2026-11-19):** after deploying `f8ba48a`, a tab
       still on `c882a6b` showed «មានកំណែថ្មី — ចុចដើម្បីធ្វើបច្ចុប្បន្នភាព»; the button loaded the new
       bundle, «អំពីកម្មវិធី» then showed `f8ba48a`, and the (fake) data was kept.
@@ -129,9 +174,9 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 
 | Item | MoEYS instruction ៦៧ (2026-2027) | KruDesk now | Status |
 |---|---|---|---|
-| Grades 7–8 subjects | 14 exam subjects, total 750, i = 15 (§4.1): តែងសេចក្ដី 60, សរសេរតាមអាន 40, គណិត 100, others 50 incl. «អប់រំកាយ កីឡា និងសុខភាព» and «បំណិនជីវិតតាមមូលដ្ឋាន (សិល្បៈ កសិកម្ម ពេងជាង…)» | school preset: 15 subjects (សិល្បៈ and ICT separate, បំណិនជីវិត off), total 800, i = 16 | OK — the ministry note (§5) lets schools with extra subjects use i = total ÷ 50; the teacher chose the school list. Names follow the school («អប់រំកាយ-កីឡា», «ផែនដីវិទ្យា») |
+| Grades 7–8 subjects | 14 exam subjects, total 750, i = 15 (§4.1): តែងសេចក្ដី 60, សរសេរតាមអាន 40, គណិត 100, others 50 incl. «អប់រំកាយ កីឡា និងសុខភាព» and «បំណិនជីវិតតាមមូលដ្ឋាន (សិល្បៈ កសិកម្ម គេហកិច្ច…)» | `createLowerSecondarySubjects()` (14 active subjects, 750, i = 15; arts/ict/agriculture off and toggleable) | OK (tests reproduce the ministry example «ឃ»: 34.39) |
 | Grade 9 subjects | 10 subjects, total 420, i = 8.4 + ភាសាបរទេស bonus (score − 25) (§2.1) | `createGrade9Subjects()` | OK (tests reproduce the ministry example: 35.82) |
-| Grades 10, 11, 12 subjects | grade 10: 13 subjects, 800 (i = 16), ភាសាខ្មែរ 150, គណិត 150, ភាសាបរទេស 100, others 25–50; grade 11 and 12: science / social-science tracks (825, i = 16.5 / 625, i = 12.5), grade 12 ភាសាបរទេស bonus (§3, §5) | `createUpperSecondarySubjects()`: 12 subjects, all /50 | **NOT per ministry** — next task |
+| Grades 10, 11, 12 subjects | grade 10: 13 subjects, 800 (i = 16), ភាសាខ្មែរ 150, គណិត 150, ភាសាបរទេស 100, others 25–50; grade 11 and 12: science / social-science tracks (825, i = 16.5 / 625, i = 12.5), grade 12 ភាសាបរទេស bonus (§3, §5) | `createGrade10Subjects()`, `createGrade11Subjects(track)`, `createGrade12Subjects(track)` + `SchoolClass.track` | OK (tests reproduce grade 12 «ខ» 32.45 and «គ» 38.55) |
 | Monthly average | sum of all subjects ÷ i (on /50) | (sum ÷ sum of max) × 50 with blank = 0 → same value | OK |
 | Monthly-in-semester average | sum of monthly averages ÷ number of months | same | OK |
 | Semester exam average | sum of exam scores ÷ i | same (exam tab uses the class subjects) | OK |
@@ -142,9 +187,7 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 | Fail / not eligible (grades 9, 12) | annual avg < 25; missing semester-exam subjects; unexcused > 30; unexcused + excused > 40; many excused absences (§6.5) | avg < 25 or one absence limit (default unexcused > 30) | **Partly** — open item above |
 
 ### Next tasks for Gemini (ask the teacher before each)
-1. Upper-secondary presets per grade (10, 11 science / social, 12 science / social) from §3 and §5 of
-   the ministry PDF, the same way grade 9 was done (`getPresetSubjects(preset, gradeLevel)`, plus a
-   track choice for grades 11–12). Grade 12 ភាសាបរទេស is a bonus subject like grade 9.
+1. ~~Upper-secondary presets per grade (10, 11 science / social, 12 science / social) from §3 and §5 of the ministry PDF~~ — **done** (plus grades 7–8 switched to MoEYS §4.1 14 subjects / 750).
 2. Per-grade semester calendars if the teacher wants grade 9 / 12 to differ from grades 7–8.
 3. The grade 9 / 12 absence and missing-exam rules (open item above).
 4. «បណ្ណសរសើរ» / «លិខិតសរសើរ» counting on the semester report (open item above).

@@ -3,7 +3,7 @@ import { AppleModal } from '../../components/common/AppleModal';
 import { AppleButton } from '../../components/common/AppleButton';
 import { CLASS_COLORS, getPresetSubjects, type PresetKey } from '../../db/presets';
 import { createSchoolClass, updateSchoolClass } from '../../db/classStudentRepo';
-import type { SchoolClass } from '../../types/domain';
+import type { SchoolClass, StudyTrack } from '../../types/domain';
 import { toKhmerNumerals } from '../../utils/khmerNumerals';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -24,6 +24,7 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [gradeLevel, setGradeLevel] = useState<number>(7);
+  const [track, setTrack] = useState<StudyTrack>('science');
   const [academicYear, setAcademicYear] = useState(defaultAcademicYear);
   const [color, setColor] = useState<string>(CLASS_COLORS[0]);
   const [preset, setPreset] = useState<PresetKey>('lower-secondary');
@@ -37,11 +38,13 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
     if (classToEdit) {
       setName(classToEdit.name);
       setGradeLevel(classToEdit.gradeLevel);
+      setTrack(classToEdit.track ?? 'science');
       setAcademicYear(classToEdit.academicYear);
       setColor(classToEdit.color || CLASS_COLORS[0]);
     } else {
       setName('');
       setGradeLevel(7);
+      setTrack('science');
       setAcademicYear(defaultAcademicYear || '2026-2027');
       setColor(CLASS_COLORS[0]);
       setPreset('lower-secondary');
@@ -69,17 +72,20 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
         await updateSchoolClass(classToEdit.id, {
           name: name.trim(),
           gradeLevel,
+          track: gradeLevel >= 11 ? track : undefined,
           academicYear: academicYear.trim() || defaultAcademicYear,
           color,
         });
         onSaved(classToEdit.id, false);
       } else {
+        const classTrack = gradeLevel >= 11 ? track : undefined;
         const newId = await createSchoolClass({
           name: name.trim(),
           gradeLevel,
+          ...(classTrack ? { track: classTrack } : {}),
           academicYear: academicYear.trim() || defaultAcademicYear,
           color,
-          subjects: getPresetSubjects(preset, gradeLevel),
+          subjects: getPresetSubjects(preset, gradeLevel, classTrack),
         });
         onSaved(newId, true);
       }
@@ -167,6 +173,38 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
           </div>
         </div>
 
+        {(gradeLevel === 11 || gradeLevel === 12) && (
+          <div>
+            <span className="block text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] mb-1.5">
+              ប្រភេទថ្នាក់ (វិទ្យាសាស្ត្រ / វិទ្យាសាស្ត្រសង្គម)
+            </span>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setTrack('science')}
+                className={`px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                  track === 'science'
+                    ? 'border-[#0071e3] bg-[#e8f2ff]/70 dark:bg-blue-500/15 text-[#0071e3]'
+                    : 'border-black/[0.08] dark:border-white/[0.1] text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-[#f5f5f7] dark:hover:bg-white/[0.06]'
+                }`}
+              >
+                ថ្នាក់វិទ្យាសាស្ត្រ
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrack('social')}
+                className={`px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                  track === 'social'
+                    ? 'border-[#0071e3] bg-[#e8f2ff]/70 dark:bg-blue-500/15 text-[#0071e3]'
+                    : 'border-black/[0.08] dark:border-white/[0.1] text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-[#f5f5f7] dark:hover:bg-white/[0.06]'
+                }`}
+              >
+                ថ្នាក់វិទ្យាសាស្ត្រសង្គម
+              </button>
+            </div>
+          </div>
+        )}
+
         <div>
           <label
             htmlFor="class-academic-year"
@@ -225,7 +263,7 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
                 <div className="text-[11px] text-[#86868b] mt-0.5">
                   {gradeLevel === 9
                     ? 'ថ្នាក់ទី ៩ តាមក្រសួង (១០ មុខវិជ្ជា + ភាសាបរទេសបន្ថែម)'
-                    : 'តាមក្រដាសប្រឡងប្រចាំខែ (១៥ មុខវិជ្ជា)'}
+                    : 'តាមក្រសួង (១៤ មុខវិជ្ជា · សរុប ៧៥០)'}
                 </div>
               </button>
 
@@ -242,7 +280,13 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
                   វិទ្យាល័យ ១០–១២
                 </div>
                 <div className="text-[11px] text-[#86868b] mt-0.5">
-                  មុខវិជ្ជាមូលដ្ឋាន (១២ មុខ)
+                  {gradeLevel === 10
+                    ? 'ថ្នាក់ទី ១០ តាមក្រសួង (១៣ មុខ · សរុប ៨០០)'
+                    : gradeLevel === 11
+                      ? `ថ្នាក់ទី ១១ ${track === 'social' ? 'វិទ្យាសាស្ត្រសង្គម' : 'វិទ្យាសាស្ត្រ'} (១៣ មុខ · សរុប ៨២៥)`
+                      : gradeLevel === 12
+                        ? `ថ្នាក់ទី ១២ ${track === 'social' ? 'វិទ្យាសាស្ត្រសង្គម' : 'វិទ្យាសាស្ត្រ'} (៩ មុខ + ភាសាបរទេសបន្ថែម · ៦២៥)`
+                        : 'តាមក្រសួង (ថ្នាក់ទី ១០–១២)'}
                 </div>
               </button>
             </div>

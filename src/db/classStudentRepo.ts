@@ -46,7 +46,7 @@ export async function createSchoolClass(
 
 export async function updateSchoolClass(
   id: number,
-  patch: Partial<Pick<SchoolClass, 'name' | 'gradeLevel' | 'academicYear' | 'color'>>
+  patch: Partial<Pick<SchoolClass, 'name' | 'gradeLevel' | 'track' | 'academicYear' | 'color'>>
 ): Promise<void> {
   await db.classes.update(id, {
     ...patch,
@@ -71,6 +71,7 @@ export async function duplicateClassStructure(sourceClassId: number): Promise<nu
   return db.classes.add({
     name: candidateName,
     gradeLevel: src.gradeLevel,
+    ...(src.track ? { track: src.track } : {}),
     academicYear: src.academicYear,
     color: src.color,
     subjects: src.subjects.map((s) => ({ ...s })),

@@ -102,8 +102,8 @@ describe('Grid interaction performance at full 45-student scale', () => {
 
     const cell = await waitFor(() => {
       const cells = container.querySelectorAll<HTMLInputElement>('[data-score-cell]');
-      // Lower-secondary preset has 15 active subjects (school documents) out of 19
-      expect(cells.length).toBe(45 * 15);
+      // Lower-secondary preset has 14 active subjects (MoEYS §4.1) out of 19
+      expect(cells.length).toBe(45 * 14);
       return cells[0];
     });
 

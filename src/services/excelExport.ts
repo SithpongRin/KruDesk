@@ -963,7 +963,7 @@ export async function exportMonthlyScoreExcel(params: {
     sheet.getColumn(3).width = 22;
     sheet.getColumn(4).width = 4.5;
     for (let si = 0; si < sortedSubjects.length; si++) {
-      sheet.getColumn(5 + si).width = 5.2;
+      sheet.getColumn(5 + si).width = sortedSubjects[si].maxScore >= 100 ? 6.5 : 5.2;
     }
     sheet.getColumn(sumCol).width = 7.5;
     sheet.getColumn(avgCol).width = 7.5;

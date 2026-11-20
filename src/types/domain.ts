@@ -16,10 +16,13 @@ export interface Subject {
   isBonus?: boolean;
 }
 
+export type StudyTrack = 'science' | 'social';
+
 export interface SchoolClass {
   id?: number;
   name: string;
   gradeLevel: number;
+  track?: StudyTrack;
   academicYear: string;
   color: string;
   subjects: Subject[];

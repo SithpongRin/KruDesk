@@ -13,6 +13,7 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   variant?: 'danger' | 'primary';
   isLoading?: boolean;
+  children?: React.ReactNode;
 }
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
@@ -25,6 +26,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelLabel = 'បោះបង់',
   variant = 'danger',
   isLoading = false,
+  children,
 }) => {
   return (
     <AppleModal
@@ -54,6 +56,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       }
     >
       <p className="text-sm text-[#1d1d1f] dark:text-[#e5e5ea] leading-relaxed">{message}</p>
+      {children}
     </AppleModal>
   );
 };

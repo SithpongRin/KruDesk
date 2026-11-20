@@ -221,12 +221,12 @@ describe('Grading formulas & competition ranking', () => {
     expect(colNums.slice(16).map((c) => c.columnNumber)).toEqual([null, null]);
   });
 
-  it('sets lower-secondary preset like the school documents: Khmer 40+60=100, math 100, others 50', () => {
+  it('sets lower-secondary preset per MoEYS §4.1: Khmer 60+40=100, math 100, others 50', () => {
     const preset = createLowerSecondarySubjects();
     const byId = new Map(preset.map((s) => [s.id, s]));
 
-    expect(byId.get('kh_dictation')?.maxScore).toBe(40);
     expect(byId.get('kh_essay')?.maxScore).toBe(60);
+    expect(byId.get('kh_dictation')?.maxScore).toBe(40);
     expect(byId.get('math')?.maxScore).toBe(100);
     expect(byId.get('physics')?.maxScore).toBe(50);
     expect(byId.get('foreign_lang')?.maxScore).toBe(50);
@@ -236,7 +236,7 @@ describe('Grading formulas & competition ranking', () => {
     expect(khGroup).toBeDefined();
     expect(khGroup?.isGroup).toBe(true);
     expect(khGroup?.maxScore).toBe(100);
-    expect(khGroup?.partIds).toEqual(['kh_dictation', 'kh_essay']);
+    expect(khGroup?.partIds).toEqual(['kh_essay', 'kh_dictation']);
   });
 
   it('collapses grouped Khmer subject with hand-computed totals, blanks, and semester summary rank', () => {
@@ -344,18 +344,18 @@ describe('Grading formulas & competition ranking', () => {
       }
     }
 
-    // 1. 15 active subjects all full marks, all standard -> maxSum 800 (divisor 16), avg 50
+    // 1. 14 active subjects all full marks, all standard -> maxSum 750 (divisor 15), avg 50
     const allStd = computeScoreRow(activeStandardFull, preset, {
       scale: 50,
       countBlankAsZero: false,
     });
-    expect(allStd.maxScoreUsed).toBe(800);
-    expect(allStd.maxScoreUsed / 50).toBe(16);
-    expect(allStd.total).toBe(800);
+    expect(allStd.maxScoreUsed).toBe(750);
+    expect(allStd.maxScoreUsed / 50).toBe(15);
+    expect(allStd.total).toBe(750);
     expect(allStd.average).toBeCloseTo(50, 10);
     expect(allStd.grade).toBe('A');
 
-    // 2. foreign_lang is bonus with score 40 -> total 750 + 15 = 765, divisor 15, avg 51 (unclamped)
+    // 2. foreign_lang is bonus with score 40 -> total 700 + 15 = 715, divisor 14, avg 51.0714... (unclamped)
     const withBonusPreset = preset.map((s) =>
       s.id === 'foreign_lang' ? { ...s, isBonus: true } : s
     );
@@ -364,10 +364,10 @@ describe('Grading formulas & competition ranking', () => {
       scale: 50,
       countBlankAsZero: false,
     });
-    expect(withBonus.maxScoreUsed).toBe(750);
-    expect(withBonus.maxScoreUsed / 50).toBe(15);
-    expect(withBonus.total).toBe(765);
-    expect(withBonus.average).toBeCloseTo(51, 10);
+    expect(withBonus.maxScoreUsed).toBe(700);
+    expect(withBonus.maxScoreUsed / 50).toBe(14);
+    expect(withBonus.total).toBe(715);
+    expect(withBonus.average).toBeCloseTo((715 / 700) * 50, 10);
     expect(withBonus.grade).toBe('A');
 
     // 3. Bonus score 20 (below half of 50) -> contributes 0
@@ -376,7 +376,7 @@ describe('Grading formulas & competition ranking', () => {
       withBonusPreset,
       { scale: 50, countBlankAsZero: false }
     );
-    expect(lowBonus.total).toBe(750);
+    expect(lowBonus.total).toBe(700);
     expect(lowBonus.average).toBeCloseTo(50, 10);
 
     // 4. Row with ONLY bonus score and no standard score -> average null
@@ -393,8 +393,8 @@ describe('Grading formulas & competition ranking', () => {
       preset,
       { scale: 50, countBlankAsZero: false }
     );
-    expect(withInactiveScore.total).toBe(800);
-    expect(withInactiveScore.maxScoreUsed).toBe(800);
+    expect(withInactiveScore.total).toBe(750);
+    expect(withInactiveScore.maxScoreUsed).toBe(750);
 
     // 6. gradeFor boundaries
     expect(gradeFor(44.99)).toBe('B');

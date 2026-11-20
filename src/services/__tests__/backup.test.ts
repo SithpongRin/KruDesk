@@ -264,4 +264,26 @@ describe('Backup validation & helpers', () => {
     classes = await db.classes.toArray();
     expect(classes[0].subjects.find((s) => s.id === 'home_econ')?.isActive).toBeUndefined();
   });
+
+  it('preserves optional SchoolClass.track (science / social) through backup export and restore', async () => {
+    const payload = makeValidBackup();
+    payload.data.classes[0] = {
+      ...payload.data.classes[0],
+      name: '12A',
+      gradeLevel: 12,
+      track: 'social',
+    };
+
+    const parsed = parseAndValidateBackup(JSON.stringify(payload));
+    await restoreBackupPayload(parsed, 'replace');
+
+    let classes = await db.classes.toArray();
+    expect(classes[0].track).toBe('social');
+
+    // Merge mode into empty DB also preserves track
+    await clearAllAppData();
+    await restoreBackupPayload(parsed, 'merge');
+    classes = await db.classes.toArray();
+    expect(classes[0].track).toBe('social');
+  });
 });
