@@ -38,6 +38,7 @@ import { AppleSegmentedControl } from '../../components/common/AppleSegmentedCon
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { BackupRestoreModal } from '../../components/common/BackupRestoreModal';
 import { AboutAppCard } from './AboutAppCard';
+import { DirectorSealCard } from './DirectorSealCard';
 import {
   downloadBackupJson,
   parseAndValidateBackup,
@@ -493,6 +494,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
           </div>
         </form>
       </AppleCard>
+
+      <DirectorSealCard />
 
       {/* Section 2: បង្ហាញ (Theme & Khmer Numerals) */}
       <AppleCard title="បង្ហាញ" subtitle="កំណត់រូបរាងអេក្រង់ និងទម្រង់លេខ">

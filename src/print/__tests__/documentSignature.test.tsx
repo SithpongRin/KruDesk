@@ -74,4 +74,29 @@ describe('DocumentSignature (teacher layout 2026-11-20)', () => {
     expect(container.textContent).toContain(profile.directorName);
     expect(container.textContent).not.toContain(TEACHER_TITLE);
   });
+
+  it('prints the director stamp and signature only when they are in the sign options', () => {
+    const seal = { dataUrl: 'data:image/png;base64,AAAA', width: 10, height: 10 };
+    const base = { month: '2026-11', lunarDate: '', place: '', gregorianDate: '' };
+    const without = render(<DocumentSignature profile={profile} signOptions={base} />);
+    expect(without.container.querySelectorAll('img')).toHaveLength(0);
+
+    const withSeal = render(
+      <DocumentSignature
+        profile={profile}
+        signOptions={{ ...base, directorStamp: seal, directorSignature: seal }}
+      />
+    );
+    const left = withSeal.container.firstElementChild!.children[0] as HTMLElement;
+    const right = withSeal.container.firstElementChild!.children[2] as HTMLElement;
+    expect(left.querySelectorAll('img')).toHaveLength(2);
+    expect(right.querySelectorAll('img')).toHaveLength(0);
+
+    const withTeacher = render(
+      <DocumentSignature profile={profile} signOptions={{ ...base, teacherSignature: seal }} />
+    );
+    const teacherBlock = withTeacher.container.firstElementChild!.children[2] as HTMLElement;
+    expect(teacherBlock.querySelectorAll('img')).toHaveLength(1);
+    expect(teacherBlock.lastElementChild?.textContent).toBe(profile.teacherName);
+  });
 });

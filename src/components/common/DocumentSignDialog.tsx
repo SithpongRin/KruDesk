@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getSetting, setSetting } from '../../db/database';
 import { formatKhmerMonthYear, toLocalDateKey } from '../../lib/khmerDate';
 import type { DocumentSignOptions } from '../../print/DocumentSignature';
+import { isSealImage, type SealImage } from '../../utils/directorSeal';
 import { AppleModal } from './AppleModal';
 import { AppleButton } from './AppleButton';
 
@@ -29,6 +30,15 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
   const [gregorianDate, setGregorianDate] = useState(() => toLocalDateKey());
   // Teacher's default (2026-11-20): day and month left blank, written by hand after printing.
   const [handwrittenDate, setHandwrittenDate] = useState(true);
+  // Director's stamp/signature: only offered when uploaded in Settings; off unless ticked.
+  const [seal, setSeal] = useState<{
+    stamp?: SealImage;
+    signature?: SealImage;
+    teacher?: SealImage;
+  }>({});
+  const [teacherSign, setTeacherSign] = useState(false);
+  const sealAvailable = Boolean(seal.stamp || seal.signature);
+  const [directorSeal, setDirectorSeal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -39,9 +49,19 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
       getSetting<string>('documentPlace'),
       getSetting<string>('documentLunarDate'),
       getSetting<boolean>('documentDateHandwritten'),
+      getSetting<unknown>('directorStamp'),
+      getSetting<unknown>('directorSignature'),
+      getSetting<unknown>('teacherSignature'),
     ])
-      .then(([savedPlace, savedLunar, savedHandwritten]) => {
+      .then(([savedPlace, savedLunar, savedHandwritten, stamp, signature, teacher]) => {
         if (cancelled) return;
+        setSeal({
+          ...(isSealImage(stamp) ? { stamp } : {}),
+          ...(isSealImage(signature) ? { signature } : {}),
+          ...(isSealImage(teacher) ? { teacher } : {}),
+        });
+        setDirectorSeal(false);
+        setTeacherSign(false);
         if (savedPlace) setPlace(savedPlace);
         if (savedLunar) setLunarDate(savedLunar);
         if (typeof savedHandwritten === 'boolean') setHandwrittenDate(savedHandwritten);
@@ -66,6 +86,9 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
         lunarDate: lunarDate.trim(),
         place: place.trim(),
         gregorianDate: handwrittenDate ? '' : gregorianDate || toLocalDateKey(),
+        ...(directorSeal && seal.stamp ? { directorStamp: seal.stamp } : {}),
+        ...(directorSeal && seal.signature ? { directorSignature: seal.signature } : {}),
+        ...(teacherSign && seal.teacher ? { teacherSignature: seal.teacher } : {}),
       });
     } finally {
       setSubmitting(false);
@@ -168,6 +191,30 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
           />
           ទុកថ្ងៃទី និងខែទទេ ដើម្បីសរសេរដៃ (ឧ. «ថ្ងៃទី...........ខែ.........ឆ្នាំ ២០២៦»)
         </label>
+
+        {sealAvailable && (
+          <label className="flex items-center gap-2 text-xs text-[#1d1d1f] dark:text-[#f5f5f7] cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={directorSeal}
+              onChange={(e) => setDirectorSeal(e.target.checked)}
+              className="w-4 h-4 accent-[#dc2626]"
+            />
+            ដាក់ត្រា និងហត្ថលេខានាយក (ប្រើតែពេលនាយកអនុញ្ញាត)
+          </label>
+        )}
+
+        {seal.teacher && (
+          <label className="flex items-center gap-2 text-xs text-[#1d1d1f] dark:text-[#f5f5f7] cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={teacherSign}
+              onChange={(e) => setTeacherSign(e.target.checked)}
+              className="w-4 h-4 accent-[#0071e3]"
+            />
+            ដាក់ហត្ថលេខាគ្រូ
+          </label>
+        )}
 
         {children}
       </form>
