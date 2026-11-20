@@ -13,6 +13,7 @@ import {
 import { getActiveStudentsOrdered } from '../lib/attendance';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { RotatedHeaderText } from './RotatedHeaderText';
+import { DocumentSignature } from './DocumentSignature';
 
 export interface MonthlyScoreSheetPageData {
   id: string;
@@ -414,27 +415,19 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
               </div>
 
               {isLastPageOfSheet ? (
-                <div className="flex items-end justify-between text-[8.5pt] px-8 pt-1">
-                  <div className="text-center">
-                    <div>បានឃើញ និងឯកភាព</div>
-                    <div className="font-bold">នាយកសាលា</div>
-                    <div style={{ height: `${signGapMm}mm` }} />
-                    <div className="font-bold">{profile.directorName}</div>
-                  </div>
-
-                  {studentPages.length > 1 && (
-                    <div className="text-[8pt] text-slate-500">
-                      ទំព័រ {fmt(pageIdx + 1)} / {fmt(studentPages.length)}
-                    </div>
-                  )}
-
-                  <div className="text-center">
-                    <div>ធ្វើនៅ…………ថ្ងៃទី………ខែ………ឆ្នាំ………</div>
-                    <div className="font-bold">គ្រូបន្ទុកថ្នាក់</div>
-                    <div style={{ height: `${signGapMm}mm` }} />
-                    <div className="font-bold">{profile.teacherName}</div>
-                  </div>
-                </div>
+                <DocumentSignature
+                  profile={profile}
+                  fontSizePt={8.5}
+                  // two date lines above the teacher's title: keep the page height as before
+                  gapMm={Math.max(6, signGapMm - 4)}
+                  middle={
+                    studentPages.length > 1 && (
+                      <div className="text-[8pt] text-slate-500">
+                        ទំព័រ {fmt(pageIdx + 1)} / {fmt(studentPages.length)}
+                      </div>
+                    )
+                  }
+                />
               ) : (
                 <div className="text-center text-[8pt] text-slate-500 pt-1">
                   ទំព័រ {fmt(pageIdx + 1)} / {fmt(studentPages.length)}

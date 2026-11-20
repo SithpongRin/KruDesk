@@ -8,6 +8,7 @@ import {
 import type { PaperSize } from '../services/pdfExport';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { RotatedHeaderText } from './RotatedHeaderText';
+import { DocumentSignature } from './DocumentSignature';
 
 interface SemesterSheetProps {
   cls: SchoolClass;
@@ -109,23 +110,13 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
   );
 
   const renderSignature = (signGapMm: number, pageLabel: string) => (
-    <div className="flex items-end justify-between text-[8.5pt] px-8 pt-1">
-      <div className="text-center">
-        <div>បានឃើញ និងឯកភាព</div>
-        <div className="font-bold">នាយកសាលា</div>
-        <div style={{ height: `${signGapMm}mm` }} />
-        <div className="font-bold">{profile.directorName}</div>
-      </div>
-
-      <div className="text-[8pt] text-slate-500">{pageLabel}</div>
-
-      <div className="text-center">
-        <div>ធ្វើនៅ…………ថ្ងៃទី………ខែ………ឆ្នាំ………</div>
-        <div className="font-bold">គ្រូបន្ទុកថ្នាក់</div>
-        <div style={{ height: `${signGapMm}mm` }} />
-        <div className="font-bold">{profile.teacherName}</div>
-      </div>
-    </div>
+    <DocumentSignature
+      profile={profile}
+      fontSizePt={8.5}
+      // two date lines above the teacher's title: keep the page height as before
+      gapMm={Math.max(6, signGapMm - 4)}
+      middle={<div className="text-[8pt] text-slate-500">{pageLabel}</div>}
+    />
   );
 
   if (paperSize === 'A3') {

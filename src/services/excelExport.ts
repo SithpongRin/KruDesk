@@ -35,7 +35,15 @@ import {
 } from '../lib/monthlyResults';
 import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
 import { formatMinistryProvince } from '../print/DocumentHeader';
-import { formatDocumentGregorianDate, type DocumentSignOptions } from '../print/DocumentSignature';
+import {
+  APPROVER_LINE,
+  DIRECTOR_TITLE,
+  TEACHER_TITLE,
+  formatDocumentGregorianDate,
+  formatDocumentLunarLine,
+  loadSavedSignLines,
+  type DocumentSignOptions,
+} from '../print/DocumentSignature';
 
 /**
  * Sanitizes an Excel worksheet name:
@@ -192,38 +200,29 @@ export async function exportStudentListExcel(
 
   // Signature block
   sheet.addRow([]);
-  const sigRow1 = sheet.addRow([
-    '',
-    'បានឃើញ និងឯកភាព',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    'ធ្វើនៅ…………ថ្ងៃទី………ខែ………ឆ្នាំ………',
-  ]);
-  const sigRow2 = sheet.addRow(['', 'នាយកសាលា', '', '', '', '', '', '', 'គ្រូបន្ទុកថ្នាក់']);
-  const sigRow3 = sheet.addRow([
-    '',
-    profile.directorName,
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    profile.teacherName,
-  ]);
-  [sigRow1, sigRow2, sigRow3].forEach((r) => {
+  // Teacher's layout (2026-11-20): dates over the teacher's block; approver titles level with it.
+  const { lunarLine, gregorianLine } = await loadSavedSignLines();
+  const sigRow = (left: string, right: string) => {
+    const cells: string[] = new Array(9).fill('');
+    cells[1] = left;
+    cells[8] = right;
+    return sheet.addRow(cells);
+  };
+  const sigRows = [
+    sigRow('', lunarLine),
+    sigRow('', gregorianLine),
+    sigRow(APPROVER_LINE, TEACHER_TITLE),
+    sigRow(DIRECTOR_TITLE, ''),
+  ];
+  sheet.addRow([]);
+  sheet.addRow([]);
+  const sigNameRow = sigRow('', profile.teacherName);
+  sigRows.forEach((r, i) => {
     r.eachCell((cell) => {
-      cell.font = fontBase;
+      cell.font = i >= 2 ? fontBold : fontBase;
     });
   });
-  sigRow2.eachCell((cell) => {
-    cell.font = fontBold;
-  });
-  sigRow3.eachCell((cell) => {
+  sigNameRow.eachCell((cell) => {
     cell.font = fontBold;
   });
 
@@ -358,36 +357,29 @@ export async function exportRosterExcel(
   sheet.pageSetup.printTitlesRow = '1:4';
 
   sheet.addRow([]);
-  const sigRow1 = sheet.addRow([
-    '',
-    'បានឃើញ និងឯកភាព',
-    '',
-    '',
-    '',
-    '',
-    '',
-    'ធ្វើនៅ…………ថ្ងៃទី………ខែ………ឆ្នាំ………',
-  ]);
-  const sigRow2 = sheet.addRow(['', 'នាយកសាលា', '', '', '', '', '', 'គ្រូបន្ទុកថ្នាក់']);
-  const sigRow3 = sheet.addRow([
-    '',
-    profile.directorName,
-    '',
-    '',
-    '',
-    '',
-    '',
-    profile.teacherName,
-  ]);
-  [sigRow1, sigRow2, sigRow3].forEach((r) => {
+  // Teacher's layout (2026-11-20): dates over the teacher's block; approver titles level with it.
+  const { lunarLine, gregorianLine } = await loadSavedSignLines();
+  const sigRow = (left: string, right: string) => {
+    const cells: string[] = new Array(8).fill('');
+    cells[1] = left;
+    cells[7] = right;
+    return sheet.addRow(cells);
+  };
+  const sigRows = [
+    sigRow('', lunarLine),
+    sigRow('', gregorianLine),
+    sigRow(APPROVER_LINE, TEACHER_TITLE),
+    sigRow(DIRECTOR_TITLE, ''),
+  ];
+  sheet.addRow([]);
+  sheet.addRow([]);
+  const sigNameRow = sigRow('', profile.teacherName);
+  sigRows.forEach((r, i) => {
     r.eachCell((cell) => {
-      cell.font = fontBase;
+      cell.font = i >= 2 ? fontBold : fontBase;
     });
   });
-  sigRow2.eachCell((cell) => {
-    cell.font = fontBold;
-  });
-  sigRow3.eachCell((cell) => {
+  sigNameRow.eachCell((cell) => {
     cell.font = fontBold;
   });
 
@@ -431,6 +423,7 @@ export async function exportAttendanceExcel(params: {
     useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
 
   const { default: ExcelJS } = await import('exceljs');
+  const savedSign = await loadSavedSignLines();
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'KruDesk';
 
@@ -642,19 +635,25 @@ export async function exportAttendanceExcel(params: {
 
     // Signature block
     const sigBase = footerRowNum + 2;
-    sheet.getCell(sigBase, 2).value = 'បានឃើញ និងឯកភាព';
-    sheet.getCell(sigBase + 1, 2).value = 'នាយកសាលា';
-    sheet.getCell(sigBase + 4, 2).value = profile.directorName;
-
+    // Teacher's layout (2026-11-20): dates over the teacher's block; approver titles level with it.
     const rightCol = Math.max(8, totalCols - 6);
-    sheet.getCell(sigBase, rightCol).value = 'ធ្វើនៅ…………ថ្ងៃទី………ខែ………ឆ្នាំ………';
-    sheet.getCell(sigBase + 1, rightCol).value = 'គ្រូបន្ទុកថ្នាក់';
-    sheet.getCell(sigBase + 4, rightCol).value = profile.teacherName;
-
-    [sigBase, sigBase + 1, sigBase + 4].forEach((r, ri) => {
-      [2, rightCol].forEach((c) => {
-        sheet.getCell(r, c).font = ri === 0 ? fontBase : fontBold;
-      });
+    sheet.getCell(sigBase, rightCol).value = savedSign.lunarLine;
+    sheet.getCell(sigBase + 1, rightCol).value = savedSign.gregorianLine;
+    sheet.getCell(sigBase + 2, 2).value = APPROVER_LINE;
+    sheet.getCell(sigBase + 2, rightCol).value = TEACHER_TITLE;
+    sheet.getCell(sigBase + 3, 2).value = DIRECTOR_TITLE;
+    sheet.getCell(sigBase + 6, rightCol).value = profile.teacherName;
+    sheet.getCell(sigBase, rightCol).font = fontBase;
+    sheet.getCell(sigBase + 1, rightCol).font = fontBase;
+    (
+      [
+        [sigBase + 2, 2],
+        [sigBase + 2, rightCol],
+        [sigBase + 3, 2],
+        [sigBase + 6, rightCol],
+      ] as const
+    ).forEach(([r, c]) => {
+      sheet.getCell(r, c).font = fontBold;
     });
   }
 
@@ -710,6 +709,7 @@ export async function exportMonthlyScoreExcel(params: {
     useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
 
   const { default: ExcelJS } = await import('exceljs');
+  const savedSign = await loadSavedSignLines();
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'KruDesk';
 
@@ -973,19 +973,25 @@ export async function exportMonthlyScoreExcel(params: {
     sheet.pageSetup.printTitlesRow = '1:6';
 
     const sigBase = dataStartRow + activeStudents.length + 2;
-    sheet.getCell(sigBase, 2).value = 'បានឃើញ និងឯកភាព';
-    sheet.getCell(sigBase + 1, 2).value = 'នាយកសាលា';
-    sheet.getCell(sigBase + 4, 2).value = profile.directorName;
-
+    // Teacher's layout (2026-11-20): dates over the teacher's block; approver titles level with it.
     const rightCol = Math.max(7, totalCols - 5);
-    sheet.getCell(sigBase, rightCol).value = 'ធ្វើនៅ…………ថ្ងៃទី………ខែ………ឆ្នាំ………';
-    sheet.getCell(sigBase + 1, rightCol).value = 'គ្រូបន្ទុកថ្នាក់';
-    sheet.getCell(sigBase + 4, rightCol).value = profile.teacherName;
-
-    [sigBase, sigBase + 1, sigBase + 4].forEach((r, ri) => {
-      [2, rightCol].forEach((c) => {
-        sheet.getCell(r, c).font = ri === 0 ? fontBase : fontBold;
-      });
+    sheet.getCell(sigBase, rightCol).value = savedSign.lunarLine;
+    sheet.getCell(sigBase + 1, rightCol).value = savedSign.gregorianLine;
+    sheet.getCell(sigBase + 2, 2).value = APPROVER_LINE;
+    sheet.getCell(sigBase + 2, rightCol).value = TEACHER_TITLE;
+    sheet.getCell(sigBase + 3, 2).value = DIRECTOR_TITLE;
+    sheet.getCell(sigBase + 6, rightCol).value = profile.teacherName;
+    sheet.getCell(sigBase, rightCol).font = fontBase;
+    sheet.getCell(sigBase + 1, rightCol).font = fontBase;
+    (
+      [
+        [sigBase + 2, 2],
+        [sigBase + 2, rightCol],
+        [sigBase + 3, 2],
+        [sigBase + 6, rightCol],
+      ] as const
+    ).forEach(([r, c]) => {
+      sheet.getCell(r, c).font = fontBold;
     });
   }
 
@@ -1039,6 +1045,7 @@ export async function exportSemesterSummaryExcel(params: {
     useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
 
   const { default: ExcelJS } = await import('exceljs');
+  const savedSign = await loadSavedSignLines();
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'KruDesk';
 
@@ -1289,19 +1296,25 @@ export async function exportSemesterSummaryExcel(params: {
   sheet.pageSetup.printTitlesRow = '1:6';
 
   const sigBase = dataStartRow + summaries.length + 2;
-  sheet.getCell(sigBase, 2).value = 'បានឃើញ និងឯកភាព';
-  sheet.getCell(sigBase + 1, 2).value = 'នាយកសាលា';
-  sheet.getCell(sigBase + 4, 2).value = profile.directorName;
-
+  // Teacher's layout (2026-11-20): dates over the teacher's block; approver titles level with it.
   const rightCol = Math.max(8, totalCols - 6);
-  sheet.getCell(sigBase, rightCol).value = 'ធ្វើនៅ…………ថ្ងៃទី………ខែ………ឆ្នាំ………';
-  sheet.getCell(sigBase + 1, rightCol).value = 'គ្រូបន្ទុកថ្នាក់';
-  sheet.getCell(sigBase + 4, rightCol).value = profile.teacherName;
-
-  [sigBase, sigBase + 1, sigBase + 4].forEach((r, ri) => {
-    [2, rightCol].forEach((c) => {
-      sheet.getCell(r, c).font = ri === 0 ? fontBase : fontBold;
-    });
+  sheet.getCell(sigBase, rightCol).value = savedSign.lunarLine;
+  sheet.getCell(sigBase + 1, rightCol).value = savedSign.gregorianLine;
+  sheet.getCell(sigBase + 2, 2).value = APPROVER_LINE;
+  sheet.getCell(sigBase + 2, rightCol).value = TEACHER_TITLE;
+  sheet.getCell(sigBase + 3, 2).value = DIRECTOR_TITLE;
+  sheet.getCell(sigBase + 6, rightCol).value = profile.teacherName;
+  sheet.getCell(sigBase, rightCol).font = fontBase;
+  sheet.getCell(sigBase + 1, rightCol).font = fontBase;
+  (
+    [
+      [sigBase + 2, 2],
+      [sigBase + 2, rightCol],
+      [sigBase + 3, 2],
+      [sigBase + 6, rightCol],
+    ] as const
+  ).forEach(([r, c]) => {
+    sheet.getCell(r, c).font = fontBold;
   });
 
   const buffer = await workbook.xlsx.writeBuffer();
@@ -1479,14 +1492,17 @@ export async function exportMonthlyResultsExcel(params: {
   ]);
 
   sheet.addRow([]);
-  const lunarLine = signOptions.lunarDate || 'ថ្ងៃ……………… ខែ……………… ឆ្នាំ……………… ព.ស. ២៥……';
+  // Teacher's layout (2026-11-20): dates over the teacher's block only; the approver block has
+  // «បានឃើញ និង ឯកភាព / នាយកសាលា» level with the teacher's title, without dates or name.
+  const lunarLine = formatDocumentLunarLine(signOptions.lunarDate);
   const gregLine = formatDocumentGregorianDate(signOptions.place, signOptions.gregorianDate);
-  sheet.addRow(['', 'បានឃើញ និងឯកភាព', '', '', '', '', '', lunarLine]);
-  sheet.addRow(['', lunarLine, '', '', '', '', '', gregLine]);
-  sheet.addRow(['', gregLine, '', '', '', '', '', 'គ្រូបន្ទុកថ្នាក់']);
-  sheet.addRow(['', 'នាយក/នាយិកាសាលា']);
+  sheet.addRow(['', '', '', '', '', '', '', lunarLine]);
+  sheet.addRow(['', '', '', '', '', '', '', gregLine]);
+  sheet.addRow(['', APPROVER_LINE, '', '', '', '', '', TEACHER_TITLE]);
+  sheet.addRow(['', DIRECTOR_TITLE]);
   sheet.addRow([]);
-  sheet.addRow(['', profile.directorName, '', '', '', '', '', profile.teacherName]);
+  sheet.addRow([]);
+  sheet.addRow(['', '', '', '', '', '', '', profile.teacherName]);
 
   [5, 22, 6, 10, 10, 10, 8, 9, 6, 7, 7, 14].forEach((w, i) => {
     sheet.getColumn(i + 1).width = w;
@@ -1657,14 +1673,17 @@ export async function exportSemesterResultsExcel(params: {
   ]);
 
   sheet.addRow([]);
-  const lunarLine = signOptions.lunarDate || 'ថ្ងៃ…………… ខែ………… ឆ្នាំ………… ព.ស. ២៥……';
+  // Teacher's layout (2026-11-20): dates over the teacher's block only; the approver block has
+  // «បានឃើញ និង ឯកភាព / នាយកសាលា» level with the teacher's title, without dates or name.
+  const lunarLine = formatDocumentLunarLine(signOptions.lunarDate);
   const gregLine = formatDocumentGregorianDate(signOptions.place, signOptions.gregorianDate);
-  sheet.addRow(['', 'បានឃើញ និងឯកភាព', '', '', '', '', '', '', lunarLine]);
-  sheet.addRow(['', lunarLine, '', '', '', '', '', '', gregLine]);
-  sheet.addRow(['', gregLine, '', '', '', '', '', '', 'គ្រូបន្ទុកថ្នាក់']);
-  sheet.addRow(['', 'នាយក/នាយិកាសាលា']);
+  sheet.addRow(['', '', '', '', '', '', '', '', lunarLine]);
+  sheet.addRow(['', '', '', '', '', '', '', '', gregLine]);
+  sheet.addRow(['', APPROVER_LINE, '', '', '', '', '', '', TEACHER_TITLE]);
+  sheet.addRow(['', DIRECTOR_TITLE]);
   sheet.addRow([]);
-  sheet.addRow(['', profile.directorName, '', '', '', '', '', '', profile.teacherName]);
+  sheet.addRow([]);
+  sheet.addRow(['', '', '', '', '', '', '', '', profile.teacherName]);
 
   [5, 22, 6, 11, 11, 10, 10, 10, 8, 9, 6, 7, 7, 14].forEach((w, i) => {
     sheet.getColumn(i + 1).width = w;
@@ -1833,14 +1852,17 @@ export async function exportAnnualResultsExcel(params: {
   ]);
 
   sheet.addRow([]);
-  const lunarLine = signOptions.lunarDate || 'ថ្ងៃ…………… ខែ………… ឆ្នាំ………… ព.ស. ២៥……';
+  // Teacher's layout (2026-11-20): dates over the teacher's block only; the approver block has
+  // «បានឃើញ និង ឯកភាព / នាយកសាលា» level with the teacher's title, without dates or name.
+  const lunarLine = formatDocumentLunarLine(signOptions.lunarDate);
   const gregLine = formatDocumentGregorianDate(signOptions.place, signOptions.gregorianDate);
-  sheet.addRow(['', 'បានឃើញ និងឯកភាព', '', '', '', '', '', '', lunarLine]);
-  sheet.addRow(['', lunarLine, '', '', '', '', '', '', gregLine]);
-  sheet.addRow(['', gregLine, '', '', '', '', '', '', 'គ្រូបន្ទុកថ្នាក់']);
-  sheet.addRow(['', 'នាយក/នាយិកាសាលា']);
+  sheet.addRow(['', '', '', '', '', '', '', '', lunarLine]);
+  sheet.addRow(['', '', '', '', '', '', '', '', gregLine]);
+  sheet.addRow(['', APPROVER_LINE, '', '', '', '', '', '', TEACHER_TITLE]);
+  sheet.addRow(['', DIRECTOR_TITLE]);
   sheet.addRow([]);
-  sheet.addRow(['', profile.directorName, '', '', '', '', '', '', profile.teacherName]);
+  sheet.addRow([]);
+  sheet.addRow(['', '', '', '', '', '', '', '', profile.teacherName]);
 
   [5, 22, 6, 11, 11, 11, 10, 8, 9, 6, 7, 7, 16].forEach((w, i) => {
     sheet.getColumn(i + 1).width = w;

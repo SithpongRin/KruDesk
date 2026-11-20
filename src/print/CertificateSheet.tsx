@@ -7,6 +7,7 @@ import { toKhmerNumerals } from '../utils/khmerNumerals';
 import { getAssetUrl } from '../utils/assets';
 import { DocumentHeader, formatAcademicYearKm } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
+import type { DocumentBorderImage } from '../utils/documentBorder';
 
 interface CertificateSheetProps {
   cls: SchoolClass;
@@ -15,6 +16,8 @@ interface CertificateSheetProps {
   items: MonthlyResultRow[];
   signOptions: DocumentSignOptions;
   gradeWords?: Partial<Record<ScoreGrade, string>>;
+  /** Frame image chosen by the teacher (stretched over the whole page); built-in frame if absent. */
+  borderImage?: DocumentBorderImage;
 }
 
 const OrnateCertificateBorder: React.FC = () => (
@@ -68,6 +71,7 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
   items,
   signOptions,
   gradeWords,
+  borderImage,
 }) => {
   const { month: monthNum } = parseYearMonth(month);
   const monthName = getKhmerMonthName(monthNum);
@@ -86,7 +90,8 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
             style={{
               width: '297mm',
               height: '210mm',
-              padding: '17mm 20mm',
+              // An image frame (e.g. Khmer «ក្បាច់») is wider than the built-in lines.
+              padding: borderImage ? '24mm 30mm' : '17mm 20mm',
               boxSizing: 'border-box',
               backgroundColor: '#ffffff',
               color: '#000000',
@@ -97,7 +102,16 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
               justifyContent: 'center',
             }}
           >
-            <OrnateCertificateBorder />
+            {borderImage ? (
+              <img
+                src={borderImage.dataUrl}
+                alt=""
+                className="absolute inset-0 w-full h-full pointer-events-none select-none"
+                style={{ objectFit: 'fill' }}
+              />
+            ) : (
+              <OrnateCertificateBorder />
+            )}
 
             <div className="relative z-10">
               <DocumentHeader profile={profile} color="#1d4ed8" />
@@ -105,7 +119,7 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
               <div className="text-center mt-1">
                 <h2
                   style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
-                  className="text-[20pt] font-normal text-[#dc2626]"
+                  className="text-[24pt] font-normal text-[#dc2626] leading-snug"
                 >
                   បណ្ណសរសើរ
                 </h2>
@@ -118,7 +132,7 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
                 </div>
                 <div
                   style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
-                  className="text-[15pt] text-[#1d4ed8] mt-1"
+                  className="text-[16pt] text-[#1d4ed8] mt-1"
                 >
                   នាយក{profile.schoolName}
                 </div>
@@ -151,8 +165,6 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
                 profile={profile}
                 signOptions={signOptions}
                 showTeacher={false}
-                showApprovedBy={false}
-                align="right"
                 gapMm={13}
                 fontSizePt={12}
               />

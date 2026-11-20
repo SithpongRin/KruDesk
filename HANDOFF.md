@@ -99,6 +99,7 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 | Khmer group | monthly sheet: two part columns under number 1, no total column. Semester summary: ONE «អក្សរសាស្ត្រខ្មែរ» column (sum of parts) with one rank |
 | Averages | (sum of scores ÷ sum of max) × 50; **blank = 0 by default** (MoEYS divides by the full total; configurable); ties share rank (1,2,2,4). Display defaults to **truncation** (`កាត់ចោល`, e.g. `44.625 → 44.62`, configurable in Settings); **ranking, grade, and pass/fail use the 2-decimal displayed value** (`displayedAverage`) so equal printed averages share a rank |
 | Documents & Sidebar | Sidebar order: `ផ្ទាំងដើម · សិស្ស · បញ្ជីហៅឈ្មោះ · បញ្ជីវត្តមាន · បញ្ជីពិន្ទុ · លទ្ធផលប្រចាំខែ · តារាងកិត្តិយស · ប័ណ្ណសរសើរ · កាតសិស្ស · ការកំណត់` (mobile nav shows 4 primary + «ច្រើនទៀត»). «លទ្ធផលប្រចាំខែ» has a `ប្រចាំខែ \| ឆមាសទី ១ \| ឆមាសទី ២ \| ប្រចាំឆ្នាំ` period switch (`SemesterResultsSheet`, `SemesterReportSheet`, `AnnualResultsSheet`, `exportSemesterResultsExcel`, `exportAnnualResultsExcel`). Annual pass/fail: fails if `annualAvg < 25` OR counted absences `> absenceFailLimit` (default `30`, `absenceFailCountType: 'unexcused'`, `0` = off; `អវត្តមានលើសកំណត់` in ផ្សេងៗ when failing by absence only). Shared `DocumentSignDialog` prompts for lunar date (free text typed by teacher), place (remembered), and Gregorian date; Certificate grade words (`A: ល្អប្រសើរ`, `B: ល្អណាស់`, `C: ល្អ`, `D: ល្អបង្គួរ`, `E: មធ្យម`, `F: ខ្សោយ`) are editable and remembered |
+| Signatures | **Every document** (PDF and Excel) ends with the teacher's layout (2026-11-20, shared `DocumentSignature`): right — lunar line (typed once in the sign dialog, remembered as `documentLunarDate`, e.g. «ថ្ងៃ.....ខែ.....ឆ្នាំ មមែ អដ្ឋស័ក ព.ស. ២៥៧០»), «{place} ថ្ងៃទី.....ខែ.....ឆ្នាំ ២០២៦» (day/month blank for handwriting by default, `documentDateHandwritten`), «គ្រូទទួលបន្ទុកថ្នាក់», signing space, teacher's name (Moul); left — «បានឃើញ និង ឯកភាព» / «នាយកសាលា» (Moul) level with the teacher's title, **no dates and no director's name**. Certificate: director only (dates, «នាយកសាលា», name). Documents without the dialog (lists, attendance, score sheets, Excel) use the saved lunar line and place |
 | Semesters | **Per MoEYS instruction ៦៧ អយក.សណន (2026-2027)**: grades 7–8 sit the S1 exam 8–13 Feb and S2 23–28 Aug → S1 months = Nov–Jan, S2 = Mar–Jul (`DEFAULT_SCORE_CONFIG`, `SCORE_RULES_VERSION = 2`; `resolveScoreConfig()` moves configs saved under older rules, incl. old backups, to these months and blank = 0 once; later Settings edits are kept). Semester `ពិន្ទុសរុប = displayed ខែប្រចាំឆមាស + displayed ប្រឡងឆមាស`, `មធ្យម = ពិន្ទុសរុប ÷ 2`; annual = (S1 + S2) ÷ 2 — **confirmed** by the ministry's worked examples (`src/lib/__tests__/ministry2026.test.ts`) |
 | Students who leave | `statusChangedAt`; still shown in the month they left, hidden afterwards |
 
@@ -169,6 +170,16 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
       presses «ទាញយក PDF» — preview and PDF are identical. It returns `null` when the preview is
       closed; every caller shows the success toast only `if (exported)`. Card PDFs (`pdfService.ts`)
       keep their own `CardPreviewModal`. Tests: `src/services/__tests__/pdfPreview.test.tsx`.
+
+- [x] **Document frames (2026-11-20):** «ប័ណ្ណសរសើរ» has «ប្ដូរស៊ុម» / «ស៊ុមដើម»: the teacher picks a frame
+      image (e.g. a Khmer «ក្បាច់» border); it is turned to landscape, scaled to ≤ 2400 px JPEG
+      (`src/utils/documentBorder.ts`) and stored only in IndexedDB settings (`certificateBorder`, so it
+      travels in backups). «តារាងកិត្តិយស» keeps its built-in frame (thick indigo band like sample 03 —
+      **teacher: no kbach page frame on the honor roll**) but has «ប្ដូរស៊ុមឈ្មោះ» (`honorRollNameBanner`):
+      a transparent PNG plaque for the students' names (≤ 1200 px, white patch behind its open middle so
+      the photo never shows through). **Never commit such frame images** — they are other people's artwork.
+      The honor-roll title shows the month only (teacher, 2026-11-20); a semester honor roll would get
+      its own title.
 
 ## 7. «បញ្ជីពិន្ទុ» vs the MoEYS standard (checked 2026-11-20)
 

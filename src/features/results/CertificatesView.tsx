@@ -23,6 +23,10 @@ import {
 import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
 import { AppleCard } from '../../components/common/AppleCard';
 import { AppleButton } from '../../components/common/AppleButton';
+import {
+  DocumentBorderButton,
+  useDocumentBorder,
+} from '../../components/common/DocumentBorderButton';
 import { AppleBadge } from '../../components/common/AppleBadge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { DocumentSignDialog } from '../../components/common/DocumentSignDialog';
@@ -47,6 +51,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
     setActiveView,
     addToast,
   } = useAppStore();
+  const certificateBorder = useDocumentBorder('certificateBorder');
 
   const fmt = (val: number | string) =>
     useKhmerNumerals ? toKhmerNumerals(val) : toArabicNumerals(String(val));
@@ -253,6 +258,8 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
             ))}
           </select>
 
+          <DocumentBorderButton borderKey="certificateBorder" current={certificateBorder} />
+
           <AppleButton
             variant="primary"
             size="sm"
@@ -333,6 +340,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
                     }}
                   >
                     <CertificateSheet
+                      borderImage={certificateBorder}
                       cls={currentClass}
                       profile={profile}
                       month={selectedMonth}
@@ -389,6 +397,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
           style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}
         >
           <CertificateSheet
+            borderImage={certificateBorder}
             cls={currentClass}
             profile={profile}
             month={selectedMonth}

@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Profile, SchoolClass, Student } from '../types/domain';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
+import { DocumentSignature } from './DocumentSignature';
 
 interface StudentListSheetProps {
   cls: SchoolClass;
@@ -167,25 +168,16 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
 
             {/* Footer: Signature block ONLY on the LAST page with ~18mm blank sign space */}
             {isLastPage ? (
-              <div className="flex items-end justify-between text-[10.5px] pt-2 px-6">
-                <div className="text-center">
-                  <div>បានឃើញ និងឯកភាព</div>
-                  <div className="font-bold">នាយកសាលា</div>
-                  <div style={{ height: '18mm' }} />
-                  <div className="font-bold">{profile.directorName}</div>
-                </div>
-
-                <div className="text-[9.5px] text-slate-500">
-                  ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}
-                </div>
-
-                <div className="text-center">
-                  <div>ធ្វើនៅ…………ថ្ងៃទី………ខែ………ឆ្នាំ………</div>
-                  <div className="font-bold">គ្រូបន្ទុកថ្នាក់</div>
-                  <div style={{ height: '18mm' }} />
-                  <div className="font-bold">{profile.teacherName}</div>
-                </div>
-              </div>
+              <DocumentSignature
+                profile={profile}
+                fontSizePt={8}
+                gapMm={16}
+                middle={
+                  <div className="text-[9.5px] text-slate-500">
+                    ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}
+                  </div>
+                }
+              />
             ) : (
               <div className="text-center text-[9.5px] text-slate-500 pt-2">
                 ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}

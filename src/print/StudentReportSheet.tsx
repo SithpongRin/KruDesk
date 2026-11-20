@@ -209,7 +209,6 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
                 profile={profile}
                 signOptions={signOptions}
                 gapMm={12}
-                approverStyle="simple"
               />
 
               <div className="mt-3 text-[9pt]">

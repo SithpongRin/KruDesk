@@ -5,6 +5,7 @@ import type { MonthlyResultRow } from '../lib/monthlyResults';
 import { toKhmerNumerals } from '../utils/khmerNumerals';
 import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
+import type { DocumentBorderImage } from '../utils/documentBorder';
 
 interface HonorRollSheetProps {
   cls: SchoolClass;
@@ -12,42 +13,67 @@ interface HonorRollSheetProps {
   month: string;
   items: MonthlyResultRow[];
   signOptions: DocumentSignOptions;
+  /** Plaque image for the students' names (transparent PNG); built-in scroll if absent. */
+  nameBanner?: DocumentBorderImage;
 }
 
+/** Built-in frame after the school's sample 03: a thick indigo band between two thin black lines. */
 const HonorRollBorderSvg: React.FC = () => (
   <svg
     className="absolute inset-0 w-full h-full pointer-events-none"
     viewBox="0 0 210 297"
     preserveAspectRatio="none"
   >
-    <rect x="6" y="6" width="198" height="285" fill="none" stroke="#1e3a8a" strokeWidth="1.6" />
-    <rect x="8.5" y="8.5" width="193" height="280" fill="none" stroke="#1d4ed8" strokeWidth="0.9" />
-    {/* Corner squares */}
+    <rect x="8" y="8" width="194" height="281" fill="none" stroke="#111827" strokeWidth="0.55" />
+    <rect
+      x="10.4"
+      y="10.4"
+      width="189.2"
+      height="276.2"
+      fill="none"
+      stroke="#3b2aa0"
+      strokeWidth="3.6"
+    />
+    <rect
+      x="12.9"
+      y="12.9"
+      width="184.2"
+      height="271.2"
+      fill="none"
+      stroke="#111827"
+      strokeWidth="0.4"
+    />
+    {/* Corner brackets */}
     {[
-      [6, 6],
-      [196, 6],
-      [6, 283],
-      [196, 283],
+      [4.5, 4.5],
+      [197.5, 4.5],
+      [4.5, 284.5],
+      [197.5, 284.5],
     ].map(([x, y], i) => (
       <g key={i}>
-        <rect x={x} y={y} width="8" height="8" fill="#ffffff" stroke="#1e3a8a" strokeWidth="1.1" />
-        <rect x={x + 2} y={y + 2} width="4" height="4" fill="#1e3a8a" />
+        <rect x={x} y={y} width="8" height="8" fill="#ffffff" stroke="#111827" strokeWidth="0.6" />
+        <rect x={x + 1.6} y={y + 1.6} width="4.8" height="4.8" fill="#3b2aa0" />
       </g>
     ))}
   </svg>
 );
 
-const CrownSvg: React.FC = () => (
-  <svg width="24" height="14" viewBox="0 0 28 16" fill="none" className="mx-auto mb-0.5">
-    <path
-      d="M2 14L5 4L10 9L14 1.5L18 9L23 4L26 14H2Z"
-      fill="#f59e0b"
-      stroke="#b45309"
-      strokeWidth="1.2"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+/** Gilded scroll banner with curled ends, laid over the bottom of the photo (sample 03). */
+const NameBannerSvg: React.FC = () => {
+  // Body with scroll-curl ends (top and bottom edges curl outward), like sample 03.
+  const d =
+    'M40 10 L180 10 C192 10 196 4 204 4 C212 4 216 10 212 15 C209 19 203 17 204 13 C198 15 196 20 206 23 C196 26 198 31 204 33 C203 29 209 27 212 31 C216 36 212 42 204 42 C196 42 192 36 180 36 L40 36 C28 36 24 42 16 42 C8 42 4 36 8 31 C11 27 17 29 16 33 C22 31 24 26 14 23 C24 20 22 15 16 13 C17 17 11 19 8 15 C4 10 8 4 16 4 C24 4 28 10 40 10 Z';
+  return (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      viewBox="0 0 220 47"
+      preserveAspectRatio="none"
+    >
+      <path d={d} fill="#ffffff" stroke="#b7791f" strokeWidth="4.5" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke="#f6d365" strokeWidth="1.6" strokeLinejoin="round" />
+    </svg>
+  );
+};
 
 const SilhouetteSvg: React.FC = () => (
   <svg viewBox="0 0 64 80" className="w-full h-full bg-slate-200 text-slate-400">
@@ -72,7 +98,7 @@ const StudentPhoto: React.FC<{ photoBlob?: Blob; name: string }> = ({ photoBlob,
   return (
     <div
       className="mx-auto border border-[#1d4ed8] bg-slate-100 overflow-hidden shadow-sm"
-      style={{ width: '25mm', height: '33mm' }}
+      style={{ width: '28.5mm', height: '38mm' }}
     >
       {url ? (
         <img src={url} alt={name} className="w-full h-full object-cover" />
@@ -83,33 +109,62 @@ const StudentPhoto: React.FC<{ photoBlob?: Blob; name: string }> = ({ photoBlob,
   );
 };
 
-const PyramidCard: React.FC<{ item: MonthlyResultRow }> = ({ item }) => (
-  <div className="flex flex-col items-center text-center w-[48mm]">
-    <CrownSvg />
-    <div className="text-[10pt] font-bold text-[#dc2626] leading-tight mb-0.5">
-      លេខ {toKhmerNumerals(item.rank ?? '')}
-    </div>
-    <StudentPhoto photoBlob={item.student.photoBlob} name={item.student.nameKm} />
-    {/* Ornate scroll banner */}
-    <div className="relative mt-1.5 px-4 py-1 min-w-[40mm] max-w-[50mm]">
-      <svg
-        className="absolute inset-0 w-full h-full pointer-events-none"
-        viewBox="0 0 160 28"
-        preserveAspectRatio="none"
+const PyramidCard: React.FC<{
+  item: MonthlyResultRow;
+  nameBanner?: DocumentBorderImage;
+}> = ({ item, nameBanner }) => {
+  // A teacher's plaque image keeps its own proportions; its open middle is about half its width.
+  const bannerWidthMm = nameBanner ? 54 : 50;
+  const bannerHeightMm = nameBanner
+    ? Math.min(22, Math.max(10, (bannerWidthMm * nameBanner.height) / nameBanner.width))
+    : 11;
+  return (
+    <div className="flex flex-col items-center text-center w-[56mm]">
+      <div
+        className="text-[11pt] text-[#dc2626] leading-tight mb-1"
+        style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
       >
-        <path
-          d="M8,3 L152,3 C156,3 158,8 154,14 C158,20 156,25 152,25 L8,25 C4,25 2,20 6,14 C2,8 4,3 8,3 Z"
-          fill="#fefce8"
-          stroke="#d97706"
-          strokeWidth="1.6"
-        />
-      </svg>
-      <span className="relative z-10 font-bold text-[9pt] text-[#1e3a8a] block truncate">
-        {item.student.nameKm}
-      </span>
+        លេខ {toKhmerNumerals(item.rank ?? '')}
+      </div>
+      <StudentPhoto photoBlob={item.student.photoBlob} name={item.student.nameKm} />
+      {/* Name banner overlaps the bottom of the photo like the school's sample. */}
+      <div
+        className="relative flex items-center justify-center"
+        style={{
+          width: `${bannerWidthMm}mm`,
+          height: `${bannerHeightMm}mm`,
+          marginTop: nameBanner ? '-6mm' : '-4mm',
+        }}
+      >
+        {nameBanner ? (
+          <>
+            {/* White behind the plaque's open middle so the photo never shows through the name. */}
+            <div
+              className="absolute bg-white"
+              style={{ left: '20%', right: '20%', top: '16%', bottom: '16%' }}
+            />
+            <img
+              src={nameBanner.dataUrl}
+              alt=""
+              className="absolute inset-0 w-full h-full pointer-events-none select-none"
+              style={{ objectFit: 'fill' }}
+            />
+          </>
+        ) : (
+          <NameBannerSvg />
+        )}
+        <span
+          className="relative z-10 text-[11pt] text-[#1d4ed8] block truncate leading-none"
+          style={{
+            maxWidth: nameBanner ? `${bannerWidthMm * 0.54}mm` : '34mm',
+          }}
+        >
+          {item.student.nameKm}
+        </span>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
   cls,
@@ -117,6 +172,7 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
   month,
   items,
   signOptions,
+  nameBanner,
 }) => {
   const { month: monthNum } = parseYearMonth(month);
   const monthName = getKhmerMonthName(monthNum);
@@ -134,14 +190,14 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
         style={{
           width: '210mm',
           height: '297mm',
-          padding: '13mm 14mm',
+          padding: '15mm 17mm 14mm',
           boxSizing: 'border-box',
           backgroundColor: '#ffffff',
           color: '#1e3a8a',
           fontFamily: "'Battambang', 'Khmer OS Battambang', sans-serif",
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-start',
         }}
       >
         <HonorRollBorderSvg />
@@ -149,58 +205,70 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
         <div className="relative z-10">
           <DocumentHeader profile={profile} color="#1e3a8a" />
 
-          <div className="text-center mb-3">
+          <div className="text-center mb-2">
             <h2
               style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
-              className="text-[12.5pt] font-normal text-[#dc2626]"
+              className="text-[15pt] font-normal text-[#dc2626] leading-snug"
             >
               {/* Monthly honor roll: the month only (a semester honor roll would get its own title). */}
               តារាងកិត្តិយសប្រចាំខែ {monthName}
             </h2>
             <div
-              className="text-[10pt] text-[#1e3a8a] mt-0.5"
+              className="text-[12pt] text-[#1e3a8a] mt-0.5"
               style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
             >
               ថ្នាក់ទី {cls.name}
             </div>
-            <AcademicYearLine academicYear={cls.academicYear} className="text-[10pt] text-[#1e3a8a]" />
+            <AcademicYearLine
+              academicYear={cls.academicYear}
+              className="text-[12pt] text-[#1e3a8a]"
+            />
           </div>
 
-          <div className="space-y-3 mt-1">
+          <div className="mt-1">
             {row1.length > 0 && (
               <div className="flex justify-center">
-                <PyramidCard item={row1[0]} />
+                <PyramidCard item={row1[0]} nameBanner={nameBanner} />
               </div>
             )}
             {row2.length > 0 && (
-              <div className="flex justify-around px-6">
+              <div className="flex justify-between px-[4mm]" style={{ marginTop: '-22mm' }}>
                 {row2.map((it) => (
-                  <PyramidCard key={it.student.id ?? it.student.studentId} item={it} />
+                  <PyramidCard
+                    key={it.student.id ?? it.student.studentId}
+                    item={it}
+                    nameBanner={nameBanner}
+                  />
                 ))}
               </div>
             )}
             {row3.length > 0 && (
-              <div className="flex justify-around px-2">
+              <div className="flex justify-between px-[4mm]" style={{ marginTop: '6mm' }}>
                 {row3.map((it) => (
-                  <PyramidCard key={it.student.id ?? it.student.studentId} item={it} />
+                  <PyramidCard
+                    key={it.student.id ?? it.student.studentId}
+                    item={it}
+                    nameBanner={nameBanner}
+                  />
                 ))}
               </div>
             )}
             {row4.length > 0 && (
-              <div className="flex justify-center">
-                <PyramidCard item={row4[0]} />
+              <div className="flex justify-center" style={{ marginTop: '-22mm' }}>
+                <PyramidCard item={row4[0]} nameBanner={nameBanner} />
               </div>
             )}
           </div>
         </div>
 
-        <div className="relative z-10">
+        {/* Signatures right under the photos, like sample 03, so names never reach the frame. */}
+        <div className="relative z-10" style={{ marginTop: '7mm' }}>
           <DocumentSignature
             profile={profile}
             signOptions={signOptions}
-            teacherTitle="គ្រូទទួលបន្ទុកថ្នាក់"
             color="#1e3a8a"
-            gapMm={12}
+            gapMm={17}
+            fontSizePt={9.5}
           />
         </div>
       </div>

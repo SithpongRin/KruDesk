@@ -18,6 +18,10 @@ import {
 import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
 import { AppleCard } from '../../components/common/AppleCard';
 import { AppleButton } from '../../components/common/AppleButton';
+import {
+  DocumentBorderButton,
+  useDocumentBorder,
+} from '../../components/common/DocumentBorderButton';
 import { EmptyState } from '../../components/common/EmptyState';
 import { DocumentSignDialog } from '../../components/common/DocumentSignDialog';
 import {
@@ -41,6 +45,7 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
     setActiveView,
     addToast,
   } = useAppStore();
+  const honorRollNameBanner = useDocumentBorder('honorRollNameBanner');
 
   const fmt = (val: number | string) =>
     useKhmerNumerals ? toKhmerNumerals(val) : toArabicNumerals(String(val));
@@ -215,6 +220,13 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
             ))}
           </select>
 
+          <DocumentBorderButton
+            borderKey="honorRollNameBanner"
+            current={honorRollNameBanner}
+            label="ប្ដូរស៊ុមឈ្មោះ"
+            resetLabel="ស៊ុមឈ្មោះដើម"
+          />
+
           <AppleButton
             variant="primary"
             size="sm"
@@ -239,6 +251,7 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
         <AppleCard className="overflow-x-auto flex justify-center bg-[#f5f5f7] dark:bg-white/[0.02]">
           <div className="shadow-lg origin-top scale-[0.72] sm:scale-[0.85] lg:scale-100">
             <HonorRollSheet
+              nameBanner={honorRollNameBanner}
               cls={currentClass}
               profile={profile}
               month={selectedMonth}
@@ -264,6 +277,7 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
           style={{ position: 'fixed', left: '-10000px', top: 0, pointerEvents: 'none' }}
         >
           <HonorRollSheet
+            nameBanner={honorRollNameBanner}
             cls={currentClass}
             profile={profile}
             month={selectedMonth}
