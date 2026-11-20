@@ -106,9 +106,11 @@ const SealSpace: React.FC<{
   // «នាយកសាលា». Some schools have stamp + signature (+ name) in one image: uploaded as
   // «ត្រាសាលា» with no separate signature, it is drawn taller so the signature lands in the gap.
   const combined = Boolean(stamp && !signature);
+  // Never smaller than on the school's own score sheets (stamp+signature ≈ 34 mm tall, round
+  // stamp ≈ 30 mm), even where the signing gap is small (report cards).
   const stampHeightMm = combined
-    ? Math.min(44, gapMm + 2 * lineMm + 12)
-    : Math.min(36, gapMm + 2 * lineMm + 6);
+    ? Math.min(44, Math.max(34, gapMm + 2 * lineMm + 12))
+    : Math.min(36, Math.max(30, gapMm + 2 * lineMm + 6));
   const stampMaxWidthMm = combined ? 85 : stampHeightMm * 1.15;
   const stampTopMm = -(2 * lineMm) - 1;
   return (

@@ -186,11 +186,11 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 
 - [x] **Stamp and signatures (2026-11-20, optional):** Settings → «ត្រា និងហត្ថលេខា» (`DirectorSealCard`)
       stores three images in IndexedDB settings (`directorStamp`, `directorSignature`, `teacherSignature`;
-      in backups, **never in git**). Uploads are cleaned (`prepareSealImage`: white paper → transparent,
+      in backups, **never in git**). Before saving, the teacher turns/crops the photo in `ImageCropModal` (drag box, «បង្វិល») with a live preview of the printed result inside the real signature block (`DocumentSignature`, scaled to the dialog, with the other saved images), «ធ្វើឲ្យច្បាស់» (ink darker/more saturated, `enhanceInk`, on by default) and a «លុបផ្ទៃក្រដាស» slider around the automatically measured paper colour (`paperLuminance`); cleaning = `cleanSealCanvas` (paper → transparent,
       trimmed, ≤ 900 px PNG). The sign dialog shows «ដាក់ត្រា និងហត្ថលេខានាយក» and «ដាក់ហត្ថលេខាគ្រូ» only
       when the images exist; both are off by default and pass the images in `DocumentSignOptions`, so only
       documents exported through the dialog can carry them. `DocumentSignature` draws the director's
-      signature under «នាយកសាលា» and a large stamp centred over «បានឃើញ និង ឯកភាព / នាយកសាលា», like the school's documents (a stamp+signature[+name] in one image goes in «ត្រាសាលា» alone: drawn taller, its stamp part — ~40% across — centred), and the teacher's signature between
+      signature under «នាយកសាលា» and a large stamp (min 30 mm; stamp+signature image min 34 mm, as on the school's score sheets) centred over «បានឃើញ និង ឯកភាព / នាយកសាលា», like the school's documents (a stamp+signature[+name] in one image goes in «ត្រាសាលា» alone: drawn taller, its stamp part — ~40% across — centred), and the teacher's signature between
       «គ្រូទទួលបន្ទុកថ្នាក់» and the name. Not in Excel exports.
 
 ## 7. «បញ្ជីពិន្ទុ» vs the MoEYS standard (checked 2026-11-20)

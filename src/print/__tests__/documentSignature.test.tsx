@@ -99,4 +99,19 @@ describe('DocumentSignature (teacher layout 2026-11-20)', () => {
     expect(teacherBlock.querySelectorAll('img')).toHaveLength(1);
     expect(teacherBlock.lastElementChild?.textContent).toBe(profile.teacherName);
   });
+
+  it('never draws the stamp smaller than on the school sheets', () => {
+    const seal = { dataUrl: 'data:image/png;base64,AAAA', width: 10, height: 10 };
+    const base = { month: '2026-11', lunarDate: '', place: '', gregorianDate: '' };
+    const heightOf = (opts: object, gapMm: number) => {
+      const r = render(
+        <DocumentSignature profile={profile} signOptions={{ ...base, ...opts }} gapMm={gapMm} />
+      );
+      const img = r.container.querySelector('img') as HTMLImageElement;
+      return parseFloat(img.style.height);
+    };
+    // small signing gap (report cards): still ≥ 34 mm for stamp+signature, ≥ 30 mm for a stamp
+    expect(heightOf({ directorStamp: seal }, 10)).toBeGreaterThanOrEqual(34);
+    expect(heightOf({ directorStamp: seal, directorSignature: seal }, 10)).toBeGreaterThanOrEqual(30);
+  });
 });

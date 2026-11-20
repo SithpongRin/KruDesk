@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { inkBounds, isSealImage, whiteToTransparent } from '../directorSeal';
+import {
+  enhanceInk,
+  inkBounds,
+  isSealImage,
+  paperLuminance,
+  whiteToTransparent,
+} from '../directorSeal';
 
 function rgba(pixels: Array<[number, number, number]>): Uint8ClampedArray {
   const data = new Uint8ClampedArray(pixels.length * 4);
@@ -36,5 +42,20 @@ describe('director stamp / signature images', () => {
     expect(isSealImage({ dataUrl: 'data:image/png;base64,AA', width: 1, height: 1 })).toBe(true);
     expect(isSealImage({ dataUrl: 'https://x/y.png', width: 1, height: 1 })).toBe(false);
     expect(isSealImage(null)).toBe(false);
+  });
+
+  it('measures greyish phone-photo paper', () => {
+    const pixels: Array<[number, number, number]> = [];
+    for (let i = 0; i < 90; i++) pixels.push([220, 216, 204]); // paper
+    for (let i = 0; i < 10; i++) pixels.push([200, 40, 40]); // ink
+    expect(paperLuminance(rgba(pixels))).toBeGreaterThan(205);
+  });
+
+  it('makes faded ink darker and more vivid', () => {
+    const data = rgba([[217, 140, 140]]);
+    enhanceInk(data);
+    expect(data[0]).toBeGreaterThanOrEqual(200);
+    expect(data[1]).toBeLessThan(140);
+    expect(data[2]).toBeLessThan(140);
   });
 });

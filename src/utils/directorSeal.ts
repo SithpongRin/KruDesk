@@ -69,10 +69,117 @@ export function inkBounds(
   return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }
 
+export interface SealCleanOptions {
+  /**
+   * How much of the paper to remove, around the measured paper colour: 0 = automatic,
+   * higher removes more (greyer paper, shadows), lower keeps fainter ink.
+   */
+  strength: number;
+  /** Deepen and saturate the ink so a pale photo prints clearly. */
+  enhance: boolean;
+}
+
+export const DEFAULT_SEAL_CLEAN: SealCleanOptions = { strength: 0, enhance: true };
+
 /**
- * Reads a photo or scan of a stamp/signature, removes the white paper, trims to the ink and
- * scales the long side down to `maxLongSide`. A PNG that is already transparent keeps its alpha.
+ * Brightness of the paper: phone photos are rarely white, so take the 85th percentile of the
+ * luminance (the paper covers most of a cropped stamp/signature).
  */
+export function paperLuminance(data: Uint8ClampedArray): number {
+  const hist = new Uint32Array(256);
+  let n = 0;
+  for (let o = 0; o < data.length; o += 4) {
+    if (data[o + 3] < 128) continue;
+    hist[Math.round(0.299 * data[o] + 0.587 * data[o + 1] + 0.114 * data[o + 2])] += 1;
+    n += 1;
+  }
+  if (n === 0) return 255;
+  let seen = 0;
+  for (let v = 0; v < 256; v++) {
+    seen += hist[v];
+    if (seen >= n * 0.85) return v;
+  }
+  return 255;
+}
+
+/**
+ * Makes faded ink print clearly: pushes each colour channel away from white (darker) and away
+ * from grey (more saturated), and firms up semi-transparent edges. Works on RGBA in place.
+ */
+export function enhanceInk(data: Uint8ClampedArray, depth = 1.45, saturation = 1.3): void {
+  for (let o = 0; o < data.length; o += 4) {
+    const a = data[o + 3];
+    if (a === 0) continue;
+    let r = 255 - (255 - data[o]) * depth;
+    let g = 255 - (255 - data[o + 1]) * depth;
+    let b = 255 - (255 - data[o + 2]) * depth;
+    const grey = (r + g + b) / 3;
+    r = grey + (r - grey) * saturation;
+    g = grey + (g - grey) * saturation;
+    b = grey + (b - grey) * saturation;
+    data[o] = Math.max(0, Math.min(255, Math.round(r)));
+    data[o + 1] = Math.max(0, Math.min(255, Math.round(g)));
+    data[o + 2] = Math.max(0, Math.min(255, Math.round(b)));
+    data[o + 3] = Math.min(255, Math.round(a * 1.6));
+  }
+}
+
+/**
+ * Cleans a (cropped) canvas: paper → transparent, optional ink enhancement, trimmed to the ink
+ * with a small margin, long side at most `maxLongSide`. Returns a new canvas, or null when no
+ * ink is left (e.g. the paper threshold is too low).
+ */
+export function cleanSealCanvas(
+  source: HTMLCanvasElement,
+  options: SealCleanOptions = DEFAULT_SEAL_CLEAN,
+  maxLongSide = 900
+): HTMLCanvasElement | null {
+  // Work at a bounded size (large phone photos).
+  const workScale = Math.min(1, 1600 / Math.max(source.width, source.height));
+  const w = Math.max(1, Math.round(source.width * workScale));
+  const h = Math.max(1, Math.round(source.height * workScale));
+  const work = document.createElement('canvas');
+  work.width = w;
+  work.height = h;
+  const wctx = work.getContext('2d');
+  if (!wctx) return null;
+  wctx.drawImage(source, 0, 0, w, h);
+  const pixels = wctx.getImageData(0, 0, w, h);
+  // Paper slightly darker than its measured brightness still counts as paper.
+  const clearAbove = Math.max(
+    60,
+    Math.min(250, paperLuminance(pixels.data) - 18 - options.strength)
+  );
+  // A narrow fade band: pale ink (faded stamps) stays solid instead of half-transparent.
+  whiteToTransparent(pixels.data, clearAbove - 30, clearAbove);
+  if (options.enhance) enhanceInk(pixels.data);
+  wctx.putImageData(pixels, 0, 0);
+
+  const box = inkBounds(pixels.data, w, h);
+  if (!box) return null;
+  const pad = Math.round(Math.max(box.w, box.h) * 0.02);
+  const cx = Math.max(0, box.x - pad);
+  const cy = Math.max(0, box.y - pad);
+  const cw = Math.min(w - cx, box.w + pad * 2);
+  const ch = Math.min(h - cy, box.h + pad * 2);
+
+  const outScale = Math.min(1, maxLongSide / Math.max(cw, ch));
+  const out = document.createElement('canvas');
+  out.width = Math.max(1, Math.round(cw * outScale));
+  out.height = Math.max(1, Math.round(ch * outScale));
+  const octx = out.getContext('2d');
+  if (!octx) return null;
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+  octx.drawImage(work, cx, cy, cw, ch, 0, 0, out.width, out.height);
+  return out;
+}
+
+export function sealImageFromCanvas(canvas: HTMLCanvasElement): SealImage {
+  return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height };
+}
+
+/** Reads an image file without cropping and cleans it with the default options. */
 export async function prepareSealImage(file: File, maxLongSide = 900): Promise<SealImage> {
   const srcUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -89,39 +196,13 @@ export async function prepareSealImage(file: File, maxLongSide = 900): Promise<S
   const srcW = img.naturalWidth || img.width;
   const srcH = img.naturalHeight || img.height;
   if (!srcW || !srcH) throw new Error('Invalid image dimensions');
-
-  // Work at a bounded size first (large phone photos).
-  const workScale = Math.min(1, 1600 / Math.max(srcW, srcH));
-  const w = Math.max(1, Math.round(srcW * workScale));
-  const h = Math.max(1, Math.round(srcH * workScale));
-  const work = document.createElement('canvas');
-  work.width = w;
-  work.height = h;
-  const wctx = work.getContext('2d');
-  if (!wctx) throw new Error('Canvas 2D context unavailable');
-  wctx.drawImage(img, 0, 0, w, h);
-  const pixels = wctx.getImageData(0, 0, w, h);
-  whiteToTransparent(pixels.data);
-  wctx.putImageData(pixels, 0, 0);
-
-  const box = inkBounds(pixels.data, w, h);
-  if (!box) throw new Error('No ink found');
-  const pad = Math.round(Math.max(box.w, box.h) * 0.02);
-  const cx = Math.max(0, box.x - pad);
-  const cy = Math.max(0, box.y - pad);
-  const cw = Math.min(w - cx, box.w + pad * 2);
-  const ch = Math.min(h - cy, box.h + pad * 2);
-
-  const outScale = Math.min(1, maxLongSide / Math.max(cw, ch));
-  const outW = Math.max(1, Math.round(cw * outScale));
-  const outH = Math.max(1, Math.round(ch * outScale));
-  const out = document.createElement('canvas');
-  out.width = outW;
-  out.height = outH;
-  const octx = out.getContext('2d');
-  if (!octx) throw new Error('Canvas 2D context unavailable');
-  octx.imageSmoothingEnabled = true;
-  octx.imageSmoothingQuality = 'high';
-  octx.drawImage(work, cx, cy, cw, ch, 0, 0, outW, outH);
-  return { dataUrl: out.toDataURL('image/png'), width: outW, height: outH };
+  const source = document.createElement('canvas');
+  source.width = srcW;
+  source.height = srcH;
+  const ctx = source.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D context unavailable');
+  ctx.drawImage(img, 0, 0);
+  const cleaned = cleanSealCanvas(source, DEFAULT_SEAL_CLEAN, maxLongSide);
+  if (!cleaned) throw new Error('No ink found');
+  return sealImageFromCanvas(cleaned);
 }

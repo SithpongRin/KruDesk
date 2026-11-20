@@ -5,12 +5,10 @@ import { db, setSetting } from '../../db/database';
 import { useAppStore } from '../../store/useAppStore';
 import { AppleCard } from '../../components/common/AppleCard';
 import { AppleButton } from '../../components/common/AppleButton';
-import {
-  isSealImage,
-  prepareSealImage,
-  type DirectorSealKey,
-  type SealImage,
-} from '../../utils/directorSeal';
+import { ImageCropModal } from '../../components/common/ImageCropModal';
+import { DocumentSignature } from '../../print/DocumentSignature';
+import type { Profile } from '../../types/domain';
+import { isSealImage, type DirectorSealKey, type SealImage } from '../../utils/directorSeal';
 
 const SLOTS: Array<{ key: DirectorSealKey; title: string; hint: string }> = [
   {
@@ -33,26 +31,49 @@ const SLOTS: Array<{ key: DirectorSealKey; title: string; hint: string }> = [
 const SealSlot: React.FC<{ slot: (typeof SLOTS)[number] }> = ({ slot }) => {
   const { addToast } = useAppStore();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+  // The picked photo waits here while the teacher turns / crops it.
+  const [pending, setPending] = useState<File | null>(null);
   const row = useLiveQuery(() => db.settings.get(slot.key), [slot.key]);
   const image: SealImage | undefined = isSealImage(row?.value) ? row.value : undefined;
+  // For the preview: the signature block exactly as printed, with the other saved images too.
+  const profileRow = useLiveQuery(() => db.settings.get('profile'), []);
+  const stampRow = useLiveQuery(() => db.settings.get('directorStamp'), []);
+  const directorSignRow = useLiveQuery(() => db.settings.get('directorSignature'), []);
+  const profile = (profileRow?.value as Profile | undefined) ?? {
+    teacherName: '',
+    schoolName: '',
+    directorName: '',
+    academicYear: '',
+  };
+  const savedStamp = isSealImage(stampRow?.value) ? stampRow.value : undefined;
+  const savedDirectorSign = isSealImage(directorSignRow?.value) ? directorSignRow.value : undefined;
+  const renderPreview = (candidate: SealImage, widthPx: number) => {
+    const seal =
+      slot.key === 'directorStamp'
+        ? { directorStamp: candidate, directorSignature: savedDirectorSign }
+        : slot.key === 'directorSignature'
+          ? { directorStamp: savedStamp, directorSignature: candidate }
+          : { teacherSignature: candidate };
+    return (
+      // Real size (mm) scaled to the dialog: the same block and spacing as on the documents.
+      <div
+        style={{ zoom: Math.max(0.3, Math.min(0.6, widthPx / ((180 * 96) / 25.4))) }}
+        className="w-[180mm] pt-[14mm] pb-[10mm] text-black"
+      >
+        <DocumentSignature
+          profile={profile}
+          signOptions={{ month: '', lunarDate: '', place: '', gregorianDate: '', ...seal }}
+          gapMm={13}
+          fontSizePt={11}
+        />
+      </div>
+    );
+  };
 
-  const handleFile = async (file: File | undefined) => {
-    if (!file) return;
-    setBusy(true);
-    try {
-      await setSetting<SealImage>(slot.key, await prepareSealImage(file));
-      addToast({ type: 'success', title: `បានរក្សាទុក${slot.title}` });
-    } catch {
-      addToast({
-        type: 'error',
-        title: 'មិនអាចប្រើរូបនេះបានទេ',
-        message: 'សូមជ្រើសរូបភាព JPG ឬ PNG ដែលមានត្រា ឬហត្ថលេខាច្បាស់។',
-      });
-    } finally {
-      setBusy(false);
-      if (inputRef.current) inputRef.current.value = '';
-    }
+  const handleCropped = async (cleaned: SealImage) => {
+    setPending(null);
+    await setSetting<SealImage>(slot.key, cleaned);
+    addToast({ type: 'success', title: `បានរក្សាទុក${slot.title}` });
   };
 
   return (
@@ -78,7 +99,11 @@ const SealSlot: React.FC<{ slot: (typeof SLOTS)[number] }> = ({ slot }) => {
         accept="image/png,image/jpeg,image/webp"
         className="hidden"
         aria-label={`បញ្ចូល${slot.title}`}
-        onChange={(e) => void handleFile(e.target.files?.[0])}
+        onChange={(e) => {
+          const picked = e.target.files?.[0];
+          if (picked) setPending(picked);
+          e.target.value = '';
+        }}
       />
       <div className="flex gap-2">
         <AppleButton
@@ -86,10 +111,9 @@ const SealSlot: React.FC<{ slot: (typeof SLOTS)[number] }> = ({ slot }) => {
           variant="secondary"
           size="sm"
           icon={<Upload size={14} />}
-          disabled={busy}
           onClick={() => inputRef.current?.click()}
         >
-          {busy ? 'កំពុងរៀបចំ...' : image ? 'ប្ដូររូប' : 'បញ្ចូលរូប'}
+          {image ? 'ប្ដូររូប' : 'បញ្ចូលរូប'}
         </AppleButton>
         {image && (
           <AppleButton
@@ -103,6 +127,13 @@ const SealSlot: React.FC<{ slot: (typeof SLOTS)[number] }> = ({ slot }) => {
           </AppleButton>
         )}
       </div>
+      <ImageCropModal
+        file={pending}
+        title={`កាត់រូប — ${slot.title}`}
+        onCancel={() => setPending(null)}
+        onConfirm={handleCropped}
+        renderPreview={renderPreview}
+      />
     </div>
   );
 };
