@@ -689,13 +689,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
                 onClick={() =>
                   updateScoreConfig({ countBlankAsZero: !scoreConfig.countBlankAsZero })
                 }
-                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ${
+                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
                   scoreConfig.countBlankAsZero ? 'bg-[#0071e3]' : 'bg-[#d1d1d6] dark:bg-white/20'
                 }`}
               >
+                {/* knob slides right when on (translate-x-5.5 does not exist in Tailwind, so it never moved) */}
                 <span
-                  className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform duration-200 mt-0.5 ${
-                    scoreConfig.countBlankAsZero ? 'translate-x-5.5' : 'translate-x-0.5'
+                  className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow transition duration-200 ${
+                    scoreConfig.countBlankAsZero ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </button>

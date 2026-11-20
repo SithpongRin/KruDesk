@@ -34,16 +34,19 @@ interface DocumentHeaderProps {
   profile: Profile;
   compact?: boolean;
   color?: string;
+  /** More space between the lines (honor roll, which has room to spare). */
+  spacious?: boolean;
 }
 
 export const DocumentHeader: React.FC<DocumentHeaderProps> = ({
   profile,
   compact = false,
   color = '#000000',
+  spacious = false,
 }) => {
   return (
-    <div className={compact ? 'mb-1.5' : 'mb-2.5'} style={{ color }}>
-      <div className="text-center leading-tight">
+    <div className={compact ? 'mb-1.5' : spacious ? 'mb-3' : 'mb-2.5'} style={{ color }}>
+      <div className={`text-center ${spacious ? 'leading-relaxed' : 'leading-tight'}`}>
         <div
           style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
           className={compact ? 'text-[10pt]' : 'text-[11pt]'}
@@ -69,7 +72,9 @@ export const DocumentHeader: React.FC<DocumentHeaderProps> = ({
 
       {/* Ministry + school in Moul, like the school's documents (samples 01, 02, 05). */}
       <div
-        className={`text-left leading-normal ${compact ? 'text-[9.5pt] mt-0.5' : 'text-[10pt] mt-1'}`}
+        className={`text-left ${spacious ? 'leading-relaxed' : 'leading-normal'} ${
+          compact ? 'text-[9.5pt] mt-0.5' : spacious ? 'text-[10pt] mt-2' : 'text-[10pt] mt-1'
+        }`}
         style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
       >
         <div>មន្ទីរអប់រំ យុវជន និងកីឡា {formatMinistryProvince(profile.province)}</div>

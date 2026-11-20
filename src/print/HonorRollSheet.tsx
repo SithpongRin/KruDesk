@@ -200,25 +200,25 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
         )}
 
         <div className="relative z-10">
-          <DocumentHeader profile={profile} color="#1e3a8a" />
+          <DocumentHeader profile={profile} color="#1e3a8a" spacious />
 
-          <div className="text-center mb-2">
+          <div className="text-center mb-3 leading-relaxed">
             <h2
               style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
-              className="text-[15pt] font-normal text-[#dc2626] leading-snug"
+              className="text-[15pt] font-normal text-[#dc2626] leading-relaxed"
             >
               {/* Monthly honor roll: the month only (a semester honor roll would get its own title). */}
               តារាងកិត្តិយសប្រចាំខែ {monthName}
             </h2>
             <div
-              className="text-[12pt] text-[#1e3a8a] mt-0.5"
+              className="text-[12pt] text-[#1e3a8a] mt-1"
               style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
             >
               ថ្នាក់ទី {cls.name}
             </div>
             <AcademicYearLine
               academicYear={cls.academicYear}
-              className="text-[12pt] text-[#1e3a8a]"
+              className="text-[12pt] text-[#1e3a8a] mt-1"
             />
           </div>
 
