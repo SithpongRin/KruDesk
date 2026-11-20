@@ -221,12 +221,10 @@ export const HonorRollView: React.FC<HonorRollViewProps> = ({ profile }) => {
             ))}
           </select>
 
-          <DocumentBorderButton borderKey="honorRollBorder" current={honorRollBorder} />
+          <DocumentBorderButton borderKey="honorRollBorder" />
           <DocumentBorderButton
             borderKey="honorRollNameBanner"
-            current={honorRollNameBanner}
             label="ប្ដូរស៊ុមឈ្មោះ"
-            resetLabel="ស៊ុមឈ្មោះដើម"
           />
 
           <AppleButton

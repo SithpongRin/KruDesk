@@ -7,7 +7,14 @@ import { HonorRollSheet } from '../HonorRollSheet';
 import { createDefaultSignOptions } from '../DocumentSignature';
 import type { Profile, SchoolClass } from '../../types/domain';
 import type { MonthlyResultRow } from '../../lib/monthlyResults';
-import { isDocumentBorderImage, type DocumentBorderImage } from '../../utils/documentBorder';
+import {
+  documentBorderSelection,
+  framePaddingMm,
+  isDocumentBorderImage,
+  measureFrameInset,
+  resolveDocumentBorder,
+  type DocumentBorderImage,
+} from '../../utils/documentBorder';
 
 const cls: SchoolClass = {
   id: 1,
@@ -70,6 +77,50 @@ describe('document border images', () => {
     expect(isDocumentBorderImage(undefined)).toBe(false);
   });
 
+  it('resolves built-in choices, defaults and uploads per document', () => {
+    expect(resolveDocumentBorder('certificateBorder', undefined)?.dataUrl).toMatch(/frame-orange\.jpg$/);
+    expect(resolveDocumentBorder('honorRollBorder', undefined)).toBeUndefined();
+    expect(resolveDocumentBorder('honorRollNameBanner', undefined)?.dataUrl).toMatch(/name-plaque\.png$/);
+    expect(resolveDocumentBorder('certificateBorder', border)).toBe(border);
+    // A landscape frame on the portrait honor roll is turned, and its widths follow the turn.
+    const blue = resolveDocumentBorder('honorRollBorder', { presetId: 'frame-blue' });
+    expect(blue?.rotate).toBe(true);
+    expect(blue?.inner?.top).toBeCloseTo(0.059);
+    expect(blue?.inner?.right).toBeCloseTo(0.083);
+    // The crest frame is offered for the certificate only.
+    expect(documentBorderSelection('honorRollBorder', { presetId: 'frame-gold-crest' })).toBeNull();
+    expect(documentBorderSelection('certificateBorder', { presetId: 'frame-gold-crest' })).toBe('frame-gold-crest');
+    expect(documentBorderSelection('honorRollBorder', { presetId: null })).toBeNull();
+  });
+
+  it('keeps text clear of the frame: padding grows with the frame width', () => {
+    const inner = { top: 0.146, right: 0.072, bottom: 0.164, left: 0.071 };
+    const pad = framePaddingMm(inner, 297, 210, { top: 22, right: 30, bottom: 22, left: 30 });
+    expect(pad.top).toBe(Math.ceil(0.146 * 210 + 4));
+    expect(pad.bottom).toBe(Math.ceil(0.164 * 210 + 4));
+    expect(pad.left).toBe(30);
+  });
+
+  it('measures the frame width of an image', () => {
+    const W = 100;
+    const H = 80;
+    const data = new Uint8ClampedArray(W * H * 4).fill(255);
+    // 10 px dark band on the left/right, 8 px on top/bottom
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (x < 10 || x >= W - 10 || y < 8 || y >= H - 8) {
+          const o = (y * W + x) * 4;
+          data[o] = data[o + 1] = data[o + 2] = 0;
+        }
+      }
+    }
+    const inset = measureFrameInset({ data, width: W, height: H } as ImageData);
+    expect(inset.left).toBeCloseTo(0.1, 1);
+    expect(inset.right).toBeCloseTo(0.1, 1);
+    expect(inset.top).toBeCloseTo(0.1, 1);
+    expect(inset.bottom).toBeCloseTo(0.1, 1);
+  });
+
   it('certificate uses the chosen frame image instead of the built-in frame', () => {
     const { container } = render(
       <CertificateSheet
@@ -84,7 +135,7 @@ describe('document border images', () => {
     const page = container.querySelector('[data-print-page]') as HTMLElement;
     expect(page.querySelector(`img[src="${border.dataUrl}"]`)).not.toBeNull();
     expect(page.querySelector(':scope > svg')).toBeNull();
-    expect(page.style.padding).toBe('24mm 30mm');
+    expect(page.style.padding).toBe('22mm 30mm');
   });
 
   it('without chosen images: certificate uses the default kbach frame, honor roll the gold plaque', () => {
@@ -98,7 +149,7 @@ describe('document border images', () => {
       />
     );
     expect(
-      cert.container.querySelector('img[src$="images/frames/certificate-kbach.jpg"]')
+      cert.container.querySelector('img[src$="images/frames/frame-orange.jpg"]')
     ).not.toBeNull();
     const roll = render(
       <HonorRollSheet

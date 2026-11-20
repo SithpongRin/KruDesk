@@ -7,7 +7,12 @@ import { toKhmerNumerals } from '../utils/khmerNumerals';
 import { getAssetUrl } from '../utils/assets';
 import { DocumentHeader, formatAcademicYearKm } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
-import type { DocumentBorderImage } from '../utils/documentBorder';
+import {
+  framePaddingMm,
+  resolveDocumentBorder,
+  type DocumentBorderImage,
+} from '../utils/documentBorder';
+import { FrameImage } from './FrameImage';
 
 interface CertificateSheetProps {
   cls: SchoolClass;
@@ -20,13 +25,6 @@ interface CertificateSheetProps {
   borderImage?: DocumentBorderImage;
 }
 
-/** Default frame: orange Khmer «ក្បាច់» border from the teacher's templates (public/images/frames). */
-const DEFAULT_CERTIFICATE_FRAME: DocumentBorderImage = {
-  dataUrl: getAssetUrl('images/frames/certificate-kbach.jpg'),
-  width: 2400,
-  height: 1644,
-};
-
 export const CertificateSheet: React.FC<CertificateSheetProps> = ({
   cls,
   profile,
@@ -38,6 +36,9 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
 }) => {
   const { month: monthNum } = parseYearMonth(month);
   const monthName = getKhmerMonthName(monthNum);
+  const frame = borderImage ?? resolveDocumentBorder('certificateBorder', undefined);
+  // Keep the text clear of the frame's innermost line (frames differ in width).
+  const pad = framePaddingMm(frame?.inner, 297, 210, { top: 22, right: 30, bottom: 22, left: 30 });
 
   return (
     <div className="bg-white text-black font-battambang">
@@ -54,7 +55,7 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
               width: '297mm',
               height: '210mm',
               // Room for the Khmer «ក្បាច់» frame image around the text.
-              padding: '24mm 30mm',
+              padding: `${pad.top}mm ${pad.right}mm ${pad.bottom}mm ${pad.left}mm`,
               boxSizing: 'border-box',
               backgroundColor: '#ffffff',
               color: '#000000',
@@ -65,12 +66,7 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
               justifyContent: 'center',
             }}
           >
-            <img
-              src={(borderImage ?? DEFAULT_CERTIFICATE_FRAME).dataUrl}
-              alt=""
-              className="absolute inset-0 w-full h-full pointer-events-none select-none"
-              style={{ objectFit: 'fill' }}
-            />
+            {frame && <FrameImage image={frame} pageWidthMm={297} pageHeightMm={210} />}
 
             <div className="relative z-10">
               <DocumentHeader profile={profile} color="#1d4ed8" />
@@ -99,16 +95,14 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
 
               <div className="text-center text-[14pt] leading-[1.9] max-w-[205mm] mx-auto mt-3">
                 សរសើរចំពោះសិស្សឈ្មោះ{' '}
-                <strong className="font-bold text-[14.5pt]">{item.student.nameKm}</strong>{' '}
-                រៀនថ្នាក់ទី <strong className="font-bold">{cls.name}</strong>{' '}
-                ដែលបានយកចិត្តទុកដាក់ ខិតខំសិក្សារៀនសូត្រ ទទួលបានចំណាត់ថ្នាក់លេខ{' '}
+                <strong className="font-bold text-[14.5pt]">{item.student.nameKm}</strong> រៀនថ្នាក់ទី{' '}
+                <strong className="font-bold">{cls.name}</strong> ដែលបានយកចិត្តទុកដាក់ ខិតខំសិក្សារៀនសូត្រ
+                ទទួលបានចំណាត់ថ្នាក់លេខ{' '}
                 <strong className="font-bold text-[#dc2626] text-[12.5pt]">
                   {toKhmerNumerals(item.rank ?? '')}
                 </strong>{' '}
                 និទ្ទេស{' '}
-                <strong className="font-bold text-[#dc2626] text-[12.5pt]">
-                  {gradeWord}
-                </strong>
+                <strong className="font-bold text-[#dc2626] text-[12.5pt]">{gradeWord}</strong>
               </div>
 
               <div
@@ -120,12 +114,12 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
             </div>
 
             <div className="relative z-10 mt-1">
+              {/* Same block as the honor roll: approver on the left, homeroom teacher on the right. */}
               <DocumentSignature
                 profile={profile}
                 signOptions={signOptions}
-                showTeacher={false}
                 gapMm={13}
-                fontSizePt={12}
+                fontSizePt={11}
               />
             </div>
           </div>

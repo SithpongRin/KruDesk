@@ -258,7 +258,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
             ))}
           </select>
 
-          <DocumentBorderButton borderKey="certificateBorder" current={certificateBorder} />
+          <DocumentBorderButton borderKey="certificateBorder" />
 
           <AppleButton
             variant="primary"

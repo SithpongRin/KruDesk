@@ -99,7 +99,7 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
 | Khmer group | monthly sheet: two part columns under number 1, no total column. Semester summary: ONE «អក្សរសាស្ត្រខ្មែរ» column (sum of parts) with one rank |
 | Averages | (sum of scores ÷ sum of max) × 50; **blank = 0 by default** (MoEYS divides by the full total; configurable); ties share rank (1,2,2,4). Display defaults to **truncation** (`កាត់ចោល`, e.g. `44.625 → 44.62`, configurable in Settings); **ranking, grade, and pass/fail use the 2-decimal displayed value** (`displayedAverage`) so equal printed averages share a rank |
 | Documents & Sidebar | Sidebar order: `ផ្ទាំងដើម · សិស្ស · បញ្ជីហៅឈ្មោះ · បញ្ជីវត្តមាន · បញ្ជីពិន្ទុ · លទ្ធផលប្រចាំខែ · តារាងកិត្តិយស · ប័ណ្ណសរសើរ · កាតសិស្ស · ការកំណត់` (mobile nav shows 4 primary + «ច្រើនទៀត»). «លទ្ធផលប្រចាំខែ» has a `ប្រចាំខែ \| ឆមាសទី ១ \| ឆមាសទី ២ \| ប្រចាំឆ្នាំ` period switch (`SemesterResultsSheet`, `SemesterReportSheet`, `AnnualResultsSheet`, `exportSemesterResultsExcel`, `exportAnnualResultsExcel`). Annual pass/fail: fails if `annualAvg < 25` OR counted absences `> absenceFailLimit` (default `30`, `absenceFailCountType: 'unexcused'`, `0` = off; `អវត្តមានលើសកំណត់` in ផ្សេងៗ when failing by absence only). Shared `DocumentSignDialog` prompts for lunar date (free text typed by teacher), place (remembered), and Gregorian date; Certificate grade words (`A: ល្អប្រសើរ`, `B: ល្អណាស់`, `C: ល្អ`, `D: ល្អបង្គួរ`, `E: មធ្យម`, `F: ខ្សោយ`) are editable and remembered |
-| Signatures | **Every document** (PDF and Excel) ends with the teacher's layout (2026-11-20, shared `DocumentSignature`): right — lunar line (typed once in the sign dialog, remembered as `documentLunarDate`, e.g. «ថ្ងៃ.....ខែ.....ឆ្នាំ មមែ អដ្ឋស័ក ព.ស. ២៥៧០»), «{place} ថ្ងៃទី.....ខែ.....ឆ្នាំ ២០២៦» (day/month blank for handwriting by default, `documentDateHandwritten`), «គ្រូទទួលបន្ទុកថ្នាក់», signing space, teacher's name (Moul); left — «បានឃើញ និង ឯកភាព» / «នាយកសាលា» (Moul) level with the teacher's title, **no dates and no director's name**. Certificate: director only (dates, «នាយកសាលា», name). Documents without the dialog (lists, attendance, score sheets, Excel) use the saved lunar line and place |
+| Signatures | **Every document** (PDF and Excel) ends with the teacher's layout (2026-11-20, shared `DocumentSignature`): right — lunar line (typed once in the sign dialog, remembered as `documentLunarDate`, e.g. «ថ្ងៃ.....ខែ.....ឆ្នាំ មមែ អដ្ឋស័ក ព.ស. ២៥៧០»), «{place} ថ្ងៃទី.....ខែ.....ឆ្នាំ ២០២៦» (day/month blank for handwriting by default, `documentDateHandwritten`), «គ្រូទទួលបន្ទុកថ្នាក់», signing space, teacher's name (Moul); left — «បានឃើញ និង ឯកភាព» / «នាយកសាលា» (Moul) level with the teacher's title, **no dates and no director's name**. Certificate: same two blocks as the honor roll (teacher, 2026-11-20). Documents without the dialog (lists, attendance, score sheets, Excel) use the saved lunar line and place |
 | Semesters | **Per MoEYS instruction ៦៧ អយក.សណន (2026-2027)**: grades 7–8 sit the S1 exam 8–13 Feb and S2 23–28 Aug → S1 months = Nov–Jan, S2 = Mar–Jul (`DEFAULT_SCORE_CONFIG`, `SCORE_RULES_VERSION = 2`; `resolveScoreConfig()` moves configs saved under older rules, incl. old backups, to these months and blank = 0 once; later Settings edits are kept). Semester `ពិន្ទុសរុប = displayed ខែប្រចាំឆមាស + displayed ប្រឡងឆមាស`, `មធ្យម = ពិន្ទុសរុប ÷ 2`; annual = (S1 + S2) ÷ 2 — **confirmed** by the ministry's worked examples (`src/lib/__tests__/ministry2026.test.ts`) |
 | Students who leave | `statusChangedAt`; still shown in the month they left, hidden afterwards |
 
@@ -171,15 +171,18 @@ PLAN.md            original plan (Khmer) · GEMINI_PROMPT.md original build brie
       closed; every caller shows the success toast only `if (exported)`. Card PDFs (`pdfService.ts`)
       keep their own `CardPreviewModal`. Tests: `src/services/__tests__/pdfPreview.test.tsx`.
 
-- [x] **Document frames (2026-11-20):** defaults chosen by the teacher from their own templates, shipped in
-      `public/images/frames/` (teacher's decision 2026-11-20, despite the images coming from other artists —
-      remove them if an artist objects): certificate = orange Khmer «ក្បាច់» border (`certificate-kbach.jpg`),
-      honor-roll names = gold plaque (`name-plaque.png`, white patch behind its open middle); honor-roll page =
-      built-in indigo band like sample 03. Each can be replaced per device: «ប្ដូរស៊ុម» (certificate,
-      honor roll) and «ប្ដូរស៊ុមឈ្មោះ» (honor roll) store a picked image in IndexedDB settings
-      (`certificateBorder`, `honorRollBorder`, `honorRollNameBanner`; travels in backups; turned to the page's
-      orientation, ≤ 2400 px JPEG / ≤ 1200 px PNG for the plaque). «ស៊ុមដើម» / «ស៊ុមឈ្មោះដើម» go back to the
-      defaults. The honor-roll title shows the month only; no crowns.
+- [x] **Document frames (2026-11-20):** the teacher's templates (Downloads\Template) ship in
+      `public/images/frames/` (teacher's decision 2026-11-20, although the images come from other artists —
+      remove them if an artist objects) and are listed in `BUILT_IN_PAGE_FRAMES` / `BUILT_IN_NAME_PLAQUES`
+      (`src/utils/documentBorder.ts`) with each frame's measured width per side (`inner`). «ប្ដូរស៊ុម» /
+      «ប្ដូរស៊ុមឈ្មោះ» open a picker (`DocumentBorderButton`): built-in thumbnails + «បញ្ចូលរូបខ្លួនឯង»
+      (upload, turned to the page's orientation, frame width measured with `measureFrameInset`). Stored in
+      settings as `{ presetId }` or the uploaded image (`certificateBorder`, `honorRollBorder`,
+      `honorRollNameBanner`; travels in backups). Defaults: certificate = orange kbach, honor-roll page =
+      drawn indigo band (sample 03), honor-roll names = gold plaque. Page padding follows the frame width
+      (`framePaddingMm`), and the honor roll shrinks its content to fit inside wide frames (checked for every
+      built-in frame on both documents). The gold crest frame is certificate-only (its crests would sit on
+      the honor roll's long sides). Honor-roll title = month only; no crowns.
 
 ## 7. «បញ្ជីពិន្ទុ» vs the MoEYS standard (checked 2026-11-20)
 

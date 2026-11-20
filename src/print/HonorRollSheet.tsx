@@ -1,12 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Profile, SchoolClass } from '../types/domain';
 import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
 import type { MonthlyResultRow } from '../lib/monthlyResults';
 import { toKhmerNumerals } from '../utils/khmerNumerals';
 import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
-import type { DocumentBorderImage } from '../utils/documentBorder';
-import { getAssetUrl } from '../utils/assets';
+import {
+  framePaddingMm,
+  resolveDocumentBorder,
+  type DocumentBorderImage,
+} from '../utils/documentBorder';
+import { FrameImage } from './FrameImage';
 
 interface HonorRollSheetProps {
   cls: SchoolClass;
@@ -61,12 +65,8 @@ const HonorRollBorderSvg: React.FC = () => (
   </svg>
 );
 
-/** Default name plaque (gold Khmer frame chosen by the teacher, public/images/frames). */
-const DEFAULT_NAME_PLAQUE: DocumentBorderImage = {
-  dataUrl: getAssetUrl('images/frames/name-plaque.png'),
-  width: 1200,
-  height: 347,
-};
+/** Only used if the built-in plaque list were ever emptied. */
+const FALLBACK_PLAQUE: DocumentBorderImage = { dataUrl: '', width: 1200, height: 347 };
 
 const SilhouetteSvg: React.FC = () => (
   <svg viewBox="0 0 64 80" className="w-full h-full bg-slate-200 text-slate-400">
@@ -107,7 +107,8 @@ const PyramidCard: React.FC<{
   nameBanner?: DocumentBorderImage;
 }> = ({ item, nameBanner }) => {
   // The plaque keeps its own proportions; its open middle is about half its width.
-  const plaque = nameBanner ?? DEFAULT_NAME_PLAQUE;
+  const plaque =
+    nameBanner ?? resolveDocumentBorder('honorRollNameBanner', undefined) ?? FALLBACK_PLAQUE;
   const bannerWidthMm = 54;
   const bannerHeightMm = Math.min(22, Math.max(10, (bannerWidthMm * plaque.height) / plaque.width));
   return (
@@ -169,16 +170,64 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
   const row3 = items.slice(3, 5);
   const row4 = items.slice(5, 6);
 
+  // Wide frames leave less room: shrink the whole content (never enlarge) so the photos and the
+  // signatures always stay inside the frame. Re-measured when fonts finish loading.
+  const pageRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [fitScale, setFitScale] = useState(1);
+  useLayoutEffect(() => {
+    const page = pageRef.current;
+    const content = contentRef.current;
+    if (!page || !content) return;
+    const measure = () => {
+      const cs = getComputedStyle(page);
+      const available =
+        page.clientHeight - parseFloat(cs.paddingTop || '0') - parseFloat(cs.paddingBottom || '0');
+      const needed = content.offsetHeight;
+      const next = needed > 0 && available > 0 ? Math.min(1, available / needed) : 1;
+      setFitScale((prev) => (Math.abs(prev - next) > 0.002 ? next : prev));
+    };
+    measure();
+    let cancelled = false;
+    document.fonts?.ready.then(() => {
+      if (!cancelled) measure();
+    });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    ro?.observe(content);
+    return () => {
+      cancelled = true;
+      ro?.disconnect();
+    };
+  }, [borderImage, nameBanner, items, profile, signOptions]);
+
   return (
     <div className="bg-white text-black font-battambang">
       <div
+        ref={pageRef}
         data-print-page
-        className="relative"
+        className="relative overflow-hidden"
         style={{
           width: '210mm',
           height: '297mm',
           // An image frame (e.g. Khmer «ក្បាច់») is wider than the built-in band.
-          padding: borderImage ? '20mm 21mm 16mm' : '15mm 17mm 14mm',
+          padding: borderImage
+            ? (() => {
+                // Keep everything clear of the frame's innermost line (frames differ in width).
+                const p = framePaddingMm(
+                  borderImage.inner,
+                  210,
+                  297,
+                  {
+                    top: 18,
+                    right: 19,
+                    bottom: 15,
+                    left: 19,
+                  },
+                  3
+                );
+                return `${p.top}mm ${p.right}mm ${p.bottom}mm ${p.left}mm`;
+              })()
+            : '15mm 17mm 14mm',
           boxSizing: 'border-box',
           backgroundColor: '#ffffff',
           color: '#1e3a8a',
@@ -189,17 +238,20 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
         }}
       >
         {borderImage ? (
-          <img
-            src={borderImage.dataUrl}
-            alt=""
-            className="absolute inset-0 w-full h-full pointer-events-none select-none"
-            style={{ objectFit: 'fill' }}
-          />
+          <FrameImage image={borderImage} pageWidthMm={210} pageHeightMm={297} />
         ) : (
           <HonorRollBorderSvg />
         )}
 
-        <div className="relative z-10">
+        <div
+          ref={contentRef}
+          className="relative z-10"
+          style={
+            fitScale < 1
+              ? { transform: `scale(${fitScale})`, transformOrigin: 'top center' }
+              : undefined
+          }
+        >
           <DocumentHeader profile={profile} color="#1e3a8a" spacious />
 
           <div className="text-center mb-3 leading-relaxed">
@@ -256,17 +308,17 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
               </div>
             )}
           </div>
-        </div>
 
-        {/* Signatures right under the photos, like sample 03, so names never reach the frame. */}
-        <div className="relative z-10" style={{ marginTop: '7mm' }}>
-          <DocumentSignature
-            profile={profile}
-            signOptions={signOptions}
-            color="#1e3a8a"
-            gapMm={17}
-            fontSizePt={9.5}
-          />
+          {/* Signatures right under the photos, like sample 03, so names never reach the frame. */}
+          <div style={{ marginTop: '7mm' }}>
+            <DocumentSignature
+              profile={profile}
+              signOptions={signOptions}
+              color="#1e3a8a"
+              gapMm={17}
+              fontSizePt={9.5}
+            />
+          </div>
         </div>
       </div>
     </div>
