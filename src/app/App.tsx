@@ -19,6 +19,7 @@ import { AuthStatusScreen } from '../features/auth/AuthStatusScreen';
 import { LoginScreen } from '../features/auth/LoginScreen';
 import { useAuthStore } from '../features/auth/useAuthStore';
 import { FirstSignInConflictModal } from '../features/sync/FirstSignInConflictModal';
+import { LegacyImportModal } from '../features/sync/LegacyImportModal';
 import { useSyncStore } from '../services/sync/useSyncStore';
 
 const DashboardView = lazy(() =>
@@ -250,6 +251,19 @@ export const App: React.FC = () => {
             </AppleButton>
           </div>
         )}
+        {toastPortal}
+      </div>
+    );
+  }
+
+  if (
+    canAccessUserDb &&
+    syncEnabled &&
+    (firstSignInPhase === 'legacy-import' || firstSignInPhase === 'importing-legacy')
+  ) {
+    return (
+      <div className="h-screen w-screen bg-[#f5f5f7] dark:bg-[#111214]">
+        <LegacyImportModal />
         {toastPortal}
       </div>
     );

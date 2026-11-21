@@ -5,12 +5,15 @@ import { getFirebaseServices, isFirebaseConfigured } from '../firebase/client';
 import { useAppStore } from '../../store/useAppStore';
 import { SYNC_INITIAL_DONE_KEY } from './syncCodec';
 import type { FirstSignInConflictChoice } from './firstSignIn';
+import type { LegacyDbSummary } from './legacyImport';
 import type { SyncEngine, SyncStatusSnapshot } from './syncEngine';
 
 export const FIRST_SIGN_IN_SLOW_TIMEOUT_MS = 20_000;
 
 export type FirstSignInPhase =
   | 'idle'
+  | 'legacy-import'
+  | 'importing-legacy'
   | 'checking'
   | 'pulling'
   | 'uploading'
@@ -32,8 +35,11 @@ interface SyncStoreState {
   firstSignInSlow: boolean;
   conflictSummary: FirstSignInConflictSummary | null;
   conflictError: string | null;
+  legacyImportSummary: LegacyDbSummary | null;
+  legacyImportError: string | null;
   errorDismissed: boolean;
 
+  resolveLegacyImport: (choice: 'import' | 'decline') => Promise<void>;
   resolveConflict: (choice: FirstSignInConflictChoice) => Promise<void>;
   retryFirstSignIn: () => Promise<void>;
   deferFirstSignInToLocal: () => void;
@@ -113,6 +119,8 @@ export function stopSyncEngine(): void {
     firstSignInSlow: false,
     conflictSummary: null,
     conflictError: null,
+    legacyImportSummary: null,
+    legacyImportError: null,
     errorDismissed: false,
   });
 }
@@ -139,6 +147,23 @@ async function attemptFirstSignIn(
       clearSlowTimer();
       useSyncStore.setState({ firstSignInPhase: 'done', firstSignInSlow: false });
       await engine.start();
+      return;
+    }
+
+    // Step 6c (§5): BEFORE the first sign-in decision, check if unclaimed legacy `KruDeskDB`
+    // has data on this device so the normal flow (upload or conflict Replace) handles it.
+    const { inspectLegacyDbForUser } = await import('./legacyImport');
+    if (isCancelled()) return;
+    const legacySummary = await inspectLegacyDbForUser(uid);
+    if (isCancelled()) return;
+    if (legacySummary) {
+      clearSlowTimer();
+      useSyncStore.setState({
+        firstSignInPhase: 'legacy-import',
+        firstSignInSlow: false,
+        legacyImportSummary: legacySummary,
+        legacyImportError: null,
+      });
       return;
     }
 
@@ -280,6 +305,8 @@ export async function startSyncForUser(uid: string): Promise<void> {
     firstSignInSlow: false,
     conflictSummary: null,
     conflictError: null,
+    legacyImportSummary: null,
+    legacyImportError: null,
     errorDismissed: false,
   });
 
@@ -411,7 +438,54 @@ export const useSyncStore = create<SyncStoreState>((set, get) => ({
   firstSignInSlow: false,
   conflictSummary: null,
   conflictError: null,
+  legacyImportSummary: null,
+  legacyImportError: null,
   errorDismissed: false,
+
+  resolveLegacyImport: async (choice) => {
+    const engine = activeEngine;
+    const localDb = activeLocalDb;
+    const firestore = activeFirestore;
+    const uid = activeSyncUid;
+    const tokenAtStart = sessionToken;
+
+    if (!engine || !localDb || !firestore || !uid) {
+      return;
+    }
+
+    set({ firstSignInPhase: 'importing-legacy', legacyImportError: null });
+    try {
+      const { declineLegacyDbForUser, importLegacyDbIntoUserDb } = await import('./legacyImport');
+      if (choice === 'import') {
+        const summary = await importLegacyDbIntoUserDb(uid, localDb);
+        if (tokenAtStart !== sessionToken) return;
+        await useAppStore.getState().hydratePreferences();
+        useAppStore.getState().addToast({
+          type: 'success',
+          title: 'បាននាំចូលទិន្នន័យចាស់ជោគជ័យ!',
+          message: `បានចម្លង ${summary.classesCount} ថ្នាក់ និងសិស្ស ${summary.studentsCount} នាក់ចូលគណនីរបស់អ្នក។`,
+        });
+      } else {
+        declineLegacyDbForUser(uid);
+      }
+
+      if (tokenAtStart !== sessionToken) return;
+      set({ legacyImportSummary: null, legacyImportError: null });
+
+      // Continue straight into the normal first sign-in decision (upload or Replace conflict)
+      await attemptFirstSignIn(engine, localDb, firestore, uid, tokenAtStart);
+    } catch (err) {
+      if (tokenAtStart !== sessionToken) return;
+      console.error('[useSyncStore] Legacy import failed:', err);
+      set({
+        firstSignInPhase: 'legacy-import',
+        legacyImportError:
+          err instanceof Error
+            ? err.message
+            : 'មិនអាចនាំចូលទិន្នន័យចាស់បានទេ សូមព្យាយាមម្ដងទៀត។',
+      });
+    }
+  },
 
   resolveConflict: async (choice) => {
     const engine = activeEngine;
