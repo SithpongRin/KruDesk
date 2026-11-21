@@ -1,6 +1,7 @@
 import React from 'react';
 import { KruDeskWordmark } from '../../components/common/KruDeskWordmark';
-import { Clock, Ban, ShieldAlert, RefreshCw, LogOut, AlertCircle } from 'lucide-react';
+import { Clock, Ban, ShieldAlert, RefreshCw, LogOut, AlertCircle, Send } from 'lucide-react';
+import { ADMIN_TELEGRAM_HANDLE, ADMIN_TELEGRAM_URL, TELEGRAM_BLUE } from '../../lib/contact';
 import { AppleButton } from '../../components/common/AppleButton';
 import type { UserApprovalStatus } from './authCache';
 import { useAuthStore } from './useAuthStore';
@@ -113,6 +114,18 @@ export const AuthStatusScreen: React.FC<AuthStatusScreenProps> = ({ status }) =>
             ចាកចេញ
           </AppleButton>
         </div>
+
+        <a
+          href={ADMIN_TELEGRAM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="contact-admin-telegram"
+          className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-xs font-semibold shadow-sm hover:opacity-90 active:scale-[0.98] transition-all"
+          style={{ backgroundColor: TELEGRAM_BLUE }}
+        >
+          <Send size={15} />
+          <span>ទាក់ទង Admin តាម Telegram ({ADMIN_TELEGRAM_HANDLE})</span>
+        </a>
       </div>
     </div>
   );
