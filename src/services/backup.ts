@@ -11,6 +11,7 @@ import { toLocalDateKey } from '../lib/khmerDate';
 import {
   isInternalSyncSettingKey,
   SYNC_DEVICE_ID_KEY,
+  SYNC_INITIAL_DONE_KEY,
   SYNC_LAST_PULLED_AT_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
 } from './sync/syncCodec';
@@ -191,12 +192,22 @@ async function normalizeRestoredClassSubjects(
 }
 
 export async function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(reader.error || new Error('Failed to read blob'));
-    reader.readAsDataURL(blob);
-  });
+  if (typeof FileReader !== 'undefined') {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error || new Error('Failed to read blob'));
+      reader.readAsDataURL(blob);
+    });
+  }
+  const buf = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  const mime = blob.type || 'image/jpeg';
+  return `data:${mime};base64,${btoa(binary)}`;
 }
 
 export function dataUrlToBlob(dataUrl: string): Blob | undefined {
@@ -368,9 +379,10 @@ export async function restoreBackupPayload(
       const studentIdMap = new Map<number, number>();
 
       if (mode === 'replace') {
-        const [deviceIdRow, lastPulledRow] = await Promise.all([
+        const [deviceIdRow, lastPulledRow, initialDoneRow] = await Promise.all([
           targetDb.settings.get(SYNC_DEVICE_ID_KEY),
           targetDb.settings.get(SYNC_LAST_PULLED_AT_KEY),
+          targetDb.settings.get(SYNC_INITIAL_DONE_KEY),
         ]);
 
         await Promise.all([
@@ -466,6 +478,9 @@ export async function restoreBackupPayload(
         }
         if (lastPulledRow) {
           await targetDb.settings.put(lastPulledRow);
+        }
+        if (initialDoneRow) {
+          await targetDb.settings.put(initialDoneRow);
         }
         if (targetDb.outboxEnabled) {
           await targetDb.settings.put({

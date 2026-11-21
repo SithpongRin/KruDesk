@@ -6,6 +6,7 @@ import { useAppStore, type ActiveView } from '../../store/useAppStore';
 import { useAuthStore } from '../../features/auth/useAuthStore';
 import { KHMER_MONTHS, parseYearMonth } from '../../lib/khmerDate';
 import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
+import { SyncStatusBadge } from './SyncStatusBadge';
 
 const VIEW_TITLES: Record<ActiveView, string> = {
   dashboard: 'ផ្ទាំងដើម',
@@ -83,6 +84,8 @@ export const AppleHeader: React.FC = () => {
         <h2 className="text-sm sm:text-base font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] tracking-tight font-battambang truncate">
           {VIEW_TITLES[activeView]}
         </h2>
+
+        <SyncStatusBadge />
       </div>
 
       {/* Class picker & Month picker */}

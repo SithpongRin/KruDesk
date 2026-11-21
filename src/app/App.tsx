@@ -7,6 +7,7 @@ import type { Profile } from '../types/domain';
 import { CAMBODIA_PROVINCES } from '../lib/provinces';
 import { AppleSidebar } from '../components/layout/AppleSidebar';
 import { AppleHeader } from '../components/layout/AppleHeader';
+import { SyncErrorBanner } from '../components/layout/SyncStatusBadge';
 import { MobileBottomNav } from '../components/layout/MobileBottomNav';
 import { OnboardingView } from '../components/layout/OnboardingView';
 import { AppleModal } from '../components/common/AppleModal';
@@ -17,6 +18,8 @@ import { MOEYS_EMBLEM_DATA_URI } from '../utils/moeysEmblemDataUri';
 import { AuthStatusScreen } from '../features/auth/AuthStatusScreen';
 import { LoginScreen } from '../features/auth/LoginScreen';
 import { useAuthStore } from '../features/auth/useAuthStore';
+import { FirstSignInConflictModal } from '../features/sync/FirstSignInConflictModal';
+import { useSyncStore } from '../services/sync/useSyncStore';
 
 const DashboardView = lazy(() =>
   import('../features/dashboard/DashboardView').then((m) => ({ default: m.DashboardView }))
@@ -71,6 +74,13 @@ export const App: React.FC = () => {
     userDbReady,
     initAuth,
   } = useAuthStore();
+  const {
+    enabled: syncEnabled,
+    firstSignInPhase,
+    firstSignInSlow,
+    retryFirstSignIn,
+    deferFirstSignInToLocal,
+  } = useSyncStore();
   const [isReady, setIsReady] = useState(false);
 
   const canAccessUserDb =
@@ -197,6 +207,74 @@ export const App: React.FC = () => {
     }
   }
 
+  if (
+    canAccessUserDb &&
+    syncEnabled &&
+    (firstSignInPhase === 'checking' ||
+      firstSignInPhase === 'pulling' ||
+      firstSignInPhase === 'uploading')
+  ) {
+    const progressLabel =
+      firstSignInPhase === 'pulling'
+        ? 'កំពុងទាញទិន្នន័យពី Cloud…'
+        : firstSignInPhase === 'uploading'
+          ? 'កំពុងបញ្ជូនទិន្នន័យទៅ Cloud…'
+          : 'កំពុងពិនិត្យទិន្នន័យ Cloud…';
+
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#f5f5f7] dark:bg-[#111214] px-6">
+        <div className="w-16 h-16 rounded-3xl bg-white dark:bg-[#1c1c1e] shadow-md p-3 flex items-center justify-center mb-4 border border-black/[0.04] dark:border-white/[0.08]">
+          <img
+            src={MOEYS_EMBLEM_DATA_URI}
+            alt="MoEYS Logo"
+            className="w-full h-full object-contain"
+          />
+        </div>
+        <h2 className="text-base font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] font-moul tracking-wide">
+          KruDesk
+        </h2>
+        <p className="text-xs text-[#6e6e73] dark:text-[#98989d] mt-2 font-battambang">
+          {firstSignInSlow ? 'អ៊ីនធឺណិតយឺត…' : progressLabel}
+        </p>
+        <div className="w-56 h-1.5 mt-4 rounded-full bg-black/[0.08] dark:bg-white/[0.1] overflow-hidden">
+          <div className="h-full w-1/2 rounded-full bg-[#0071e3] animate-pulse" />
+        </div>
+        {firstSignInSlow && (
+          <div className="mt-5 flex flex-col sm:flex-row items-center gap-2.5">
+            <AppleButton
+              variant="primary"
+              size="sm"
+              onClick={() => void retryFirstSignIn()}
+            >
+              ព្យាយាមម្ដងទៀត
+            </AppleButton>
+            <AppleButton
+              variant="secondary"
+              size="sm"
+              onClick={deferFirstSignInToLocal}
+            >
+              ប្រើក្នុងឧបករណ៍នេះសិន (sync ពេលក្រោយ)
+            </AppleButton>
+          </div>
+        )}
+        {toastPortal}
+      </div>
+    );
+  }
+
+  if (
+    canAccessUserDb &&
+    syncEnabled &&
+    (firstSignInPhase === 'conflict' || firstSignInPhase === 'resolving')
+  ) {
+    return (
+      <div className="h-screen w-screen bg-[#f5f5f7] dark:bg-[#111214]">
+        <FirstSignInConflictModal />
+        {toastPortal}
+      </div>
+    );
+  }
+
   return (
     <AppInner
       key={activeDbName}
@@ -315,6 +393,7 @@ const AppInner: React.FC<{
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden print:block print:h-auto print:overflow-visible">
         <AppleHeader />
+        <SyncErrorBanner />
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden pb-20 md:pb-6 print:overflow-visible print:pb-0">
           <Suspense

@@ -31,6 +31,7 @@ import {
   encodeSafeKey,
   isSyncedSettingKey,
   SYNC_DEVICE_ID_KEY,
+  SYNC_INITIAL_DONE_KEY,
   SYNC_LAST_PULLED_AT_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
 } from '../services/sync/syncCodec';
@@ -1025,9 +1026,10 @@ export async function clearAllAppData(
 
   if (options?.syncToCloud && targetDb.outboxEnabled) {
     await targetDb.transaction('rw', allTables, async () => {
-      const [deviceIdRow, lastPulledRow] = await Promise.all([
+      const [deviceIdRow, lastPulledRow, initialDoneRow] = await Promise.all([
         targetDb.settings.get(SYNC_DEVICE_ID_KEY),
         targetDb.settings.get(SYNC_LAST_PULLED_AT_KEY),
+        targetDb.settings.get(SYNC_INITIAL_DONE_KEY),
       ]);
 
       await Promise.all([
@@ -1048,6 +1050,9 @@ export async function clearAllAppData(
       }
       if (lastPulledRow) {
         await targetDb.settings.put(lastPulledRow);
+      }
+      if (initialDoneRow) {
+        await targetDb.settings.put(initialDoneRow);
       }
       await targetDb.settings.put({
         key: SYNC_PENDING_FULL_REPLACE_KEY,

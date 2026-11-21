@@ -88,12 +88,14 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: getTeacherFirestore('DeviceA'),
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
     });
     const engineB = new SyncEngine({
       localDb: dbB,
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     // Device A writes synced profile setting + device-only theme setting
@@ -208,12 +210,14 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: getTeacherFirestore('DeviceA'),
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
     });
     const engineB = new SyncEngine({
       localDb: dbB,
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     // Seed initial class and 2 students from Device A while online
@@ -291,12 +295,14 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: getTeacherFirestore('DeviceA'),
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
     });
     const engineB = new SyncEngine({
       localDb: dbB,
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     // Seed shared class and 2 students
@@ -387,12 +393,14 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: getTeacherFirestore('DeviceA'),
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
     });
     const engineB = new SyncEngine({
       localDb: dbB,
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     const classId = await dbA.classes.add({
@@ -460,12 +468,14 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: getTeacherFirestore('DeviceA'),
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
     });
     const engineB = new SyncEngine({
       localDb: dbB,
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     // Seed initial class and 2 students on both devices
@@ -570,12 +580,14 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: fsA,
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
     });
     const engineB = new SyncEngine({
       localDb: dbB,
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     const classId = await dbA.classes.add({
@@ -670,12 +682,14 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: fsA,
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
     });
     const engineB = new SyncEngine({
       localDb: dbB,
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     const classId = await dbA.classes.add({
@@ -797,6 +811,7 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: getTeacherFirestore('DeviceA'),
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
       onError: (msg) => errors.push(msg),
     });
     const engineB = new SyncEngine({
@@ -804,6 +819,7 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     // Normal class + student alongside an oversized setting (> 900 KB)
@@ -880,12 +896,14 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: getTeacherFirestore('DeviceA'),
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
     });
     const engineB = new SyncEngine({
       localDb: dbB,
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     // Seed initial data on Device A and sync to Device B
@@ -979,6 +997,7 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: fsA,
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
       onError: (msg) => errors.push(msg),
     });
     const engineB = new SyncEngine({
@@ -986,6 +1005,7 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     const class1Id = await dbA.classes.add({
@@ -1080,12 +1100,14 @@ describe('SyncEngine multi-device synchronization with Firestore Emulator (§6.3
       firestore: getTeacherFirestore('DeviceA'),
       uid: TEACHER_UID,
       deviceId: 'device-A',
+      requireInitialDone: false,
     });
     const engineB = new SyncEngine({
       localDb: dbB,
       firestore: getTeacherFirestore('DeviceB'),
       uid: TEACHER_UID,
       deviceId: 'device-B',
+      requireInitialDone: false,
     });
 
     const classId = await dbA.classes.add({

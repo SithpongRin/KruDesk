@@ -11,6 +11,7 @@ import {
   isEmulatorEnabled,
   isFirebaseConfigured,
 } from '../../services/firebase/client';
+import { startSyncForUser, stopSyncEngine } from '../../services/sync/useSyncStore';
 import { useAppStore } from '../../store/useAppStore';
 import {
   readCachedAuthStatus,
@@ -136,10 +137,13 @@ export async function activateUserDatabase(uid: string): Promise<{ dbName: strin
   openedDbUid = uid;
   await openDbForUser(uid);
   await useAppStore.getState().hydratePreferences();
+  void startSyncForUser(uid);
   return { dbName: getUserDbName(uid), reloaded: false };
 }
 
 export function deactivateUserDatabase(): void {
+  // Always stop SyncEngine (clearing debounce timers & listeners) BEFORE closing Dexie
+  stopSyncEngine();
   openedDbUid = null;
   closeUserDb();
   resetInMemoryStores();
@@ -408,6 +412,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return () => {
       cancelled = true;
       cleanupDataSubscriptions();
+      stopSyncEngine();
       if (unsubAuth) {
         unsubAuth();
         unsubAuth = null;

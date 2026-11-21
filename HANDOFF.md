@@ -31,7 +31,7 @@ tracked file.
 - `d8d938b` Admin menu «គ្រប់គ្រងអ្នកប្រើ» in the Sidebar (Admin only) — **not pushed**.
 - `43be585` per-account Dexie `KruDeskDB_<uid>` (old `KruDeskDB` never deleted), safe random integer ids
   for classes/students/holidays (Dexie v5 + `outbox` table), full reload on sign-out/account switch — **not pushed**.
-- **Cloud sync step 3 (committed locally, not pushed):** `src/services/sync/{syncCodec,syncEngine,photoCompression}.ts`,
+- `19fbd7f` **Cloud sync step 3 (not pushed):** `src/services/sync/{syncCodec,syncEngine,photoCompression}.ts`,
   atomic Dexie DBCore outbox middleware (`src/db/database.ts`, enabled only on `KruDeskDB_<uid>`),
   `docs` rule in `firestore.rules`, `tests/syncEngine.emulator.test.ts`. All 6 review issues + A–D fixed:
   per-transaction remote-apply marker, `class → students → photo → others` apply order + durable
@@ -39,18 +39,37 @@ tracked file.
   `{ __deleted: true, ts }` + self-heal, whole-doc 900 KB check keeping oversized entries without blocking
   other docs, per-entry photo error catch (unreadable Blobs stay in outbox without blocking other docs),
   single-flight `opChain` lock, full-replace sync for restore / «លុបទិន្នន័យទាំងអស់» with every-device
-  Khmer warnings. Verified: `npm test` 192/192, `npm run test:rules` 18/18 (plus Claude's 7/7 repro), build OK.
+  Khmer warnings.
+- **Cloud sync step 4 (committed locally, not pushed):** hooked `SyncEngine` into app lifecycle
+  (`src/services/sync/{useSyncStore,firstSignIn,cloudSnapshot}.ts`, `useAuthStore.ts`, `App.tsx`,
+  `AppleHeader.tsx`, `SyncStatusBadge.tsx`, `FirstSignInConflictModal.tsx`; lazy-loaded so initial bundle
+  stays small).
+  - Lifecycle: starts once for approved/admin users right after `openDbForUser(uid)` only when Firebase is
+    configured (GitHub Pages stays local-only); `stopSyncEngine()` runs synchronously BEFORE `closeUserDb()`;
+    `online`/`offline`/`focus`/`visibilitychange` wired.
+  - First sign-in phases (`idle | checking | pulling | uploading | conflict | resolving | awaiting-first-sync | done`),
+    per-account internal `syncInitialDone` flag (read before setting phase so normal opens never flash the
+    checking screen), 20 s slow-network timeout with «ព្យាយាមម្ដងទៀត» and «ប្រើក្នុងឧបករណ៍នេះសិន (sync ពេលក្រោយ)»
+    → `awaiting-first-sync` (header shows «មិនទាន់ sync — រង់ចាំអ៊ីនធឺណិត»; if an in-flight pull/upload finishes
+    without error after defer, `syncInitialDone` is still marked true so no false conflict appears).
+  - Engine guard: `requireInitialDone` defaults to `true` inside `SyncEngine` (blocks push/pull/syncNow/
+    debounce until `syncInitialDone === true`, preventing silent merge; first sign-in passes explicit internal
+    bypass; direct engine tests pass `requireInitialDone: false`).
+  - Conflict replace (§1.6): saves **both** durable gzipped Cloud snapshots (`pre-replace-device` +
+    `pre-replace-cloud`, chunks ≤ 700 KB, SHA-256 verified) to `users/{uid}/backups` before replacing (aborts
+    without touching anything if either snapshot fails), plus best-effort browser JSON download.
+  - Verified: `npm test` 197/197, `npm run test:rules` 24/24 (rules 7 + syncEngine 11 + firstSignIn 6),
+    build OK.
 
 **Known items & decisions**
-- Teacher's decision for §1.6 (both device and cloud have data): **Replace, not merge** — first download the
-  device backup JSON and save a cloud snapshot to `users/{uid}/backups`, then confirm in Khmer that every device
-  will be replaced.
+- Teacher's decision for §1.6 (both device and cloud have data): **Replace, not merge** — both device and
+  cloud snapshots are saved to `users/{uid}/backups` (plus extra local JSON download) before replacing.
 - Tombstones are never purged yet, so docs grow slowly → **plan a purge (e.g. tombstones older than 90 days) in step 6**.
 
-**Next steps:** step 4 (hook SyncEngine into app, header sync status, first sign-in flows §1.6), step 5
-(deploy `docs` rule — Claude reviews first), step 6 (daily cloud snapshots, tombstone purge, import of old
-`KruDeskDB` / backups), step 7 (docs). Push to `main` only when sync works end-to-end. Do not let other
-teachers use it before then (data is still per-device).
+**Next steps:** step 5 (deploy `firestore.rules` with `docs` rule — Claude reviewed OK, teacher runs deploy;
+test on real phone + laptop via a Vercel Preview branch before touching `main`), step 6 (daily cloud
+snapshots, tombstone purge, import of old `KruDeskDB` / backups), step 7 (docs). Push to `main` only after
+real phone + laptop testing passes (deploy order: rules deploy → phone + laptop test → push `main`).
 
 **Emulator notes (Java 24 on this PC):** run `npm run test:rules`. If the emulator fails with "Unable to
 establish loopback connection", set `JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=D:/KruDesk/.firebase/jtmp`

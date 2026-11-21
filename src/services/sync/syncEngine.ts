@@ -46,6 +46,7 @@ import {
   parseAttendanceSessionRowKey,
   stripUndefinedDeep,
   SYNC_DEVICE_ID_KEY,
+  SYNC_INITIAL_DONE_KEY,
   SYNC_LAST_PULLED_AT_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
   SYNC_PENDING_PHOTOS_KEY,
@@ -70,8 +71,21 @@ export interface SyncEngineOptions {
   uid: string;
   deviceId?: string;
   debounceMs?: number;
+  /**
+   * When true (default — safer for app runtime), blocks all push/pull/syncNow/
+   * debounced pushes until `syncInitialDone === true` in local settings, preventing a silent
+   * merge before the first sign-in decision (§1.6). First sign-in helpers pass an explicit
+   * internal `bypassInitialSyncGuard: true` flag once the decision is made. Low-level unit/
+   * emulator tests that construct SyncEngine directly without first sign-in pass `false`.
+   */
+  requireInitialDone?: boolean;
   onStatusChange?: (snapshot: SyncStatusSnapshot) => void;
   onError?: (khmerMessage: string) => void;
+}
+
+export interface PushOutboxOptions {
+  /** Internal bypass used exclusively by the first sign-in flow after deciding Replace/Upload. */
+  bypassInitialSyncGuard?: boolean;
 }
 
 export interface PushOutboxResult {
@@ -83,6 +97,8 @@ export interface PushOutboxResult {
 
 export interface PullChangesOptions {
   forceAll?: boolean;
+  /** Internal bypass used exclusively by the first sign-in flow after deciding Pull/Replace. */
+  bypassInitialSyncGuard?: boolean;
   /** Optional test/diagnostic hook invoked right before each pulled doc is applied. */
   onBeforeApplyDoc?: (docId: string) => Promise<void> | void;
 }
@@ -928,6 +944,7 @@ export class SyncEngine {
   private readonly uid: string;
   private deviceId: string;
   private readonly debounceMs: number;
+  private readonly requireInitialDone: boolean;
   private readonly onStatusChange?: (snapshot: SyncStatusSnapshot) => void;
   private readonly onError?: (khmerMessage: string) => void;
 
@@ -938,6 +955,8 @@ export class SyncEngine {
   private lastError: string | null = null;
   private isSyncing = false;
   private lastFocusPullAt = 0;
+  /** Cached flag once `syncInitialDone === true` has been verified from IndexedDB. */
+  private initialSyncConfirmed = false;
   /** Single-flight promise chain so push/pull/full-replace operations never overlap. */
   private opChain: Promise<unknown> = Promise.resolve();
 
@@ -947,8 +966,18 @@ export class SyncEngine {
     this.uid = options.uid;
     this.deviceId = options.deviceId || `dev_${Math.random().toString(36).slice(2, 10)}`;
     this.debounceMs = options.debounceMs ?? 2000;
+    this.requireInitialDone = options.requireInitialDone ?? true;
     this.onStatusChange = options.onStatusChange;
     this.onError = options.onError;
+  }
+
+  private async isBlockedByInitialSync(bypass?: boolean): Promise<boolean> {
+    if (!this.requireInitialDone || bypass) return false;
+    if (!this.localDb.isOpen()) return true;
+    const row = await this.localDb.settings.get(SYNC_INITIAL_DONE_KEY);
+    const done = row?.value === true;
+    this.initialSyncConfirmed = done;
+    return !done;
   }
 
   private runSerialized<T>(fn: () => Promise<T>): Promise<T> {
@@ -975,12 +1004,13 @@ export class SyncEngine {
     const wasOffline = this.offlineMode;
     this.offlineMode = offline;
     if (offline) {
-      if (this.debounceTimer) {
-        clearTimeout(this.debounceTimer);
-        this.debounceTimer = null;
-      }
+      this.clearDebounceTimer();
       void this.emitStatus();
     } else if (wasOffline) {
+      if (this.requireInitialDone && !this.initialSyncConfirmed) {
+        void this.emitStatus();
+        return;
+      }
       void this.syncNow();
     }
   }
@@ -991,7 +1021,7 @@ export class SyncEngine {
     return false;
   }
 
-  async start(): Promise<void> {
+  async start(options?: { skipInitialSync?: boolean }): Promise<void> {
     await this.localDb.runRemoteTransaction([this.localDb.settings], async () => {
       const saved = await this.localDb.settings.get(SYNC_DEVICE_ID_KEY);
       if (typeof saved?.value === 'string' && saved.value) {
@@ -1001,18 +1031,27 @@ export class SyncEngine {
       }
     });
 
-    this.unsubOutboxHook = this.localDb.onOutboxQueued(() => {
-      this.scheduleDebouncedPush();
-    });
+    if (this.requireInitialDone) {
+      const initRow = await this.localDb.settings.get(SYNC_INITIAL_DONE_KEY);
+      this.initialSyncConfirmed = initRow?.value === true;
+    }
+
+    if (!this.unsubOutboxHook) {
+      this.unsubOutboxHook = this.localDb.onOutboxQueued(() => {
+        this.scheduleDebouncedPush();
+      });
+    }
+
+    if (options?.skipInitialSync) {
+      await this.emitStatus();
+      return;
+    }
 
     await this.syncNow();
   }
 
   stop(): void {
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
-    }
+    this.clearDebounceTimer();
     if (this.unsubOutboxHook) {
       this.unsubOutboxHook();
       this.unsubOutboxHook = null;
@@ -1024,9 +1063,11 @@ export class SyncEngine {
       void this.emitStatus();
       return;
     }
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
+    if (this.requireInitialDone && !this.initialSyncConfirmed) {
+      void this.emitStatus();
+      return;
     }
+    this.clearDebounceTimer();
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = null;
       void this.pushOutbox();
@@ -1185,13 +1226,22 @@ export class SyncEngine {
    * - Uploads every current local synced row (including compressed student photos).
    * Used after restore ('replace') or «លុបទិន្នន័យទាំងអស់» (`syncToCloud: true`).
    */
-  pushFullReplace(): Promise<PushOutboxResult> {
-    return this.runSerialized(() => this._pushFullReplaceInternal());
+  pushFullReplace(options?: PushOutboxOptions): Promise<PushOutboxResult> {
+    return this.runSerialized(() => this._pushFullReplaceInternal(options));
   }
 
-  private async _pushFullReplaceInternal(): Promise<PushOutboxResult> {
+  private async _pushFullReplaceInternal(options?: PushOutboxOptions): Promise<PushOutboxResult> {
     this.clearDebounceTimer();
     if (!this.localDb.isOpen()) {
+      return {
+        pushedEntriesCount: 0,
+        pushedDocsCount: 0,
+        skippedOversizedDocIds: [],
+        failedPhotoDocIds: [],
+      };
+    }
+    if (await this.isBlockedByInitialSync(options?.bypassInitialSyncGuard)) {
+      await this.emitStatus();
       return {
         pushedEntriesCount: 0,
         pushedDocsCount: 0,
@@ -1363,13 +1413,23 @@ export class SyncEngine {
    * - Checks the WHOLE document size (existing rows + incoming writes) against 900 KB;
    *   oversized docs are kept in outbox (never dropped) with a Khmer error and do not block other docs.
    */
-  pushOutbox(): Promise<PushOutboxResult> {
-    return this.runSerialized(() => this._pushOutboxInternal());
+  pushOutbox(options?: PushOutboxOptions): Promise<PushOutboxResult> {
+    return this.runSerialized(() => this._pushOutboxInternal(options));
   }
 
-  private async _pushOutboxInternal(): Promise<PushOutboxResult> {
+  private async _pushOutboxInternal(options?: PushOutboxOptions): Promise<PushOutboxResult> {
     this.clearDebounceTimer();
     if (!this.localDb.isOpen()) {
+      return {
+        pushedEntriesCount: 0,
+        pushedDocsCount: 0,
+        skippedOversizedDocIds: [],
+        failedPhotoDocIds: [],
+      };
+    }
+
+    if (await this.isBlockedByInitialSync(options?.bypassInitialSyncGuard)) {
+      await this.emitStatus();
       return {
         pushedEntriesCount: 0,
         pushedDocsCount: 0,
@@ -1390,7 +1450,7 @@ export class SyncEngine {
 
     const pendingFullReplace = await this.localDb.settings.get(SYNC_PENDING_FULL_REPLACE_KEY);
     if (pendingFullReplace) {
-      return this._pushFullReplaceInternal();
+      return this._pushFullReplaceInternal(options);
     }
 
     const entries = await this.localDb.outbox.toArray();
@@ -1576,6 +1636,10 @@ export class SyncEngine {
       await this.emitStatus();
       return { pulledDocsCount: 0, requeuedCount: 0 };
     }
+    if (await this.isBlockedByInitialSync(options?.bypassInitialSyncGuard)) {
+      await this.emitStatus();
+      return { pulledDocsCount: 0, requeuedCount: 0 };
+    }
 
     this.isSyncing = true;
     await this.emitStatus('syncing');
@@ -1681,6 +1745,16 @@ export class SyncEngine {
           failedPhotoDocIds: [],
         };
       }
+      if (await this.isBlockedByInitialSync()) {
+        await this.emitStatus();
+        return {
+          pushedEntriesCount: 0,
+          pulledDocsCount: 0,
+          requeuedCount: 0,
+          skippedOversizedDocIds: [],
+          failedPhotoDocIds: [],
+        };
+      }
       const pushRes = await this._pushOutboxInternal();
       const pullRes = await this._pullChangesInternal();
       return {
@@ -1697,6 +1771,9 @@ export class SyncEngine {
    * Throttled pull on window focus (at most once per 60 seconds, per §1.5).
    */
   async onWindowFocus(): Promise<void> {
+    if (await this.isBlockedByInitialSync()) {
+      return;
+    }
     const now = Date.now();
     if (now - this.lastFocusPullAt < 60_000) {
       return;
