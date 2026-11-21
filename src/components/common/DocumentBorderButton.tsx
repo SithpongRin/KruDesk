@@ -1,21 +1,27 @@
 import React, { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Check, Frame, Upload } from 'lucide-react';
+import { Check, Frame, RotateCcw, Upload } from 'lucide-react';
 import { db, setSetting } from '../../db/database';
 import { useAppStore } from '../../store/useAppStore';
 import {
+  CERTIFICATE_RANKS,
+  certificateRankBorderKey,
+  certificateRankBorderSelection,
   DOCUMENT_BORDER_FORMAT,
   DOCUMENT_BORDER_ORIENTATION,
   DOCUMENT_FRAME_CHOICES,
   documentBorderSelection,
   isDocumentBorderImage,
   prepareDocumentBorderImage,
+  resolveCertificateRankBorder,
   resolveDocumentBorder,
+  type CertificateRank,
   type DocumentBorderImage,
   type DocumentBorderKey,
   type StoredDocumentBorder,
 } from '../../utils/documentBorder';
 import { getAssetUrl } from '../../utils/assets';
+import { toKhmerNumerals } from '../../utils/khmerNumerals';
 import { AppleButton } from './AppleButton';
 import { AppleModal } from './AppleModal';
 
@@ -25,11 +31,38 @@ export function useDocumentBorder(key: DocumentBorderKey): DocumentBorderImage |
   return resolveDocumentBorder(key, row?.value);
 }
 
+/** Optional per-rank certificate frame overrides (`certificateBorder_1` / `_2` / `_3`). */
+export function useCertificateRankBorders(): Partial<
+  Record<CertificateRank, DocumentBorderImage | undefined>
+> {
+  const rows = useLiveQuery(
+    () =>
+      Promise.all(
+        CERTIFICATE_RANKS.map(async (rank) => ({
+          rank,
+          row: await db.settings.get(certificateRankBorderKey(rank)),
+        }))
+      ),
+    []
+  );
+  const out: Partial<Record<CertificateRank, DocumentBorderImage | undefined>> = {};
+  if (!rows) return out;
+  for (const item of rows) {
+    const resolved = resolveCertificateRankBorder(item.row?.value);
+    if (resolved) out[item.rank] = resolved;
+  }
+  return out;
+}
+
 interface DocumentBorderButtonProps {
   borderKey: DocumentBorderKey;
   /** Button text (default «ប្ដូរស៊ុម»). */
   label?: string;
+  /** When true (certificates), lets the teacher pick different frames for ranks 1, 2, 3. */
+  enablePerRank?: boolean;
 }
+
+type BorderTarget = 'all' | CertificateRank;
 
 const tileBase =
   'relative rounded-xl border-2 overflow-hidden bg-white transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0071e3]';
@@ -37,25 +70,78 @@ const tileBase =
 /**
  * «ប្ដូរស៊ុម»: a dialog with the frames shipped with the app (the teacher's templates),
  * the drawn frame where there is one, and «បញ្ចូលរូបខ្លួនឯង» for the teacher's own image.
+ * When `enablePerRank` is set on certificates, also lets the teacher pick a separate frame
+ * per rank (លេខ ១, លេខ ២, លេខ ៣) or keep all ranks using the same shared frame.
  */
 export const DocumentBorderButton: React.FC<DocumentBorderButtonProps> = ({
   borderKey,
   label = 'ប្ដូរស៊ុម',
+  enablePerRank = false,
 }) => {
   const { addToast } = useAppStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const row = useLiveQuery(() => db.settings.get(borderKey), [borderKey]);
-  const selection = documentBorderSelection(borderKey, row?.value);
-  const uploaded = isDocumentBorderImage(row?.value) ? row.value : undefined;
+  const [target, setTarget] = useState<BorderTarget>('all');
+
+  const allowPerRank = enablePerRank && borderKey === 'certificateBorder';
+  const activeSettingKey =
+    allowPerRank && target !== 'all' ? certificateRankBorderKey(target) : borderKey;
+
+  const baseRow = useLiveQuery(() => db.settings.get(borderKey), [borderKey]);
+  const rankRows = useLiveQuery(
+    async () => {
+      if (!allowPerRank) return undefined;
+      const entries = await Promise.all(
+        CERTIFICATE_RANKS.map(async (rank) => [
+          rank,
+          (await db.settings.get(certificateRankBorderKey(rank)))?.value,
+        ] as const)
+      );
+      return Object.fromEntries(entries) as Record<CertificateRank, unknown>;
+    },
+    [allowPerRank]
+  );
+
+  const activeRawValue =
+    allowPerRank && target !== 'all' ? rankRows?.[target] : baseRow?.value;
+
+  const selection =
+    allowPerRank && target !== 'all'
+      ? certificateRankBorderSelection(activeRawValue)
+      : documentBorderSelection(borderKey, activeRawValue);
+  const uploaded = isDocumentBorderImage(activeRawValue) ? activeRawValue : undefined;
+
+  const customRanks = allowPerRank
+    ? CERTIFICATE_RANKS.filter(
+        (rank) => certificateRankBorderSelection(rankRows?.[rank]) !== 'inherit'
+      )
+    : [];
+
   const { frames, defaultId } = DOCUMENT_FRAME_CHOICES[borderKey];
   const isPlaque = borderKey === 'honorRollNameBanner';
   const portrait = DOCUMENT_BORDER_ORIENTATION[borderKey] === 'portrait';
 
   const choose = async (presetId: string | null) => {
-    await setSetting<StoredDocumentBorder>(borderKey, { presetId });
-    setOpen(false);
+    await setSetting<StoredDocumentBorder>(activeSettingKey, { presetId });
+    if (!allowPerRank || target === 'all') {
+      setOpen(false);
+    }
+  };
+
+  const resetRankToShared = async (rank: CertificateRank) => {
+    await db.settings.delete(certificateRankBorderKey(rank));
+  };
+
+  const resetAllRanksToShared = async () => {
+    await Promise.all(
+      CERTIFICATE_RANKS.map((rank) => db.settings.delete(certificateRankBorderKey(rank)))
+    );
+    addToast({
+      type: 'success',
+      title: 'ប្រើស៊ុមដូចគ្នាទាំងអស់',
+      message: 'ប័ណ្ណសរសើរលេខ ១–៣ ប្រើស៊ុមទូទៅដូចគ្នាវិញហើយ។',
+    });
   };
 
   const handleFile = async (file: File | undefined) => {
@@ -70,11 +156,16 @@ export const DocumentBorderButton: React.FC<DocumentBorderButtonProps> = ({
         0.9,
         format.transparent
       );
-      await setSetting<StoredDocumentBorder>(borderKey, image);
-      setOpen(false);
+      await setSetting<StoredDocumentBorder>(activeSettingKey, image);
+      if (!allowPerRank || target === 'all') {
+        setOpen(false);
+      }
       addToast({
         type: 'success',
-        title: 'បានប្ដូរស៊ុម',
+        title:
+          allowPerRank && target !== 'all'
+            ? `បានប្ដូរស៊ុមសម្រាប់លេខ ${toKhmerNumerals(target)}`
+            : 'បានប្ដូរស៊ុម',
         message: 'រូបរបស់អ្នករក្សាទុកក្នុងកម្មវិធីនេះ (និងក្នុង Backup)។',
       });
     } catch {
@@ -147,6 +238,8 @@ export const DocumentBorderButton: React.FC<DocumentBorderButtonProps> = ({
     </button>
   );
 
+  const sharedFrame = resolveDocumentBorder('certificateBorder', baseRow?.value);
+
   return (
     <>
       <input
@@ -170,7 +263,11 @@ export const DocumentBorderButton: React.FC<DocumentBorderButtonProps> = ({
         isOpen={open}
         onClose={() => setOpen(false)}
         title={label}
-        subtitle="ជ្រើសស៊ុមដែលមានស្រាប់ ឬបញ្ចូលរូបរបស់អ្នក"
+        subtitle={
+          allowPerRank
+            ? 'ជ្រើសស៊ុមរួម ឬជ្រើសស៊ុមផ្សេងគ្នាសម្រាប់លេខ ១, លេខ ២ និងលេខ ៣'
+            : 'ជ្រើសស៊ុមដែលមានស្រាប់ ឬបញ្ចូលរូបរបស់អ្នក'
+        }
         maxWidth="2xl"
         footer={
           <>
@@ -189,42 +286,126 @@ export const DocumentBorderButton: React.FC<DocumentBorderButtonProps> = ({
           </>
         }
       >
-        <div
-          className={`grid gap-3 ${
-            isPlaque
-              ? 'grid-cols-1 sm:grid-cols-2'
-              : portrait
-                ? 'grid-cols-3 sm:grid-cols-4'
-                : 'grid-cols-2 sm:grid-cols-3'
-          }`}
-        >
-          {defaultId === null &&
-            tile(
-              'drawn',
-              selection === null,
-              () => void choose(null),
-              <div className={`w-full ${thumbBox} bg-white p-1.5`}>
-                <div className="w-full h-full border-[3px] border-[#3b2aa0] outline outline-1 outline-black outline-offset-1" />
-              </div>,
-              'ស៊ុមដើម (ខៀវស្វាយ)'
-            )}
-          {frames.map((f) =>
-            tile(
-              f.id,
-              selection === f.id,
-              () => void choose(f.id),
-              renderThumb(getAssetUrl(f.path), portrait && f.width >= f.height),
-              f.id === defaultId ? `${f.label} (ដើម)` : f.label
-            )
+        <div className="space-y-3">
+          {allowPerRank && (
+            <div className="space-y-2">
+              <div
+                role="tablist"
+                aria-label="ជ្រើសចំណាត់ថ្នាក់សម្រាប់ស៊ុមប័ណ្ណសរសើរ"
+                className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-[#f5f5f7] dark:bg-white/[0.06]"
+              >
+                {(
+                  [
+                    { id: 'all' as const, text: 'ទូទៅ (ដូចគ្នាទាំងអស់)' },
+                    { id: 1 as const, text: 'លេខ ១' },
+                    { id: 2 as const, text: 'លេខ ២' },
+                    { id: 3 as const, text: 'លេខ ៣' },
+                  ]
+                ).map((tab) => {
+                  const isActive = target === tab.id;
+                  const hasCustom =
+                    tab.id !== 'all' && customRanks.includes(tab.id);
+                  return (
+                    <button
+                      key={String(tab.id)}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() => setTarget(tab.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-1.5 ${
+                        isActive
+                          ? 'bg-white dark:bg-[#2c2c2e] text-[#0071e3] shadow-sm'
+                          : 'text-[#6e6e73] dark:text-[#98989d] hover:text-[#1d1d1f] dark:hover:text-[#f5f5f7]'
+                      }`}
+                    >
+                      <span>{tab.text}</span>
+                      {hasCustom && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full bg-[#0071e3]"
+                          title="មានស៊ុមផ្ទាល់ខ្លួន"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {target === 'all' && customRanks.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-blue-50/80 dark:bg-blue-500/10 border border-blue-200/70 dark:border-blue-500/25 text-[11px] text-[#1d1d1f] dark:text-blue-100">
+                  <span>
+                    កំពុងប្រើស៊ុមផ្សេងគ្នាសម្រាប់{' '}
+                    <strong>
+                      {customRanks.map((r) => `លេខ ${toKhmerNumerals(r)}`).join(', ')}
+                    </strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void resetAllRanksToShared()}
+                    className="inline-flex items-center gap-1 font-semibold text-[#0071e3] hover:underline"
+                  >
+                    <RotateCcw size={12} />
+                    <span>ប្រើស៊ុមដូចគ្នាទាំងអស់</span>
+                  </button>
+                </div>
+              )}
+            </div>
           )}
-          {uploaded &&
-            tile(
-              'upload',
-              selection === 'upload',
-              () => setOpen(false),
-              renderThumb(uploaded.dataUrl, false),
-              uploaded.fileName ? `រូបរបស់អ្នក · ${uploaded.fileName}` : 'រូបរបស់អ្នក'
+
+          <div
+            className={`grid gap-3 ${
+              isPlaque
+                ? 'grid-cols-1 sm:grid-cols-2'
+                : portrait
+                  ? 'grid-cols-3 sm:grid-cols-4'
+                  : 'grid-cols-2 sm:grid-cols-3'
+            }`}
+          >
+            {allowPerRank &&
+              target !== 'all' &&
+              tile(
+                'inherit',
+                selection === 'inherit',
+                () => void resetRankToShared(target),
+                sharedFrame ? (
+                  renderThumb(sharedFrame.dataUrl, false)
+                ) : (
+                  <div className={`w-full ${thumbBox} bg-[#f5f5f7]`} />
+                ),
+                `តាមស៊ុមទូទៅ (${sharedFrame?.fileName ?? 'ដើម'})`
+              )}
+            {!allowPerRank &&
+              defaultId === null &&
+              tile(
+                'drawn',
+                selection === null,
+                () => void choose(null),
+                <div className={`w-full ${thumbBox} bg-white p-1.5`}>
+                  <div className="w-full h-full border-[3px] border-[#3b2aa0] outline outline-1 outline-black outline-offset-1" />
+                </div>,
+                'ស៊ុមដើម (ខៀវស្វាយ)'
+              )}
+            {frames.map((f) =>
+              tile(
+                f.id,
+                selection === f.id,
+                () => void choose(f.id),
+                renderThumb(getAssetUrl(f.path), portrait && f.width >= f.height),
+                f.id === defaultId && (!allowPerRank || target === 'all')
+                  ? `${f.label} (ដើម)`
+                  : f.label
+              )
             )}
+            {uploaded &&
+              tile(
+                'upload',
+                selection === 'upload',
+                () => {
+                  if (!allowPerRank || target === 'all') setOpen(false);
+                },
+                renderThumb(uploaded.dataUrl, false),
+                uploaded.fileName ? `រូបរបស់អ្នក · ${uploaded.fileName}` : 'រូបរបស់អ្នក'
+              )}
+          </div>
         </div>
       </AppleModal>
     </>

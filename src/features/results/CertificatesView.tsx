@@ -25,6 +25,7 @@ import { AppleCard } from '../../components/common/AppleCard';
 import { AppleButton } from '../../components/common/AppleButton';
 import {
   DocumentBorderButton,
+  useCertificateRankBorders,
   useDocumentBorder,
 } from '../../components/common/DocumentBorderButton';
 import { AppleBadge } from '../../components/common/AppleBadge';
@@ -52,6 +53,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
     addToast,
   } = useAppStore();
   const certificateBorder = useDocumentBorder('certificateBorder');
+  const certificateRankBorders = useCertificateRankBorders();
 
   const fmt = (val: number | string) =>
     useKhmerNumerals ? toKhmerNumerals(val) : toArabicNumerals(String(val));
@@ -258,7 +260,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
             ))}
           </select>
 
-          <DocumentBorderButton borderKey="certificateBorder" />
+          <DocumentBorderButton borderKey="certificateBorder" enablePerRank />
 
           <AppleButton
             variant="primary"
@@ -303,6 +305,12 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
                     </div>
                     <div className="text-[11px] text-[#86868b] mt-0.5">
                       និទ្ទេស {row.grade ?? '—'} ({getGradeWord(row.grade, gradeWords)})
+                      {(row.rank === 1 || row.rank === 2 || row.rank === 3) &&
+                        certificateRankBorders[row.rank]?.fileName && (
+                          <span className="ml-1.5 text-[#0071e3] dark:text-[#64d2ff]">
+                            · ស៊ុម៖ {certificateRankBorders[row.rank]!.fileName}
+                          </span>
+                        )}
                     </div>
                   </div>
                   <AppleButton
@@ -341,6 +349,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
                   >
                     <CertificateSheet
                       borderImage={certificateBorder}
+                      borderImagesByRank={certificateRankBorders}
                       cls={currentClass}
                       profile={profile}
                       month={selectedMonth}
@@ -398,6 +407,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ profile }) =
         >
           <CertificateSheet
             borderImage={certificateBorder}
+            borderImagesByRank={certificateRankBorders}
             cls={currentClass}
             profile={profile}
             month={selectedMonth}

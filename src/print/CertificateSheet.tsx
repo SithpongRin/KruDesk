@@ -10,6 +10,7 @@ import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature
 import {
   framePaddingMm,
   resolveDocumentBorder,
+  type CertificateRank,
   type DocumentBorderImage,
 } from '../utils/documentBorder';
 import { FrameImage } from './FrameImage';
@@ -23,6 +24,8 @@ interface CertificateSheetProps {
   gradeWords?: Partial<Record<ScoreGrade, string>>;
   /** Frame image chosen by the teacher (stretched over the whole page); the default kbach frame if absent. */
   borderImage?: DocumentBorderImage;
+  /** Optional per-rank frame overrides (ranks 1–3); falls back to `borderImage` when unset. */
+  borderImagesByRank?: Partial<Record<CertificateRank, DocumentBorderImage | undefined>>;
 }
 
 export const CertificateSheet: React.FC<CertificateSheetProps> = ({
@@ -33,18 +36,27 @@ export const CertificateSheet: React.FC<CertificateSheetProps> = ({
   signOptions,
   gradeWords,
   borderImage,
+  borderImagesByRank,
 }) => {
   const { month: monthNum } = parseYearMonth(month);
   const monthName = getKhmerMonthName(monthNum);
-  const frame = borderImage ?? resolveDocumentBorder('certificateBorder', undefined);
-  // Keep the text clear of the frame's innermost line (frames differ in width).
-  const pad = framePaddingMm(frame?.inner, 297, 210, { top: 22, right: 30, bottom: 22, left: 30 });
+  const defaultFrame = borderImage ?? resolveDocumentBorder('certificateBorder', undefined);
 
   return (
     <div className="bg-white text-black font-battambang">
       {items.map((item, idx) => {
         const isLast = idx === items.length - 1;
         const gradeWord = getGradeWord(item.grade, gradeWords);
+        const rankKey: CertificateRank | undefined =
+          item.rank === 1 || item.rank === 2 || item.rank === 3 ? item.rank : undefined;
+        const frame = (rankKey ? borderImagesByRank?.[rankKey] : undefined) ?? defaultFrame;
+        // Keep the text clear of each page's own frame width (frames differ per rank).
+        const pad = framePaddingMm(frame?.inner, 297, 210, {
+          top: 22,
+          right: 30,
+          bottom: 22,
+          left: 30,
+        });
 
         return (
           <div

@@ -8,10 +8,12 @@ import { createDefaultSignOptions } from '../DocumentSignature';
 import type { Profile, SchoolClass } from '../../types/domain';
 import type { MonthlyResultRow } from '../../lib/monthlyResults';
 import {
+  certificateRankBorderSelection,
   documentBorderSelection,
   framePaddingMm,
   isDocumentBorderImage,
   measureFrameInset,
+  resolveCertificateRankBorder,
   resolveDocumentBorder,
   type DocumentBorderImage,
 } from '../../utils/documentBorder';
@@ -161,6 +163,36 @@ describe('document border images', () => {
       />
     );
     expect(roll.container.querySelector('img[src$="images/frames/name-plaque.png"]')).not.toBeNull();
+  });
+
+  it('certificate renders a different frame per rank (1, 2, 3) and falls back to the shared frame when unset', () => {
+    const rank1Frame = resolveCertificateRankBorder({ presetId: 'frame-gold-crest' });
+    const rank2Frame = resolveCertificateRankBorder({ presetId: 'frame-blue' });
+    expect(rank1Frame?.dataUrl).toMatch(/frame-gold-crest\.jpg$/);
+    expect(rank2Frame?.dataUrl).toMatch(/frame-blue\.jpg$/);
+    expect(resolveCertificateRankBorder(undefined)).toBeUndefined();
+    expect(certificateRankBorderSelection(undefined)).toBe('inherit');
+    expect(certificateRankBorderSelection({ presetId: 'frame-blue' })).toBe('frame-blue');
+
+    const row2: MonthlyResultRow = { ...row, student: { ...row.student, id: 2, nameKm: 'សិស្ស ទីពីរ' }, rank: 2 };
+    const row3: MonthlyResultRow = { ...row, student: { ...row.student, id: 3, nameKm: 'សិស្ស ទីបី' }, rank: 3 };
+    const { container } = render(
+      <CertificateSheet
+        cls={cls}
+        profile={profile}
+        month="2026-11"
+        items={[row, row2, row3]}
+        signOptions={signOptions}
+        borderImage={resolveDocumentBorder('certificateBorder', { presetId: 'frame-orange' })}
+        borderImagesByRank={{ 1: rank1Frame, 2: rank2Frame }}
+      />
+    );
+    const pages = container.querySelectorAll('[data-print-page]');
+    expect(pages).toHaveLength(3);
+    expect(pages[0]?.querySelector('img[src$="images/frames/frame-gold-crest.jpg"]')).not.toBeNull();
+    expect(pages[1]?.querySelector('img[src$="images/frames/frame-blue.jpg"]')).not.toBeNull();
+    // Rank 3 has no override -> falls back to shared frame-orange
+    expect(pages[2]?.querySelector('img[src$="images/frames/frame-orange.jpg"]')).not.toBeNull();
   });
 
   it('honor roll keeps the built-in frame without an image and shows the month only', () => {

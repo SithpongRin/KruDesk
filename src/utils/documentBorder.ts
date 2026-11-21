@@ -8,6 +8,15 @@ import { getAssetUrl } from './assets';
  */
 export type DocumentBorderKey = 'certificateBorder' | 'honorRollBorder' | 'honorRollNameBanner';
 
+export type CertificateRank = 1 | 2 | 3;
+export const CERTIFICATE_RANKS: readonly CertificateRank[] = [1, 2, 3] as const;
+
+export type CertificateRankBorderKey = `certificateBorder_${CertificateRank}`;
+
+export function certificateRankBorderKey(rank: CertificateRank): CertificateRankBorderKey {
+  return `certificateBorder_${rank}`;
+}
+
 export interface DocumentBorderImage {
   /** Image URL: a data URL (uploaded) or a built-in asset URL. */
   dataUrl: string;
@@ -211,6 +220,35 @@ export function resolveDocumentBorder(
   const id = documentBorderSelection(key, stored);
   const frame = DOCUMENT_FRAME_CHOICES[key].frames.find((f) => f.id === id);
   return frame ? builtInFrameImage(key, frame) : undefined;
+}
+
+/**
+ * Resolves a per-rank certificate frame override (`certificateBorder_1` / `_2` / `_3`).
+ * Returns `undefined` when no override is stored so the caller falls back to the shared
+ * `certificateBorder` setting.
+ */
+export function resolveCertificateRankBorder(stored: unknown): DocumentBorderImage | undefined {
+  if (stored === undefined || stored === null) return undefined;
+  return resolveDocumentBorder('certificateBorder', stored);
+}
+
+/**
+ * Current selection for a specific certificate rank: `'inherit'` when using the shared frame,
+ * `'upload'` when an image was uploaded for this rank, or a built-in frame ID.
+ */
+export function certificateRankBorderSelection(stored: unknown): string {
+  if (stored === undefined || stored === null) return 'inherit';
+  if (isDocumentBorderImage(stored)) return 'upload';
+  if (stored && typeof stored === 'object' && 'presetId' in stored) {
+    const id = (stored as { presetId: unknown }).presetId;
+    if (
+      typeof id === 'string' &&
+      DOCUMENT_FRAME_CHOICES.certificateBorder.frames.some((f) => f.id === id)
+    ) {
+      return id;
+    }
+  }
+  return 'inherit';
 }
 
 export function isDocumentBorderImage(value: unknown): value is DocumentBorderImage {
