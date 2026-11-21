@@ -9,13 +9,16 @@ import {
   decodeSafeKey,
   encodeSafeKey,
   getDocApplyPriority,
+  isExpiredTombstone,
   isInternalSyncSettingKey,
   isSyncedSettingKey,
   makeTombstone,
   MAX_SYNC_DOC_BYTES,
   SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY,
+  SYNC_LAST_PULL_WALL_AT_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
   SYNC_PENDING_PHOTOS_KEY,
+  TOMBSTONE_RETENTION_MS,
 } from '../syncCodec';
 
 describe('SyncCodec & atomic Dexie DBCore Outbox middleware (§00 fixes 1–6)', () => {
@@ -380,5 +383,18 @@ describe('SyncCodec & atomic Dexie DBCore Outbox middleware (§00 fixes 1–6)',
     await restoreBackupPayload(payload, 'replace', testDb);
     const preserved = await testDb.settings.get(SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY);
     expect(preserved?.value).toBe('2026-11-21');
+  });
+
+  it('identifies tombstones older than 90 days and keeps syncLastPullWallAt strictly local', () => {
+    const now = 1_800_000_000_000;
+    const oldTombstone = makeTombstone(now - TOMBSTONE_RETENTION_MS - 1_000);
+    const freshTombstone = makeTombstone(now - TOMBSTONE_RETENTION_MS + 60_000);
+
+    expect(isExpiredTombstone(oldTombstone, now)).toBe(true);
+    expect(isExpiredTombstone(freshTombstone, now)).toBe(false);
+    expect(isExpiredTombstone({ id: 1, name: 'live' }, now)).toBe(false);
+
+    expect(isInternalSyncSettingKey(SYNC_LAST_PULL_WALL_AT_KEY)).toBe(true);
+    expect(isSyncedSettingKey(SYNC_LAST_PULL_WALL_AT_KEY)).toBe(false);
   });
 });

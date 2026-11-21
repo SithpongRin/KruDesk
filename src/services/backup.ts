@@ -13,6 +13,7 @@ import {
   SYNC_DEVICE_ID_KEY,
   SYNC_INITIAL_DONE_KEY,
   SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY,
+  SYNC_LAST_PULL_WALL_AT_KEY,
   SYNC_LAST_PULLED_AT_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
 } from './sync/syncCodec';
@@ -380,12 +381,14 @@ export async function restoreBackupPayload(
       const studentIdMap = new Map<number, number>();
 
       if (mode === 'replace') {
-        const [deviceIdRow, lastPulledRow, initialDoneRow, lastDailySnapshotRow] = await Promise.all([
-          targetDb.settings.get(SYNC_DEVICE_ID_KEY),
-          targetDb.settings.get(SYNC_LAST_PULLED_AT_KEY),
-          targetDb.settings.get(SYNC_INITIAL_DONE_KEY),
-          targetDb.settings.get(SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY),
-        ]);
+        const [deviceIdRow, lastPulledRow, lastPullWallRow, initialDoneRow, lastDailySnapshotRow] =
+          await Promise.all([
+            targetDb.settings.get(SYNC_DEVICE_ID_KEY),
+            targetDb.settings.get(SYNC_LAST_PULLED_AT_KEY),
+            targetDb.settings.get(SYNC_LAST_PULL_WALL_AT_KEY),
+            targetDb.settings.get(SYNC_INITIAL_DONE_KEY),
+            targetDb.settings.get(SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY),
+          ]);
 
         await Promise.all([
           targetDb.settings.clear(),
@@ -480,6 +483,9 @@ export async function restoreBackupPayload(
         }
         if (lastPulledRow) {
           await targetDb.settings.put(lastPulledRow);
+        }
+        if (lastPullWallRow) {
+          await targetDb.settings.put(lastPullWallRow);
         }
         if (initialDoneRow) {
           await targetDb.settings.put(initialDoneRow);

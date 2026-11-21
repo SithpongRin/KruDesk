@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   FieldPath,
   getDocs,
@@ -50,6 +51,7 @@ import {
   estimateJsonBytes,
   getDocApplyPriority,
   getDocKindFromId,
+  isExpiredTombstone,
   isSyncedSettingKey,
   isSyncTombstone,
   makeTombstone,
@@ -60,10 +62,12 @@ import {
   SYNC_DEVICE_ID_KEY,
   SYNC_INITIAL_DONE_KEY,
   SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY,
+  SYNC_LAST_PULL_WALL_AT_KEY,
   SYNC_LAST_PULLED_AT_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
   SYNC_PENDING_PHOTOS_KEY,
   SYNC_SCHEMA_VERSION,
+  TOMBSTONE_RETENTION_MS,
   type SyncAbsenceRow,
   type SyncAttendanceSessionRow,
   type SyncPhotoRow,
@@ -108,8 +112,10 @@ export interface SyncEngineOptions {
   dailySnapshots?: boolean;
   /** Maximum Cloud snapshots to keep per user when pruning after a daily snapshot (default 10). */
   maxCloudSnapshots?: number;
-  /** Optional clock provider for deterministic daily-snapshot tests (defaults to `Date.now`). */
+  /** Optional clock provider for deterministic daily-snapshot & tombstone-purge tests (defaults to `Date.now`). */
   dailySnapshotNow?: () => number;
+  /** Retention window before tombstones `{ __deleted: true, ts }` are purged on written docs (default 90 days). */
+  tombstoneRetentionMs?: number;
   /** Optional test hook to override saving the daily snapshot payload. */
   saveDailySnapshot?: (
     firestore: Firestore,
@@ -389,20 +395,32 @@ export async function estimateFullDocBytes(
   });
 }
 
+export interface ApplyRemoteDocOptions {
+  /**
+   * When true (device was offline longer than the tombstone purge horizon), cloud wins:
+   * unedited local rows missing from `remoteRows` are deleted locally and NOT re-queued via
+   * self-heal so purged deletes are never resurrected (Step 6d).
+   */
+  skipSelfHeal?: boolean;
+}
+
 /**
  * Applies a single remote Firestore document to Dexie inside a per-transaction remote scope.
  * - Never sets any global flag: concurrent teacher edits still record into `outbox`.
  * - Reads fresh pending outbox keys inside the SAME Dexie transaction so concurrent edits are never overwritten.
- * - Deletes local rows ONLY when the remote doc contains an explicit tombstone `{ __deleted: true, ts }`.
- * - Local rows missing from the remote doc without a tombstone are preserved and re-queued into `outbox` (self-heal).
+ * - Deletes local rows ONLY when the remote doc contains an explicit tombstone `{ __deleted: true, ts }`,
+ *   OR when `options.skipSelfHeal` is true (stale device > 90 days: cloud wins).
+ * - Otherwise local rows missing from the remote doc without a tombstone are preserved and re-queued into `outbox` (self-heal).
  * - Student photos arriving before their student row are stored durably in `syncPendingPhotos` until the student arrives.
  */
 export async function applyRemoteDocToDexie(
   localDb: KruDeskDatabase,
   docId: string,
   rawDocData: Record<string, unknown>,
-  extraPendingRowKeys?: Set<string>
+  extraPendingRowKeys?: Set<string>,
+  options?: ApplyRemoteDocOptions
 ): Promise<{ requeuedCount: number }> {
+  const skipSelfHeal = options?.skipSelfHeal === true;
   const kind = getDocKindFromId(docId);
   const remoteRows =
     rawDocData.rows && typeof rawDocData.rows === 'object'
@@ -423,6 +441,10 @@ export async function applyRemoteDocToDexie(
         if (pendingRowKeys.has('v')) return;
 
         if (!hasOwn(remoteRows, 'v')) {
+          if (skipSelfHeal) {
+            await localDb.settings.delete(key);
+            return;
+          }
           // Missing without tombstone -> self-heal if present locally
           const localSetting = await localDb.settings.get(key);
           if (localSetting) {
@@ -454,6 +476,10 @@ export async function applyRemoteDocToDexie(
         if (pendingRowKeys.has(rowKey)) return;
 
         if (!hasOwn(remoteRows, rowKey)) {
+          if (skipSelfHeal) {
+            await localDb.classes.delete(classId);
+            return;
+          }
           const localCls = await localDb.classes.get(classId);
           if (localCls) {
             const entry = buildClassDocEntry({ ...localCls, id: classId });
@@ -546,16 +572,19 @@ export async function applyRemoteDocToDexie(
             });
           }
 
-          // Self-heal: any local student in this class missing from remoteRows (no value & no tombstone)
-          // is preserved and re-queued into outbox.
+          // Self-heal (normal pull) OR cloud-wins local delete (stale pull > 90d, skipSelfHeal)
           for (const localStudent of existingList) {
             const sid = localStudent.id;
             if (sid === undefined) continue;
             const rk = `s_${sid}`;
             if (!hasOwn(remoteRows, rk) && !pendingRowKeys.has(rk)) {
-              const entry = buildStudentDocEntry({ ...localStudent, id: sid });
-              await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
-              requeuedCount++;
+              if (skipSelfHeal) {
+                await localDb.students.delete(sid);
+              } else {
+                const entry = buildStudentDocEntry({ ...localStudent, id: sid });
+                await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
+                requeuedCount++;
+              }
             }
           }
 
@@ -583,6 +612,18 @@ export async function applyRemoteDocToDexie(
           let pendingPhotosDirty = false;
 
           if (!hasOwn(remoteRows, rowKey)) {
+            if (skipSelfHeal) {
+              if (hasOwn(pendingPhotos, String(studentId))) {
+                delete pendingPhotos[String(studentId)];
+                await writePendingPhotosMap(localDb, pendingPhotos);
+              }
+              if (student?.photoBlob) {
+                const copy = { ...student };
+                delete copy.photoBlob;
+                await localDb.students.put(copy);
+              }
+              return;
+            }
             // Missing without tombstone -> self-heal if student has a local photoBlob
             if (student?.photoBlob) {
               await localDb.outbox.put({
@@ -700,22 +741,30 @@ export async function applyRemoteDocToDexie(
             }
           }
 
-          // Self-heal missing absences & sessions (never delete without tombstone)
+          // Self-heal missing absences & sessions (or delete locally on stale pull when skipSelfHeal)
           for (const loc of localAbsences) {
             const rk = `a_${loc.studentRef}_${loc.date.replace(/-/g, '_')}`;
             if (!hasOwn(remoteRows, rk) && !pendingRowKeys.has(rk)) {
-              const entry = buildAttendanceDocEntry(loc);
-              await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
-              requeuedCount++;
+              if (skipSelfHeal) {
+                await localDb.attendance.delete([classId, loc.date, loc.studentRef]);
+              } else {
+                const entry = buildAttendanceDocEntry(loc);
+                await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
+                requeuedCount++;
+              }
             }
           }
 
           for (const locSess of localSessions) {
             const rk = `sess_${locSess.date.replace(/-/g, '_')}`;
             if (!hasOwn(remoteRows, rk) && !pendingRowKeys.has(rk)) {
-              const entry = buildAttendanceSessionDocEntry(locSess);
-              await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
-              requeuedCount++;
+              if (skipSelfHeal) {
+                await localDb.attendanceSessions.delete([classId, locSess.date]);
+              } else {
+                const entry = buildAttendanceSessionDocEntry(locSess);
+                await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
+                requeuedCount++;
+              }
             }
           }
         }
@@ -757,9 +806,13 @@ export async function applyRemoteDocToDexie(
         for (const loc of localRows) {
           const rk = `m_${loc.studentRef}`;
           if (!hasOwn(remoteRows, rk) && !pendingRowKeys.has(rk)) {
-            const entry = buildMonthlyScoreDocEntry(loc);
-            await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
-            requeuedCount++;
+            if (skipSelfHeal) {
+              await localDb.monthlyScores.delete([classId, month, loc.studentRef]);
+            } else {
+              const entry = buildMonthlyScoreDocEntry(loc);
+              await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
+              requeuedCount++;
+            }
           }
         }
       });
@@ -800,9 +853,13 @@ export async function applyRemoteDocToDexie(
         for (const loc of localRows) {
           const rk = `e_${loc.studentRef}`;
           if (!hasOwn(remoteRows, rk) && !pendingRowKeys.has(rk)) {
-            const entry = buildSemesterExamDocEntry(loc);
-            await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
-            requeuedCount++;
+            if (skipSelfHeal) {
+              await localDb.semesterExams.delete([classId, semester, loc.studentRef]);
+            } else {
+              const entry = buildSemesterExamDocEntry(loc);
+              await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
+              requeuedCount++;
+            }
           }
         }
       });
@@ -834,9 +891,13 @@ export async function applyRemoteDocToDexie(
           if (loc.id === undefined) continue;
           const rk = `h_${loc.id}`;
           if (!hasOwn(remoteRows, rk) && !pendingRowKeys.has(rk)) {
-            const entry = buildHolidayDocEntry({ ...loc, id: loc.id });
-            await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
-            requeuedCount++;
+            if (skipSelfHeal) {
+              await localDb.holidays.delete(loc.id);
+            } else {
+              const entry = buildHolidayDocEntry({ ...loc, id: loc.id });
+              await localDb.outbox.put({ ...entry, op: 'put', ts: localDb.nextOutboxTs() });
+              requeuedCount++;
+            }
           }
         }
       });
@@ -853,6 +914,10 @@ export async function applyRemoteDocToDexie(
         if (pendingRowKeys.has(rk)) return;
 
         if (!hasOwn(remoteRows, rk)) {
+          if (skipSelfHeal) {
+            await localDb.templates.delete(decodedId);
+            return;
+          }
           const localTpl = await localDb.templates.get(decodedId);
           if (localTpl) {
             const entry = buildTemplateDocEntry(localTpl);
@@ -1004,6 +1069,7 @@ export class SyncEngine {
   private readonly dailySnapshots: boolean;
   private readonly maxCloudSnapshots: number;
   private readonly dailySnapshotNow: () => number;
+  private readonly tombstoneRetentionMs: number;
   private readonly saveDailySnapshotFn?: (
     firestore: Firestore,
     uid: string,
@@ -1012,6 +1078,10 @@ export class SyncEngine {
   ) => Promise<CloudSnapshotMeta>;
   private stopped = false;
   private dailySnapshotInFlight: Promise<CloudSnapshotMeta | null> | null = null;
+  /** In-memory cache of tombstones observed in pulled/written docs (`docId -> (rowKey -> ts)`). */
+  private knownTombstonesByDoc = new Map<string, Map<string, number>>();
+  /** Docs written by this device since the last daily tombstone purge pass (no extra full scans). */
+  private docsWrittenSincePurge = new Set<string>();
   private markerUnsub: (() => void) | null = null;
   private fallbackTimer: ReturnType<typeof setInterval> | null = null;
   private remotePullTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1032,6 +1102,7 @@ export class SyncEngine {
     this.dailySnapshots = options.dailySnapshots ?? false;
     this.maxCloudSnapshots = options.maxCloudSnapshots ?? MAX_CLOUD_SNAPSHOTS;
     this.dailySnapshotNow = options.dailySnapshotNow ?? (() => Date.now());
+    this.tombstoneRetentionMs = options.tombstoneRetentionMs ?? TOMBSTONE_RETENTION_MS;
     this.saveDailySnapshotFn = options.saveDailySnapshot;
     this.onStatusChange = options.onStatusChange;
     this.onError = options.onError;
@@ -1199,6 +1270,7 @@ export class SyncEngine {
               console.warn('[SyncEngine] Failed to prune old cloud snapshots:', pruneErr);
             }
           }
+          await this.purgeExpiredTombstonesInWrittenDocs(now);
           await recordTodayLocally();
           return null;
         }
@@ -1222,6 +1294,9 @@ export class SyncEngine {
         } catch (pruneErr) {
           console.warn('[SyncEngine] Failed to prune old cloud snapshots:', pruneErr);
         }
+
+        // 4. Purge expired tombstones (> 90 days) from docs this device wrote anyway (no full scans)
+        await this.purgeExpiredTombstonesInWrittenDocs(now);
 
         await recordTodayLocally();
         return savedMeta;
@@ -1273,6 +1348,135 @@ export class SyncEngine {
     if (this.dailySnapshotInFlight) {
       await this.dailySnapshotInFlight;
     }
+  }
+
+  private recordRemoteDocTombstones(docId: string, rawDocData: Record<string, unknown>): void {
+    const remoteRows =
+      rawDocData.rows && typeof rawDocData.rows === 'object'
+        ? (rawDocData.rows as Record<string, unknown>)
+        : {};
+    const nextMap = new Map<string, number>();
+    for (const [rk, rawVal] of Object.entries(remoteRows)) {
+      if (isSyncTombstone(rawVal) && typeof rawVal.ts === 'number' && Number.isFinite(rawVal.ts)) {
+        nextMap.set(rk, rawVal.ts);
+      }
+    }
+    if (nextMap.size > 0) {
+      this.knownTombstonesByDoc.set(docId, nextMap);
+    } else {
+      this.knownTombstonesByDoc.delete(docId);
+    }
+  }
+
+  private getExpiredTombstoneKeysForDoc(
+    docId: string,
+    nowMs: number,
+    excludedRowKeys?: ReadonlySet<string>
+  ): string[] {
+    const map = this.knownTombstonesByDoc.get(docId);
+    if (!map || map.size === 0) return [];
+    const expired: string[] = [];
+    for (const [rk, ts] of map.entries()) {
+      if (excludedRowKeys?.has(rk)) continue;
+      if (nowMs - ts > this.tombstoneRetentionMs) {
+        expired.push(rk);
+      }
+    }
+    return expired;
+  }
+
+  private updateTombstoneCacheAfterDocCommit(
+    docId: string,
+    writes: Array<{ rowKey: string; firestoreValue: unknown }>,
+    purgedKeys: string[]
+  ): void {
+    this.docsWrittenSincePurge.add(docId);
+    let map = this.knownTombstonesByDoc.get(docId);
+    for (const rk of purgedKeys) {
+      map?.delete(rk);
+    }
+    for (const w of writes) {
+      if (
+        isSyncTombstone(w.firestoreValue) &&
+        typeof w.firestoreValue.ts === 'number' &&
+        Number.isFinite(w.firestoreValue.ts)
+      ) {
+        if (!map) {
+          map = new Map<string, number>();
+          this.knownTombstonesByDoc.set(docId, map);
+        }
+        map.set(w.rowKey, w.firestoreValue.ts);
+      } else {
+        map?.delete(w.rowKey);
+      }
+    }
+    if (map && map.size === 0) {
+      this.knownTombstonesByDoc.delete(docId);
+    }
+  }
+
+  /**
+   * Purges expired tombstones (> tombstoneRetentionMs) from docs this device wrote since
+   * the last daily pass — ZERO extra full collection scans. Best-effort; never throws.
+   */
+  private async purgeExpiredTombstonesInWrittenDocs(nowMs: number): Promise<number> {
+    if (this.stopped || this.isOffline() || !this.localDb.isOpen()) return 0;
+    if (this.docsWrittenSincePurge.size === 0) return 0;
+
+    const candidateDocIds = Array.from(this.docsWrittenSincePurge);
+    this.docsWrittenSincePurge.clear();
+
+    const toPurge: Array<{ docId: string; rowKeys: string[] }> = [];
+    for (const docId of candidateDocIds) {
+      const pending = await loadFreshPendingRowKeys(this.localDb, docId);
+      const expired = this.getExpiredTombstoneKeysForDoc(docId, nowMs, pending);
+      if (expired.length > 0) {
+        toPurge.push({ docId, rowKeys: expired });
+      }
+    }
+
+    if (toPurge.length === 0) return 0;
+
+    let purgedCount = 0;
+    try {
+      const CHUNK_SIZE = 200;
+      for (let i = 0; i < toPurge.length; i += CHUNK_SIZE) {
+        const slice = toPurge.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(this.firestore);
+        for (const item of slice) {
+          const docRef = doc(this.firestore, 'users', this.uid, 'docs', item.docId);
+          const updateArgs: unknown[] = [
+            'updatedAt',
+            serverTimestamp(),
+            'updatedBy',
+            this.deviceId,
+          ];
+          for (const rk of item.rowKeys) {
+            updateArgs.push(new FieldPath('rows', rk), deleteField());
+          }
+          batch.update(
+            docRef,
+            updateArgs[0] as string,
+            updateArgs[1],
+            ...(updateArgs.slice(2) as [])
+          );
+        }
+        await batch.commit();
+        for (const item of slice) {
+          const map = this.knownTombstonesByDoc.get(item.docId);
+          for (const rk of item.rowKeys) {
+            map?.delete(rk);
+          }
+          if (map && map.size === 0) {
+            this.knownTombstonesByDoc.delete(item.docId);
+          }
+          purgedCount += item.rowKeys.length;
+        }
+      }
+    } catch (err) {
+      console.warn('[SyncEngine] Best-effort tombstone purge failed (will retry later):', err);
+    }
+    return purgedCount;
   }
 
   /** True while the change-marker listener is attached (exposed for tests / diagnostics). */
@@ -1468,7 +1672,8 @@ export class SyncEngine {
   private addDocWritesToBatch(
     batch: ReturnType<typeof writeBatch>,
     docId: string,
-    writes: Array<{ rowKey: string; firestoreValue: unknown }>
+    writes: Array<{ rowKey: string; firestoreValue: unknown }>,
+    purgeRowKeys: string[] = []
   ): void {
     const kind = getDocKindFromId(docId);
     const docRef = doc(this.firestore, 'users', this.uid, 'docs', docId);
@@ -1485,7 +1690,8 @@ export class SyncEngine {
       { merge: true }
     );
 
-    // 2. Apply field-level updates to `rows.<rowKey>` (values or tombstones)
+    // 2. Apply field-level updates to `rows.<rowKey>` (values, tombstones, and purged expired tombstones)
+    const writtenKeys = new Set(writes.map((w) => w.rowKey));
     const updateArgs: unknown[] = [
       'kind',
       kind,
@@ -1498,6 +1704,11 @@ export class SyncEngine {
     ];
     for (const w of writes) {
       updateArgs.push(new FieldPath('rows', w.rowKey), w.firestoreValue);
+    }
+    for (const rk of purgeRowKeys) {
+      if (!writtenKeys.has(rk)) {
+        updateArgs.push(new FieldPath('rows', rk), deleteField());
+      }
     }
 
     batch.update(
@@ -1591,8 +1802,11 @@ export class SyncEngine {
 
       // 2. Build the union of doc updates:
       //    - remote non-tombstone rows missing locally -> tombstone (skip unreadable local photos!)
+      //    - remote tombstones older than tombstoneRetentionMs on docs we write anyway -> deleteField()
       //    - all current local rows -> put
+      const nowMs = this.dailySnapshotNow();
       const writesByDoc = new Map<string, Array<{ rowKey: string; firestoreValue: unknown }>>();
+      const expiredPurgeByDoc = new Map<string, string[]>();
       const pushWrite = (docId: string, rowKey: string, firestoreValue: unknown) => {
         let list = writesByDoc.get(docId);
         if (!list) {
@@ -1616,7 +1830,17 @@ export class SyncEngine {
         const localRows = localDocsMap.get(docId);
 
         for (const [rk, rawVal] of Object.entries(remoteRows)) {
-          if (isSyncTombstone(rawVal)) continue;
+          if (isSyncTombstone(rawVal)) {
+            if (
+              (!localRows || !localRows.has(rk)) &&
+              isExpiredTombstone(rawVal, nowMs, this.tombstoneRetentionMs)
+            ) {
+              const list = expiredPurgeByDoc.get(docId) ?? [];
+              list.push(rk);
+              expiredPurgeByDoc.set(docId, list);
+            }
+            continue;
+          }
           if (!localRows || !localRows.has(rk)) {
             pushWrite(docId, rk, makeTombstone(replaceTs));
           }
@@ -1638,6 +1862,7 @@ export class SyncEngine {
         const batchDocs: Array<{
           docId: string;
           writes: Array<{ rowKey: string; firestoreValue: unknown }>;
+          purgeKeys: string[];
         }> = [];
 
         for (const [docId, writes] of slice) {
@@ -1657,8 +1882,9 @@ export class SyncEngine {
             continue;
           }
 
-          this.addDocWritesToBatch(batch, docId, writes);
-          batchDocs.push({ docId, writes });
+          const purgeKeys = expiredPurgeByDoc.get(docId) ?? [];
+          this.addDocWritesToBatch(batch, docId, writes, purgeKeys);
+          batchDocs.push({ docId, writes, purgeKeys });
         }
 
         if (batchDocs.length > 0) {
@@ -1666,6 +1892,7 @@ export class SyncEngine {
           pushedDocsCount += batchDocs.length;
           for (const d of batchDocs) {
             pushedEntriesCount += d.writes.length;
+            this.updateTombstoneCacheAfterDocCommit(d.docId, d.writes, d.purgeKeys);
           }
         }
       }
@@ -1801,8 +2028,10 @@ export class SyncEngine {
           docId: string;
           writes: Array<{ rowKey: string; firestoreValue: unknown }>;
           entries: OutboxEntry[];
+          purgeKeys: string[];
         }> = [];
         const droppedEntries: OutboxEntry[] = [];
+        const pushNowMs = this.dailySnapshotNow();
 
         for (const [docId, docEntries] of slice) {
           const resolvedList = await Promise.all(
@@ -1865,11 +2094,14 @@ export class SyncEngine {
             continue;
           }
 
-          this.addDocWritesToBatch(batch, docId, writes);
+          const writeKeySet = new Set(writes.map((w) => w.rowKey));
+          const purgeKeys = this.getExpiredTombstoneKeysForDoc(docId, pushNowMs, writeKeySet);
+          this.addDocWritesToBatch(batch, docId, writes, purgeKeys);
           batchPrepared.push({
             docId,
             writes,
             entries: activeResolved.map((r) => r.entry),
+            purgeKeys,
           });
         }
 
@@ -1883,17 +2115,21 @@ export class SyncEngine {
             const committedEntries = batchPrepared.flatMap((d) => d.entries);
             pushedEntriesCount += committedEntries.length;
             pushedDocsCount += batchPrepared.length;
+            for (const item of batchPrepared) {
+              this.updateTombstoneCacheAfterDocCommit(item.docId, item.writes, item.purgeKeys);
+            }
             await this.deleteCommittedOutboxEntries(committedEntries);
           } catch (batchErr) {
             if (isFirestoreDocSizeError(batchErr)) {
               // Isolate oversized doc(s) so other docs in the same chunk still succeed
               for (const item of batchPrepared) {
                 const singleBatch = writeBatch(this.firestore);
-                this.addDocWritesToBatch(singleBatch, item.docId, item.writes);
+                this.addDocWritesToBatch(singleBatch, item.docId, item.writes, item.purgeKeys);
                 try {
                   await singleBatch.commit();
                   pushedEntriesCount += item.entries.length;
                   pushedDocsCount++;
+                  this.updateTombstoneCacheAfterDocCommit(item.docId, item.writes, item.purgeKeys);
                   await this.deleteCommittedOutboxEntries(item.entries);
                 } catch (singleErr) {
                   if (isFirestoreDocSizeError(singleErr)) {
@@ -1956,11 +2192,28 @@ export class SyncEngine {
     await this.emitStatus('syncing');
 
     try {
-      const savedLastPulledRow = await this.localDb.settings.get(SYNC_LAST_PULLED_AT_KEY);
+      const nowMs = this.dailySnapshotNow();
+      const [savedLastPulledRow, savedLastPullWallRow] = await Promise.all([
+        this.localDb.settings.get(SYNC_LAST_PULLED_AT_KEY),
+        this.localDb.settings.get(SYNC_LAST_PULL_WALL_AT_KEY),
+      ]);
+      const savedLastPulledMs =
+        typeof savedLastPulledRow?.value === 'number' ? savedLastPulledRow.value : 0;
+      const savedLastPullWallMs =
+        typeof savedLastPullWallRow?.value === 'number' ? savedLastPullWallRow.value : 0;
+
+      // Step 6d safety guard: if this device has not pulled for longer than the tombstone
+      // purge horizon (> 90 days), force a full pull and SKIP self-heal (cloud wins) so rows
+      // deleted & purged on Cloud are never resurrected!
+      const staleReferenceMs =
+        savedLastPullWallMs > 0 ? savedLastPullWallMs : savedLastPulledMs;
+      const isStaleBeyondHorizon =
+        staleReferenceMs > 0 && nowMs - staleReferenceMs > this.tombstoneRetentionMs;
+
       const lastPulledAtMs =
-        options?.forceAll === true || typeof savedLastPulledRow?.value !== 'number'
+        options?.forceAll === true || isStaleBeyondHorizon || savedLastPulledMs <= 0
           ? 0
-          : savedLastPulledRow.value;
+          : savedLastPulledMs;
 
       const docsCol = collection(this.firestore, 'users', this.uid, 'docs');
       const q =
@@ -1974,6 +2227,12 @@ export class SyncEngine {
 
       const snapshot = await getDocs(q);
       if (snapshot.empty) {
+        await this.localDb.runRemoteTransaction([this.localDb.settings], async () => {
+          await this.localDb.settings.put({
+            key: SYNC_LAST_PULL_WALL_AT_KEY,
+            value: nowMs,
+          });
+        });
         this.lastSyncedAt = Date.now();
         return { pulledDocsCount: 0, requeuedCount: 0 };
       }
@@ -2004,19 +2263,30 @@ export class SyncEngine {
         if (options?.onBeforeApplyDoc) {
           await options.onBeforeApplyDoc(item.id);
         }
-        const { requeuedCount } = await applyRemoteDocToDexie(this.localDb, item.id, item.data);
+        this.recordRemoteDocTombstones(item.id, item.data);
+        const { requeuedCount } = await applyRemoteDocToDexie(
+          this.localDb,
+          item.id,
+          item.data,
+          undefined,
+          isStaleBeyondHorizon ? { skipSelfHeal: true } : undefined
+        );
         totalRequeued += requeuedCount;
         pulledDocsCount++;
       }
 
-      if (maxUpdatedAtMs > lastPulledAtMs) {
-        await this.localDb.runRemoteTransaction([this.localDb.settings], async () => {
+      await this.localDb.runRemoteTransaction([this.localDb.settings], async () => {
+        if (maxUpdatedAtMs > lastPulledAtMs) {
           await this.localDb.settings.put({
             key: SYNC_LAST_PULLED_AT_KEY,
             value: maxUpdatedAtMs,
           });
+        }
+        await this.localDb.settings.put({
+          key: SYNC_LAST_PULL_WALL_AT_KEY,
+          value: nowMs,
         });
-      }
+      });
 
       if (totalRequeued > 0 && !this.isOffline()) {
         this.scheduleDebouncedPush();

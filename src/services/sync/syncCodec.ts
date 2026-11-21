@@ -17,14 +17,20 @@ export const MAX_SYNC_DOC_BYTES = 900 * 1024;
 
 export const SYNC_DEVICE_ID_KEY = 'syncDeviceId';
 export const SYNC_LAST_PULLED_AT_KEY = 'syncLastPulledAt';
+export const SYNC_LAST_PULL_WALL_AT_KEY = 'syncLastPullWallAt';
 export const SYNC_PENDING_PHOTOS_KEY = 'syncPendingPhotos';
 export const SYNC_PENDING_FULL_REPLACE_KEY = 'syncPendingFullReplace';
 export const SYNC_INITIAL_DONE_KEY = 'syncInitialDone';
 export const SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY = 'syncLastDailySnapshotDay';
 
+/** Tombstones older than 90 days may be purged from docs written by a device (Step 6d). */
+export const TOMBSTONE_RETENTION_DAYS = 90;
+export const TOMBSTONE_RETENTION_MS = TOMBSTONE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
 export const INTERNAL_SYNC_SETTING_KEYS = new Set<string>([
   SYNC_DEVICE_ID_KEY,
   SYNC_LAST_PULLED_AT_KEY,
+  SYNC_LAST_PULL_WALL_AT_KEY,
   SYNC_PENDING_PHOTOS_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
   SYNC_INITIAL_DONE_KEY,
@@ -49,6 +55,19 @@ export function isSyncTombstone(val: unknown): val is SyncTombstone {
     typeof val === 'object' &&
     val !== null &&
     (val as Record<string, unknown>).__deleted === true
+  );
+}
+
+export function isExpiredTombstone(
+  val: unknown,
+  nowMs: number = Date.now(),
+  retentionMs: number = TOMBSTONE_RETENTION_MS
+): boolean {
+  return (
+    isSyncTombstone(val) &&
+    typeof val.ts === 'number' &&
+    Number.isFinite(val.ts) &&
+    nowMs - val.ts > retentionMs
   );
 }
 
