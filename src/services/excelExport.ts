@@ -785,7 +785,7 @@ export async function exportMonthlyScoreExcel(params: {
 
     sheet.mergeCells(1, 1, 1, Math.max(4, totalCols - 3));
     const titleCell = sheet.getCell(1, 1);
-    titleCell.value = `${profile.schoolName}   ថ្នាក់ទី ${cls.name}   ${shData.title} — ${shData.periodLabel} (${fmt(cls.academicYear)})`;
+    titleCell.value = `${profile.schoolName}   ថ្នាក់ទី ${cls.name}   ${shData.title}   ឆ្នាំសិក្សា ${fmt(cls.academicYear)}`;
     titleCell.font = { name: 'Khmer OS Battambang', size: 11, bold: true };
     titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
 
@@ -822,7 +822,7 @@ export async function exportMonthlyScoreExcel(params: {
     }
     sheet.mergeCells(rNum, 1, rNum, 4);
     sheet.getCell(rNum, 1).value = 'លេខរៀងមុខវិជ្ជា';
-    sheet.getCell(rNum, 1).alignment = { horizontal: 'right', vertical: 'middle' };
+    sheet.getCell(rNum, 1).alignment = { horizontal: 'center', vertical: 'middle' };
 
     // Subject columns with rotated Khmer headers (textRotation: 90)
     let colCursor = 5;

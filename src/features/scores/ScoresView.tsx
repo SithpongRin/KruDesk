@@ -1226,7 +1226,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
         const p = parseYearMonth(m);
         sheets.push({
           id: m,
-          title: 'បញ្ជីពិន្ទុប្រចាំខែ',
+          title: `បញ្ជីពិន្ទុខែ${getKhmerMonthName(p.month)}`,
           periodLabel: `ខែ ${getKhmerMonthName(p.month)} ឆ្នាំ ${fmtNum(p.year)}`,
           monthKey: m,
           scoresByStudent: scoresMap,

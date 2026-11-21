@@ -101,7 +101,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
         const isPortrait = orientation === 'portrait';
         const pageWidthMm = isPortrait ? 210 : 297;
         const pageHeightMm = isPortrait ? 297 : 210;
-        const padVMm = isPortrait ? 5 : 3.5;
+        const padVMm = isPortrait ? 4 : 2.5;
         const padHMm = isPortrait ? 5 : 6;
         const innerWidthMm = pageWidthMm - padHMm * 2;
 
@@ -125,74 +125,77 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
           const isVeryLastPage = sIdx === sheets.length - 1 && isLastPageOfSheet;
           const pageRowCount = pg.items.length;
 
-          // Adaptive typography & spacing tuned for A4 landscape (203mm usable height)
-          // and A4 portrait (287mm usable height).
+          // Adaptive typography & spacing tuned for A4 landscape (205mm usable height)
+          // and A4 portrait (289mm usable height), accounting for Khmer Battambang glyph height
+          // so the signature sits snugly right under the table without drifting or clipping.
           const rowHeightMm = isPortrait
             ? pageRowCount > 39
-              ? 4.3
+              ? 4.2
               : pageRowCount > 30
-                ? 4.8
-                : 5.4
+                ? 4.5
+                : 5.0
             : pageRowCount > 39
-              ? 2.95
+              ? 2.75
               : pageRowCount > 30
-                ? 3.25
-                : 3.9;
+                ? 3.0
+                : 3.75;
           const fontSizePt = isPortrait
             ? subjectCount > 13
               ? 7.4
               : 8.4
             : pageRowCount > 39
-              ? 7.6
+              ? 7.1
               : pageRowCount > 30
-                ? 8.2
-                : 9.0;
+                ? 7.6
+                : 8.8;
           const headerHeightMm = isPortrait
-            ? 24
+            ? 23
             : pageRowCount > 39
-              ? 18.5
+              ? 15.5
               : pageRowCount > 30
-                ? 19.5
-                : 23;
+                ? 16.5
+                : 21;
+          const groupHeaderMm = isPortrait ? 4.4 : 4.0;
           const headerFontPt = isPortrait
             ? subjectCount > 13
               ? 6.8
               : 7.6
             : pageRowCount > 39
-              ? 7.2
+              ? 6.9
               : pageRowCount > 30
-                ? 7.8
-                : 8.4;
+                ? 7.3
+                : 8.2;
           const idFontPt = isPortrait
             ? subjectCount > 13
               ? 6.8
               : 7.6
             : pageRowCount > 39
-              ? 7.2
+              ? 6.9
               : pageRowCount > 30
-                ? 7.8
-                : 8.2;
+                ? 7.3
+                : 8.0;
           const signFontPt = isPortrait
             ? 10.5
             : pageRowCount > 39
-              ? 9.5
+              ? 9.0
               : pageRowCount > 30
-                ? 10
+                ? 9.5
                 : 10.5;
           const signGapMm = isPortrait
-            ? 14
+            ? 12
             : pageRowCount > 39
-              ? 9
+              ? 7
               : pageRowCount > 30
-                ? 10
-                : 14;
+                ? 9
+                : 13;
+          // DocumentSignature already has pt-2 (~2mm), so keep extra margin small
           const signMarginTopMm = isPortrait
-            ? 6
+            ? 1.5
             : pageRowCount > 39
-              ? 2.5
+              ? 0
               : pageRowCount > 30
-                ? 3
-                : 5;
+                ? 0.5
+                : 2;
 
           return (
             <div
@@ -212,11 +215,11 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
               }}
             >
               <div>
-                {/* Header matching reference/01_monthly_scores.webp */}
-                <div className="flex items-center justify-between mb-1.5 gap-2">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-1 gap-2">
                   <div
                     className={`${
-                      isPortrait ? 'text-[8.2pt] gap-x-2' : 'text-[9.5pt] gap-x-3'
+                      isPortrait ? 'text-[8.5pt] gap-x-2.5' : 'text-[9.5pt] gap-x-3'
                     } flex flex-wrap items-center`}
                   >
                     <span>
@@ -226,22 +229,19 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                       ថ្នាក់ទី <strong>{cls.name}</strong>
                     </span>
                     <span>
-                      <strong>{sheet.periodLabel}</strong>
-                    </span>
-                    <span>
                       ឆ្នាំសិក្សា <strong>{fmt(cls.academicYear)}</strong>
                     </span>
                   </div>
 
                   <div
                     style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
-                    className={`${isPortrait ? 'text-[10pt]' : 'text-[11.5pt]'} shrink-0`}
+                    className={`${isPortrait ? 'text-[10.5pt]' : 'text-[11.5pt]'} shrink-0`}
                   >
                     {sheet.title}
                   </div>
 
                   <table
-                    className={`border-collapse ${isPortrait ? 'text-[7.5pt]' : 'text-[8.5pt]'} shrink-0`}
+                    className={`border-collapse ${isPortrait ? 'text-[7.5pt]' : 'text-[8.2pt]'} shrink-0`}
                   >
                     <thead>
                       <tr>
@@ -275,7 +275,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                 {/* Score Table */}
                 <table
                   className="w-full border-collapse"
-                  style={{ fontSize: `${fontSizePt}pt`, tableLayout: 'fixed', lineHeight: 1 }}
+                  style={{ fontSize: `${fontSizePt}pt`, tableLayout: 'fixed', lineHeight: 0.94 }}
                 >
                   <thead>
                     <tr className="bg-slate-100">
@@ -313,8 +313,8 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                           <th
                             key={span.key}
                             colSpan={span.subjects.length}
-                            className="border border-black text-center font-bold px-0.5 py-0.5"
-                            style={{ fontSize: `${headerFontPt}pt`, height: '4.6mm' }}
+                            className="border border-black text-center font-bold px-0.5 py-0"
+                            style={{ fontSize: `${headerFontPt}pt`, height: `${groupHeaderMm}mm` }}
                           >
                             {span.group}
                           </th>
@@ -327,7 +327,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                           >
                             <RotatedHeaderText
                               text={span.subjects[0].name}
-                              heightMm={hasAnyGroup ? headerHeightMm + 4.6 : headerHeightMm}
+                              heightMm={hasAnyGroup ? headerHeightMm + groupHeaderMm : headerHeightMm}
                               widthMm={rotatedBoxWidthMm}
                               fontSizePt={headerFontPt}
                             />
@@ -342,7 +342,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                       >
                         <RotatedHeaderText
                           text="ពិន្ទុសរុប"
-                          heightMm={hasAnyGroup ? headerHeightMm + 4.6 : headerHeightMm}
+                          heightMm={hasAnyGroup ? headerHeightMm + groupHeaderMm : headerHeightMm}
                           widthMm={cols.total - 0.8}
                           fontSizePt={headerFontPt}
                         />
@@ -354,7 +354,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                       >
                         <RotatedHeaderText
                           text="មធ្យមភាគ"
-                          heightMm={hasAnyGroup ? headerHeightMm + 4.6 : headerHeightMm}
+                          heightMm={hasAnyGroup ? headerHeightMm + groupHeaderMm : headerHeightMm}
                           widthMm={cols.avg - 0.8}
                           fontSizePt={headerFontPt}
                         />
@@ -366,7 +366,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                       >
                         <RotatedHeaderText
                           text="ចំណាត់ថ្នាក់"
-                          heightMm={hasAnyGroup ? headerHeightMm + 4.6 : headerHeightMm}
+                          heightMm={hasAnyGroup ? headerHeightMm + groupHeaderMm : headerHeightMm}
                           widthMm={cols.rank - 0.8}
                           fontSizePt={Math.max(6.6, headerFontPt - 0.2)}
                         />
@@ -405,9 +405,9 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                     {/* Paper-form subject column numbers: grouped spans share one merged number */}
                     <tr
                       className="bg-slate-50"
-                      style={{ height: '3.8mm', fontSize: `${Math.max(7, fontSizePt - 0.8)}pt` }}
+                      style={{ height: '3.2mm', fontSize: `${Math.max(6.6, fontSizePt - 0.6)}pt` }}
                     >
-                      <th colSpan={4} className="border border-black text-right px-1.5 font-medium">
+                      <th colSpan={4} className="border border-black text-center px-1.5 font-medium">
                         លេខរៀងមុខវិជ្ជា
                       </th>
                       {columnNumbers.map((colNum) => (

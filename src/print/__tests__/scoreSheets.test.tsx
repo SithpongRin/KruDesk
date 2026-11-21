@@ -55,7 +55,7 @@ describe('MonthlyScoreSheet & SemesterSheet active subject filtering and layout'
     cleanup();
   });
 
-  it('MonthlyScoreSheet renders ONLY active subjects, uses readable >=8pt table font for 39 students, and places signature right below the table', () => {
+  it('MonthlyScoreSheet renders ONLY active subjects, centers លេខរៀងមុខវិជ្ជា, hides duplicate periodLabel in header, and keeps signature right below the table', () => {
     const cls = makeClass();
     const students = makeStudents(39);
     const activeSubjects = sortSubjects(cls.subjects).filter(isSubjectActive);
@@ -71,7 +71,7 @@ describe('MonthlyScoreSheet & SemesterSheet active subject filtering and layout'
         sheets={[
           {
             id: '2026-11',
-            title: 'បញ្ជីពិន្ទុប្រចាំខែ',
+            title: 'បញ្ជីពិន្ទុខែវិច្ឆិកា',
             periodLabel: 'ខែ វិច្ឆិកា ឆ្នាំ 2026',
             monthKey: '2026-11',
             scoresByStudent: new Map(),
@@ -86,6 +86,8 @@ describe('MonthlyScoreSheet & SemesterSheet active subject filtering and layout'
     expect(pageEl.style.justifyContent).not.toBe('space-between');
 
     const text = container.textContent ?? '';
+    expect(text).toContain('បញ្ជីពិន្ទុខែវិច្ឆិកា');
+    expect(text).not.toContain('ខែ វិច្ឆិកា ឆ្នាំ 2026');
     for (const active of activeSubjects) {
       expect(text).toContain(active.name);
     }
@@ -93,15 +95,21 @@ describe('MonthlyScoreSheet & SemesterSheet active subject filtering and layout'
       expect(text).not.toContain(inactive.name);
     }
 
+    // លេខរៀងមុខវិជ្ជា cell is centered
+    const colNumLabel = Array.from(container.querySelectorAll('th')).find((th) =>
+      th.textContent?.includes('លេខរៀងមុខវិជ្ជា')
+    );
+    expect(colNumLabel?.className).toContain('text-center');
+
     // Score table should have 4 leading cols + activeSubjects.length + 4 summary cols
     const bodyRows = container.querySelectorAll('table.w-full tbody tr');
     expect(bodyRows.length).toBe(39);
     const firstRowCells = bodyRows[0].querySelectorAll('td');
     expect(firstRowCells.length).toBe(4 + activeSubjects.length + 4);
 
-    // Readable table font size (>= 8pt for 39 rows)
+    // Readable table font size (>= 7.5pt for 39 rows on landscape)
     const table = container.querySelector('table.w-full') as HTMLElement;
-    expect(parseFloat(table.style.fontSize)).toBeGreaterThanOrEqual(8);
+    expect(parseFloat(table.style.fontSize)).toBeGreaterThanOrEqual(7.5);
 
     // Signature block font size >= 9.5pt
     const sigGrid = Array.from(container.querySelectorAll('div')).find((el) =>
