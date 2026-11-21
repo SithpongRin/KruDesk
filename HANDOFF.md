@@ -60,14 +60,22 @@ tracked file.
     without touching anything if either snapshot fails), plus best-effort browser JSON download.
   - Verified: `npm test` 197/197, `npm run test:rules` 24/24 (rules 7 + syncEngine 11 + firstSignIn 6),
     build OK.
+- **Live sync (Claude, 2026-11-21, after the teacher's first Preview test said "no sync"):** pull used to run
+  only on start / `online` / focus (throttled 60 s), so with both devices open nothing arrived. Now every
+  successful push bumps one tiny doc `users/{uid}/sync/marker` (best-effort, after the commit) and each device
+  keeps ONE `onSnapshot` on it (`liveUpdates: true`, only after first sign-in) → pull within ~3 s;
+  focus/visibility/`pageshow` pull throttled 5 s; 5-minute fallback pull while visible. Cost: 1 read per remote
+  change + 1 write per push. New rule `match /sync/{docId}` (owner + approved). Tests:
+  `tests/liveSync.emulator.test.ts` (5). Verified on the real app with two emulator "devices" (2.6 s both ways).
 
 **Known items & decisions**
 - Teacher's decision for §1.6 (both device and cloud have data): **Replace, not merge** — both device and
   cloud snapshots are saved to `users/{uid}/backups` (plus extra local JSON download) before replacing.
 - Tombstones are never purged yet, so docs grow slowly → **plan a purge (e.g. tombstones older than 90 days) in step 6**.
 
-**Next steps:** step 5 (deploy `firestore.rules` with `docs` rule — Claude reviewed OK, teacher runs deploy;
-test on real phone + laptop via a Vercel Preview branch before touching `main`), step 6 (daily cloud
+**Next steps:** step 5 — rules with `docs` + `sync` are deployed to `krudesk-1fa42`; commits are on branch
+`test/cloud-sync` (Vercel Preview `krudesk-git-test-cloud-sync-si-th-pong.vercel.app`, test with a separate
+Google test account); `main` NOT pushed. Finish the real phone + laptop test, then step 6 (daily cloud
 snapshots, tombstone purge, import of old `KruDeskDB` / backups), step 7 (docs). Push to `main` only after
 real phone + laptop testing passes (deploy order: rules deploy → phone + laptop test → push `main`).
 

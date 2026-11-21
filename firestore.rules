@@ -109,6 +109,11 @@ service cloud.firestore {
       match /docs/{docId} {
         allow read, write: if (isApproved() || isAdmin()) && request.auth.uid == uid;
       }
+
+      // Per-teacher live change marker (one tiny doc other devices listen to) — same access as docs.
+      match /sync/{docId} {
+        allow read, write: if (isApproved() || isAdmin()) && request.auth.uid == uid;
+      }
     }
 
     // Everything else is denied by default.

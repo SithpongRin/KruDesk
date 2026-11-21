@@ -302,6 +302,8 @@ export async function startSyncForUser(uid: string): Promise<void> {
       firestore,
       uid,
       requireInitialDone: true,
+      // One listener on users/{uid}/sync/marker + 5-min fallback, started only after first sign-in
+      liveUpdates: true,
       onStatusChange: (snapshot) => {
         if (mySession !== sessionToken) return;
         useSyncStore.setState((prev) => ({
@@ -361,6 +363,8 @@ export async function startSyncForUser(uid: string): Promise<void> {
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
       window.addEventListener('focus', handleFocusOrVisible);
+      // iOS PWA resume / back-forward cache restore does not always fire focus or visibilitychange
+      window.addEventListener('pageshow', handleFocusOrVisible);
       if (typeof document !== 'undefined') {
         document.addEventListener('visibilitychange', handleVisibilityChange);
       }
@@ -369,6 +373,7 @@ export async function startSyncForUser(uid: string): Promise<void> {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
         window.removeEventListener('focus', handleFocusOrVisible);
+        window.removeEventListener('pageshow', handleFocusOrVisible);
         if (typeof document !== 'undefined') {
           document.removeEventListener('visibilitychange', handleVisibilityChange);
         }

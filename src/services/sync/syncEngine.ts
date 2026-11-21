@@ -3,9 +3,11 @@ import {
   doc,
   FieldPath,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   Timestamp,
   where,
   writeBatch,
@@ -79,9 +81,23 @@ export interface SyncEngineOptions {
    * emulator tests that construct SyncEngine directly without first sign-in pass `false`.
    */
   requireInitialDone?: boolean;
+  /**
+   * When true, `start()` (once the first sign-in is done) attaches ONE onSnapshot listener to the
+   * tiny change-marker doc `users/{uid}/sync/marker` and pulls when another device pushes, plus a
+   * 5-minute fallback pull while the page is visible. Default false (tests opt in explicitly).
+   */
+  liveUpdates?: boolean;
+  /** Fallback pull interval while visible and online (default 5 minutes). */
+  fallbackPullIntervalMs?: number;
   onStatusChange?: (snapshot: SyncStatusSnapshot) => void;
   onError?: (khmerMessage: string) => void;
 }
+
+/** Location of the per-teacher live change marker (see firestore.rules `match /sync/{docId}`). */
+export const SYNC_MARKER_COLLECTION = 'sync';
+export const SYNC_MARKER_DOC_ID = 'marker';
+/** Minimum gap between two pulls triggered by focus / visibility / page show. */
+export const FOCUS_PULL_THROTTLE_MS = 5_000;
 
 export interface PushOutboxOptions {
   /** Internal bypass used exclusively by the first sign-in flow after deciding Replace/Upload. */
@@ -955,6 +971,11 @@ export class SyncEngine {
   private lastError: string | null = null;
   private isSyncing = false;
   private lastFocusPullAt = 0;
+  private readonly liveUpdates: boolean;
+  private readonly fallbackPullIntervalMs: number;
+  private markerUnsub: (() => void) | null = null;
+  private fallbackTimer: ReturnType<typeof setInterval> | null = null;
+  private remotePullTimer: ReturnType<typeof setTimeout> | null = null;
   /** Cached flag once `syncInitialDone === true` has been verified from IndexedDB. */
   private initialSyncConfirmed = false;
   /** Single-flight promise chain so push/pull/full-replace operations never overlap. */
@@ -967,6 +988,8 @@ export class SyncEngine {
     this.deviceId = options.deviceId || `dev_${Math.random().toString(36).slice(2, 10)}`;
     this.debounceMs = options.debounceMs ?? 2000;
     this.requireInitialDone = options.requireInitialDone ?? true;
+    this.liveUpdates = options.liveUpdates ?? false;
+    this.fallbackPullIntervalMs = options.fallbackPullIntervalMs ?? 5 * 60_000;
     this.onStatusChange = options.onStatusChange;
     this.onError = options.onError;
   }
@@ -1042,6 +1065,11 @@ export class SyncEngine {
       });
     }
 
+    // Live updates only once the first sign-in decision is done (never before — §1.6 guard).
+    if (this.liveUpdates && (!this.requireInitialDone || this.initialSyncConfirmed)) {
+      this.startLiveUpdates();
+    }
+
     if (options?.skipInitialSync) {
       await this.emitStatus();
       return;
@@ -1056,6 +1084,85 @@ export class SyncEngine {
       this.unsubOutboxHook();
       this.unsubOutboxHook = null;
     }
+    this.stopLiveUpdates();
+  }
+
+  /** True while the change-marker listener is attached (exposed for tests / diagnostics). */
+  isLiveUpdatesActive(): boolean {
+    return this.markerUnsub !== null;
+  }
+
+  private markerRef() {
+    return doc(this.firestore, 'users', this.uid, SYNC_MARKER_COLLECTION, SYNC_MARKER_DOC_ID);
+  }
+
+  /**
+   * Attaches ONE onSnapshot listener to `users/{uid}/sync/marker` (1 read per remote change)
+   * and a fallback pull every `fallbackPullIntervalMs` while the page is visible and online.
+   * Idempotent.
+   */
+  startLiveUpdates(): void {
+    if (!this.markerUnsub) {
+      this.markerUnsub = onSnapshot(
+        this.markerRef(),
+        (snap) => {
+          if (snap.metadata.fromCache || snap.metadata.hasPendingWrites || !snap.exists()) return;
+          const by = snap.get('updatedBy');
+          if (by === this.deviceId) return; // our own push — nothing new to pull
+          this.scheduleRemotePull();
+        },
+        (err) => {
+          console.warn('[SyncEngine] Change-marker listener error:', err);
+          this.markerUnsub = null; // fallback timer / focus pulls keep working
+        }
+      );
+    }
+    if (!this.fallbackTimer && this.fallbackPullIntervalMs > 0) {
+      this.fallbackTimer = setInterval(() => {
+        const visible =
+          typeof document === 'undefined' || document.visibilityState === 'visible';
+        if (visible && !this.isOffline()) {
+          void this.pullChanges().catch(() => {});
+        }
+      }, this.fallbackPullIntervalMs);
+    }
+  }
+
+  stopLiveUpdates(): void {
+    if (this.markerUnsub) {
+      this.markerUnsub();
+      this.markerUnsub = null;
+    }
+    if (this.fallbackTimer) {
+      clearInterval(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
+    if (this.remotePullTimer) {
+      clearTimeout(this.remotePullTimer);
+      this.remotePullTimer = null;
+    }
+  }
+
+  /** Coalesces bursts of marker snapshots into a single pull. */
+  private scheduleRemotePull(): void {
+    if (this.remotePullTimer) return;
+    this.remotePullTimer = setTimeout(() => {
+      this.remotePullTimer = null;
+      void this.pullChanges().catch(() => {});
+    }, 300);
+  }
+
+  /**
+   * Best-effort, fire-and-forget bump of the change marker after a successful push so other
+   * devices' listeners pull. Never blocks or fails the push (data is already committed).
+   */
+  private touchChangeMarker(): void {
+    void setDoc(this.markerRef(), {
+      updatedAt: serverTimestamp(),
+      updatedBy: this.deviceId,
+    }).catch((err) => {
+      console.warn('[SyncEngine] Could not update change marker:', err);
+    });
   }
 
   scheduleDebouncedPush(): void {
@@ -1389,6 +1496,7 @@ export class SyncEngine {
       );
 
       this.lastSyncedAt = Date.now();
+      if (pushedEntriesCount > 0 || pushedDocsCount > 0) this.touchChangeMarker();
       return {
         pushedEntriesCount,
         pushedDocsCount,
@@ -1606,6 +1714,7 @@ export class SyncEngine {
       }
 
       this.lastSyncedAt = Date.now();
+      if (pushedEntriesCount > 0 || pushedDocsCount > 0) this.touchChangeMarker();
       return {
         pushedEntriesCount,
         pushedDocsCount,
@@ -1768,14 +1877,15 @@ export class SyncEngine {
   }
 
   /**
-   * Throttled pull on window focus (at most once per 60 seconds, per §1.5).
+   * Sync on window focus / visibility / page show (iOS PWA resume), throttled to
+   * FOCUS_PULL_THROTTLE_MS so returning to the app shows other devices' edits right away.
    */
   async onWindowFocus(): Promise<void> {
     if (await this.isBlockedByInitialSync()) {
       return;
     }
     const now = Date.now();
-    if (now - this.lastFocusPullAt < 60_000) {
+    if (now - this.lastFocusPullAt < FOCUS_PULL_THROTTLE_MS) {
       return;
     }
     this.lastFocusPullAt = now;
