@@ -261,9 +261,7 @@ export const ClassFormModal: React.FC<ClassFormModalProps> = ({
                   អនុវិទ្យាល័យ ៧–៩
                 </div>
                 <div className="text-[11px] text-[#86868b] mt-0.5">
-                  {gradeLevel === 9
-                    ? 'ថ្នាក់ទី ៩ តាមក្រសួង (១០ មុខវិជ្ជា + ភាសាបរទេសបន្ថែម)'
-                    : 'តាមក្រសួង (១៤ មុខវិជ្ជា · សរុប ៧៥០)'}
+                  {'១០ មុខវិជ្ជា · សរុប ៤២០ (÷ ៨.៤) + ភាសាបរទេសបន្ថែម'}
                 </div>
               </button>
 

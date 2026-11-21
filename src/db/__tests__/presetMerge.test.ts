@@ -227,16 +227,17 @@ describe('mergeSubjectsWithPreset', () => {
 });
 
 describe('subjectsDifferFromPreset', () => {
-  it('is false for the preset itself and true for an old 11/12-subject list', async () => {
-    const { subjectsDifferFromPreset, getPresetSubjects } = await import('../presets');
+  it('is false for the preset itself and true for an old list (e.g. the 14-subject 750 list)', async () => {
+    const { subjectsDifferFromPreset, getPresetSubjects, createLowerSecondarySubjects } =
+      await import('../presets');
     const preset = getPresetSubjects('lower-secondary');
     expect(subjectsDifferFromPreset(preset, preset)).toBe(false);
-    expect(preset.filter((s) => s.isActive !== false)).toHaveLength(14);
+    // 10 counted subjects + ភាសាបរទេស (bonus) are active
+    expect(preset.filter((s) => s.isActive !== false)).toHaveLength(11);
 
-    const old = preset
-      .filter((s) => !['home_econ', 'arts', 'ict', 'pe'].includes(s.id))
-      .map((s) => (s.id === 'math' ? { ...s, maxScore: 50 } : s));
+    const old = preset.map((s) => (s.id === 'math' ? { ...s, maxScore: 50 } : s));
     expect(subjectsDifferFromPreset(old, preset)).toBe(true);
+    expect(subjectsDifferFromPreset(createLowerSecondarySubjects(), preset)).toBe(true);
   });
 });
 
