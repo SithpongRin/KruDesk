@@ -3,92 +3,134 @@
 > **ខ្មែរ (សង្ខេប)** ៖ ឯកសារនេះប្រាប់ AI ថ្មី (Claude ឬ Gemini) ពីស្ថានភាពគម្រោង ការសម្រេចចិត្តរបស់គ្រូ
 > វិធានធ្វើការ និងការងារដែលនៅសល់។ ចាប់ផ្ដើមឆាតថ្មីដោយឲ្យ AI អានឯកសារនេះមុនគេ។
 >
-> Last updated: 2026-11-21 (Claude, before new chats) · Live commit: see `git log -1` on `main` (check Settings → «អំពីកម្មវិធី»)
+> Last updated: 2026-11-21 (Gemini, Step 7 docs complete) · Live commit: see `git log -1` on `main` (check Settings → «អំពីកម្មវិធី»)
 
 ---
 
-## 00. ⚠️ Current state — read this first (2026-11-21): Firebase login + cloud sync
+## 00. ⚠️ Current state — read this first (2026-11-21): Firebase login + cloud sync (Steps 1–7 complete on local `main`)
 
 **Plan files (git-ignored, local only — read both):** `GEMINI_FIREBASE_PROMPT.md` (login, admin approval,
 rules, Vercel) and `GEMINI_CLOUD_SYNC_PROMPT.md` (cloud sync; replaces steps 5–6 of the first one).
-The admin email lives ONLY in Firestore `config/admin` and in those git-ignored files — never write it in a
-tracked file.
+The admin email lives ONLY in Firestore `config/admin` and in those git-ignored files — **never write it in a
+tracked file**.
 
-**Hosting & project**
-- New main site: **https://krudesk.vercel.app** (Vercel Hobby, project `krudesk`, auto-deploys from `main`,
-  build = `npm test && npm run build`). Old site `sithpongrin.github.io/KruDesk/` still deploys from `main`
-  without auth (teachers download their old backups there). Vite `base` is `/` on Vercel, `/KruDesk/` otherwise.
+**Hosting & Firebase project**
+- Main site: **https://krudesk.vercel.app** (Vercel Hobby, project `krudesk`, auto-deploys from `origin/main`,
+  build = `npm test && npm run build`). Preview site for cloud sync testing: branch `test/cloud-sync` →
+  `krudesk-git-test-cloud-sync-si-th-pong.vercel.app`. Old site `sithpongrin.github.io/KruDesk/` still deploys
+  from `main` without Firebase auth (local-only; teachers download old backups there). Vite `base` is `/` on
+  Vercel, `/KruDesk/` otherwise.
 - Firebase project **`krudesk-1fa42`** (Spark, free). Owner = the teacher's admin account only. Firestore
-  `(default)` in `asia-southeast1`. Auth: Google only. `config/admin` exists. `firestore.rules` deployed
-  (version with `users/*`, `backups`, but NOT yet the `docs` rule).
+  `(default)` in `asia-southeast1`. Auth: Google only. `config/admin` exists. `firestore.rules` with `users/*`,
+  `backups/{backupId}/{rest=**}`, `docs/{docId}`, and `sync/{docId}` is **already deployed** to `krudesk-1fa42`.
 - Vercel Production `VITE_FIREBASE_AUTH_DOMAIN = krudesk.vercel.app` + rewrite `/__/auth/*` →
   firebaseapp.com (login on iOS PWA). Fail-closed: a Vercel build without Firebase env (or with the
   emulator flag) fails on purpose (`build/validateVercelBuildEnv.ts`).
 
-**Done and committed**
-- `8cb4262` Vercel base path · `4797914` Google sign-in, pending/approved/rejected/disabled screens,
-  offline status cache, rules + rules tests (pushed, live).
-- `d8d938b` Admin menu «គ្រប់គ្រងអ្នកប្រើ» in the Sidebar (Admin only) — **not pushed**.
-- `43be585` per-account Dexie `KruDeskDB_<uid>` (old `KruDeskDB` never deleted), safe random integer ids
-  for classes/students/holidays (Dexie v5 + `outbox` table), full reload on sign-out/account switch — **not pushed**.
-- `19fbd7f` **Cloud sync step 3 (not pushed):** `src/services/sync/{syncCodec,syncEngine,photoCompression}.ts`,
-  atomic Dexie DBCore outbox middleware (`src/db/database.ts`, enabled only on `KruDeskDB_<uid>`),
-  `docs` rule in `firestore.rules`, `tests/syncEngine.emulator.test.ts`. All 6 review issues + A–D fixed:
-  per-transaction remote-apply marker, `class → students → photo → others` apply order + durable
-  `syncPendingPhotos`, atomic same-tx outbox + `pendingPhoto` compressed at push time, tombstones
-  `{ __deleted: true, ts }` + self-heal, whole-doc 900 KB check keeping oversized entries without blocking
-  other docs, per-entry photo error catch (unreadable Blobs stay in outbox without blocking other docs),
-  single-flight `opChain` lock, full-replace sync for restore / «លុបទិន្នន័យទាំងអស់» with every-device
-  Khmer warnings.
-- **Cloud sync step 4 (committed locally, not pushed):** hooked `SyncEngine` into app lifecycle
-  (`src/services/sync/{useSyncStore,firstSignIn,cloudSnapshot}.ts`, `useAuthStore.ts`, `App.tsx`,
-  `AppleHeader.tsx`, `SyncStatusBadge.tsx`, `FirstSignInConflictModal.tsx`; lazy-loaded so initial bundle
-  stays small).
-  - Lifecycle: starts once for approved/admin users right after `openDbForUser(uid)` only when Firebase is
-    configured (GitHub Pages stays local-only); `stopSyncEngine()` runs synchronously BEFORE `closeUserDb()`;
-    `online`/`offline`/`focus`/`visibilitychange` wired.
-  - First sign-in phases (`idle | checking | pulling | uploading | conflict | resolving | awaiting-first-sync | done`),
-    per-account internal `syncInitialDone` flag (read before setting phase so normal opens never flash the
-    checking screen), 20 s slow-network timeout with «ព្យាយាមម្ដងទៀត» and «ប្រើក្នុងឧបករណ៍នេះសិន (sync ពេលក្រោយ)»
-    → `awaiting-first-sync` (header shows «មិនទាន់ sync — រង់ចាំអ៊ីនធឺណិត»; if an in-flight pull/upload finishes
-    without error after defer, `syncInitialDone` is still marked true so no false conflict appears).
-  - Engine guard: `requireInitialDone` defaults to `true` inside `SyncEngine` (blocks push/pull/syncNow/
-    debounce until `syncInitialDone === true`, preventing silent merge; first sign-in passes explicit internal
-    bypass; direct engine tests pass `requireInitialDone: false`).
-  - Conflict replace (§1.6): saves **both** durable gzipped Cloud snapshots (`pre-replace-device` +
-    `pre-replace-cloud`, chunks ≤ 700 KB, SHA-256 verified) to `users/{uid}/backups` before replacing (aborts
-    without touching anything if either snapshot fails), plus best-effort browser JSON download.
-  - Verified: `npm test` 197/197, `npm run test:rules` 24/24 (rules 7 + syncEngine 11 + firstSignIn 6),
-    build OK.
-- **Live sync (Claude, 2026-11-21, after the teacher's first Preview test said "no sync"):** pull used to run
-  only on start / `online` / focus (throttled 60 s), so with both devices open nothing arrived. Now every
-  successful push bumps one tiny doc `users/{uid}/sync/marker` (best-effort, after the commit) and each device
-  keeps ONE `onSnapshot` on it (`liveUpdates: true`, only after first sign-in) → pull within ~3 s;
-  focus/visibility/`pageshow` pull throttled 5 s; 5-minute fallback pull while visible. Cost: 1 read per remote
-  change + 1 write per push. New rule `match /sync/{docId}` (owner + approved). Tests:
-  `tests/liveSync.emulator.test.ts` (5). Verified on the real app with two emulator "devices" (2.6 s both ways).
-- **Stamp / signature / border images (Claude, 2026-11-21):** the teacher saw no stamp or teacher signature on the
-  phone — a 900 px seal PNG is often > 900 KB, so `settings__directorStamp` / `teacherSignature` were skipped as
-  oversize. Now `settingImageCompression.ts` re-encodes only oversized setting images for the Cloud copy (WebP with
-  alpha, or quantised PNG on Safari; then scale down ×0.8 per step) until the doc is ≤ 760 KB. Every device,
-  including the uploader, ends up with that same copy. Stuck outbox entries go up on the next push.
+**Cloud Sync Architecture (Steps 1–7 complete)**
+```
+UI (unchanged, ~70 useLiveQuery) ⇄ Dexie KruDeskDB_<uid> (DBCore outbox middleware)
+                                      ⇄ SyncEngine (push / pull / marker listener / daily snapshot)
+                                      ⇄ Firestore users/{uid}/{docs, sync/marker, backups}
+```
+- **Auth & Admin (`d8d938b`, `4797914`):** Google sign-in + admin approval (`pending | approved | rejected | disabled`),
+  offline status cache, dedicated Admin-only Sidebar item «គ្រប់គ្រងអ្នកប្រើ» (with pending-count badge).
+- **Per-account DB & safe IDs (`43be585`):** Dexie v5 `KruDeskDB_<uid>` opened right after approval; random
+  safe integer IDs (`Date.now() * 1000 + random(0..999)`) prevent offline ID collisions across devices; full
+  reload on sign-out/account switch. Old `KruDeskDB` (no uid) is **never deleted or modified**.
+- **Outbox middleware → Push → `users/{uid}/docs/*` (`19fbd7f`):**
+  - Atomic Dexie DBCore middleware on `KruDeskDB_<uid>` only (`outbox` table written in the same transaction
+    as data mutations; remote applies run inside per-tx remote scope so concurrent teacher edits still enqueue).
+  - Grouped aggregates (`settings__<key>`, `class__<id>`, `students__<classId>`, `photo__<studentId>`,
+    `att__<classId>__<YYYY-MM>`, `ms__<classId>__<YYYY-MM>`, `se__<classId>__<1|2>`, `holidays`, `template__<id>`)
+    written with field-level `new FieldPath('rows', key)` so edits to different students in the same month
+    never overwrite each other. Explicit allow-list `SYNCED_SETTING_KEYS` excludes device-only preferences
+    (`theme`, `selectedClassId`, `selectedMonth`, `lastBackupAt`) and internal sync metadata.
+  - Whole-doc 900 KB guard (`estimateFullDocBytes`) keeps oversized entries in outbox with a Khmer error without
+    blocking other docs; per-entry photo compression (`photoCompression.ts`) isolates unreadable Blobs;
+    single-flight `opChain` lock prevents overlapping push/pull/replace ops.
+- **Oversized setting image shrinking (`2bea83a`):** `settingImageCompression.ts` re-encodes only oversized
+  stamps, signatures, and document borders (including per-rank `certificateBorder_1/2/3`) for the Cloud copy
+  (WebP with alpha or quantised PNG on Safari, scaled ×0.8/step until ≤ 760 KB) so every device gets the
+  identical image without tripping the 1 MiB Firestore doc limit.
+- **Live updates via change-marker listener (`d8f877f`):** every successful push bumps one tiny doc
+  `users/{uid}/sync/marker` (best-effort `setDoc` after commit). Each device keeps ONE `onSnapshot` on that
+  doc (`liveUpdates: true`, attached in `start()` ONLY after `syncInitialDone === true`) → remote edits arrive
+  in ~2–3 s without listening to the whole collection. Focus/visibility/`pageshow` pull throttle = 5 s; 5-minute
+  fallback pull while visible.
+- **Legacy import & First sign-in Replace flow (`b00d43a`, Step 6c):**
+  - Before the first sign-in check, if unclaimed legacy `KruDeskDB` has data on the device, `LegacyImportModal`
+    asks «រកឃើញទិន្នន័យចាស់ (N ថ្នាក់, N សិស្ស)។ តើជាទិន្នន័យរបស់អ្នកទេ?» (`legacyImport.ts`). Yes copies via
+    `buildBackupPayload` + `restoreBackupPayload(..., 'replace', userDb)` and marks `krudesk.legacyDbClaimedBy`
+    without modifying/deleting `KruDeskDB`; No remembers per-uid in `krudesk.legacyDbDeclinedBy`.
+  - Normal first sign-in (`firstSignIn.ts`, `useSyncStore.ts`): `requireInitialDone: true` blocks engine sync
+    until `syncInitialDone === true` (no silent merge); 20 s slow-network timeout allows retry or deferring to
+    `awaiting-first-sync`. Cloud-only → full pull; device-only → `pushFullReplace`; both have data →
+    **Replace, not merge** (`FirstSignInConflictModal`, default Cloud): saves **both** gzipped Cloud snapshots
+    (`pre-replace-device` + `pre-replace-cloud`, chunks ≤ 700 KB, SHA-256 verified) before touching either side
+    (aborts safely if either fails), plus best-effort local JSON download.
+  - Old-format **v1** JSON backups (e.g. downloaded from `sithpongrin.github.io`) restore cleanly via
+    `restoreBackupPayload(..., 'replace')` (deriving `attendanceSessions`, normalizing subjects, rebuilding
+    `photoBlob`s) and trigger `pushFullReplace` to sync every device.
+- **Tombstones + 90-day purge + stale-device guard (`19fbd7f`, Step 6d):**
+  - Deletes write tombstones `{ __deleted: true, ts }`; normal pulls delete locally ONLY on explicit tombstones
+    and self-heal missing rows by re-queuing to outbox.
+  - Tombstones older than 90 days (`TOMBSTONE_RETENTION_MS`) are removed with `deleteField()` only on docs this
+    device writes anyway (piggybacked on `pushOutbox`/`pushFullReplace` and flushed for written docs during the
+    daily snapshot — **zero extra full scans**).
+  - **Stale-device guard:** if a device's `syncLastPullWallAt` (or `syncLastPulledAt`) is > 90 days old,
+    `pullChanges()` forces `forceAll: true` and skips self-heal (`skipSelfHeal: true`, cloud wins: unedited
+    local rows absent from Cloud are deleted locally instead of re-queued, while unpushed local outbox edits
+    survive), updates `syncLastPullWallAt`, and resumes normal sync.
+- **Automatic daily Cloud snapshots & Settings restore (Steps 6a & 6b):**
+  - On the first successful sync of each local day (`toLocalDateKey`, UTC+7 safe) when online and
+    `syncInitialDone === true`, `SyncEngine` runs a non-blocking background snapshot (`buildBackupPayload` →
+    `saveBackupPayloadToCloudSnapshot(..., 'daily')`) and prunes `users/{uid}/backups` to the newest **10**
+    snapshots (deleting both metadata docs and `chunks/*` docs). Reuses 1 list query to skip writing a duplicate
+    `'daily'` snapshot if another device on the same account already took one today; failures log a warning
+    and retry tomorrow without ever affecting normal sync.
+  - Settings → **«ស្ដារពី Cloud Backup»** (`CloudBackupCard.tsx`): read-only list in 1 query (date/time, source
+    `daily | manual | pre-replace-device | pre-replace-cloud`, size, class/student counts), **«បម្រុងទុកឥឡូវ»**
+    (`'manual'` snapshot), and restore via `readCloudSnapshotPayload` (SHA-256 verified) → shared
+    `BackupRestoreModal` (with the every-device Khmer warning) → `restoreBackupPayload(..., 'replace', db)` →
+    immediate `pushFullReplace`.
 
-**Known items & decisions**
-- **Branding (teacher, 2026-11-21):** the app UI must not use the ministry emblem. Logo = the wordmark «KruDesk» (`KruDeskWordmark`: «Kru» #0b1b3f + «Desk» #1565f5, extra-bold system font). App icon = blue notebook with a «Kru DESK» label on a light-blue squircle (`public/pwa-*.png`, `apple-touch-icon.png`, `favicon-64.png`). The emblem stays only on student cards (school documents).
-- Teacher's decision for §1.6 (both device and cloud have data): **Replace, not merge** — both device and
-  cloud snapshots are saved to `users/{uid}/backups` (plus extra local JSON download) before replacing.
-- Tombstones are never purged yet, so docs grow slowly → **plan a purge (e.g. tombstones older than 90 days) in step 6**.
+**Spark Free Quota Budget (50,000 reads · 20,000 writes · 20,000 deletes / day)**
+- **Normal daily use (2 devices per teacher):** ~20–200 reads/day (1 marker read per remote push + only changed
+  aggregate docs on incremental pulls), ~10–100 writes/day (debounced field-level batch pushes + 1 marker write
+  per push).
+- **Daily Cloud snapshot (2 devices per teacher):** 1 list query/device/day (≤ 10 small metadata reads each,
+  never reads chunks), `chunks + 1` writes/day ONCE across all devices (typically 1–3 chunks → **2–4 writes/day**),
+  and `oldChunks + 1` deletes/day once > 10 snapshots (**2–4 deletes/day**). Opening Settings Cloud Backup list =
+  1 read-only query (≤ 10 reads).
+- Total footprint per active teacher is well under 0.5% of the Spark daily free tier.
 
-**Next steps:** step 5 — rules with `docs` + `sync` are deployed to `krudesk-1fa42`; commits are on branch
-`test/cloud-sync` (Vercel Preview `krudesk-git-test-cloud-sync-si-th-pong.vercel.app`, test with a separate
-Google test account); `main` NOT pushed. Finish the real phone + laptop test, then step 6 (daily cloud
-snapshots, tombstone purge, import of old `KruDeskDB` / backups), step 7 (docs). Push to `main` only after
-real phone + laptop testing passes (deploy order: rules deploy → phone + laptop test → push `main`).
+**Branding, Contact & Recent Teacher Decisions (2026-11-21)**
+- **Branding (`c4a6d07`, `b541c1e`, `0daa2c8`):** app UI must NOT use the ministry emblem. Logo =
+  `KruDeskWordmark` («Kru» `#0b1b3f` + «Desk» `#1565f5`, extra-bold system font). App icon = blue notebook with
+  «Kru DESK» on a light-blue squircle (`public/pwa-*.png`, `apple-touch-icon.png`, `favicon-64.png`). Open Graph
+  link preview (`public/og-preview.png`, 1200×630 with real KruDesk monthly report card + `index.html` OG/Twitter
+  tags). The ministry emblem stays ONLY on student ID cards.
+- **Admin contact (`51f0b8b`):** Telegram link (`src/lib/contact.ts`, `https://t.me/Sithpong`) on pending /
+  rejected / disabled screens and in the Sidebar.
+- **Scores & Print (`0f417a3`, `f8fe0db`, `eb9ab4b`):** grades 7, 8 and 9 all default to the 10-subject preset
+  (420 ÷ 8.4, coefficient = max ÷ 50, `ភាសាបរទេស` bonus score − 25); bold student name on monthly & semester
+  report cards (`StudentReportSheet`, `SemesterReportSheet`); per-rank certificate frames (`certificateBorder_1/2/3`,
+  selectable per rank 1/2/3 or shared in `DocumentBorderButton`).
 
-**Emulator notes (Java 24 on this PC):** run `npm run test:rules`. If the emulator fails with "Unable to
-establish loopback connection", set `JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=D:/KruDesk/.firebase/jtmp`
-(create the folder first). If port `8088` is "taken", an orphaned `demo-krudesk` java emulator is still
-running — stop it, or run vitest directly with `FIRESTORE_EMULATOR_HOST=127.0.0.1:8088` against it.
+**Git State & Release**
+- All Cloud Sync steps 1–7 plus branding, 10-subject preset, Telegram contact, OG link preview, bold report
+  card names, and per-rank certificate frames are merged with `origin/main` (keeping the sync side on the 3
+  duplicated cherry-pick commits `a0a63b3`, `51a9e06`, `505f958`) and pushed to production `main` per the
+  teacher's approval (2026-11-21) → Vercel Production (`https://krudesk.vercel.app`) auto-deploys.
+- Preview branch `test/cloud-sync` → `krudesk-git-test-cloud-sync-si-th-pong.vercel.app`. Never force-push.
+
+**Emulator notes (Java 24 on this PC):** run `npm run test:rules` (or
+`firebase emulators:exec --only firestore --project demo-krudesk "npx vitest run --fileParallelism=false scratch/claude-repro/ tests/"`).
+If the emulator fails with "Unable to establish loopback connection", set
+`JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=D:/KruDesk/.firebase/jtmp` (create the folder first). If port
+`8088` is taken by an orphaned `demo-krudesk` java emulator, run vitest directly with
+`FIRESTORE_EMULATOR_HOST=127.0.0.1:8088` against it.
 
 ## 0. Earlier state (2026-11-20) — done, kept for history
 
