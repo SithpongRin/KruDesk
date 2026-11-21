@@ -19,13 +19,17 @@ import {
 } from 'firebase/firestore';
 import { clearAllAppData, KruDeskDatabase } from '../src/db/database';
 import { toLocalDateKey } from '../src/lib/khmerDate';
+import { buildBackupPayload, restoreBackupPayload } from '../src/services/backup';
 import {
   listCloudSnapshots,
   readCloudSnapshotPayload,
   saveBackupPayloadToCloudSnapshot,
 } from '../src/services/sync/cloudSnapshot';
 import { markInitialSyncDone } from '../src/services/sync/firstSignIn';
-import { SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY } from '../src/services/sync/syncCodec';
+import {
+  SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY,
+  SYNC_PENDING_FULL_REPLACE_KEY,
+} from '../src/services/sync/syncCodec';
 import { SyncEngine, type SyncStatusSnapshot } from '../src/services/sync/syncEngine';
 
 const PROJECT_ID = 'demo-krudesk';
@@ -372,5 +376,96 @@ describe('Daily Cloud snapshot (§1.7 / Step 6a) with Firestore Emulator', () =>
     } finally {
       warnSpy.mockRestore();
     }
+  });
+
+  it('6. Step 6b: manual Cloud snapshot -> later edits -> restore via readCloudSnapshotPayload + restoreBackupPayload("replace") -> pushFullReplace propagates to Device B', async () => {
+    const dbA = await createDeviceDb('A6b');
+    const dbB = await createDeviceDb('B6b');
+    const fsA = getTeacherFirestore('DeviceA6b');
+    const fsB = getTeacherFirestore('DeviceB6b');
+    await Promise.all([markInitialSyncDone(dbA), markInitialSyncDone(dbB)]);
+
+    const engineA = new SyncEngine({
+      localDb: dbA,
+      firestore: fsA,
+      uid: TEACHER_UID,
+      deviceId: 'dev-A6b',
+    });
+    const engineB = new SyncEngine({
+      localDb: dbB,
+      firestore: fsB,
+      uid: TEACHER_UID,
+      deviceId: 'dev-B6b',
+    });
+    engines.push(engineA, engineB);
+
+    // 1. Seed initial state & save a manual Cloud snapshot
+    const origClassId = await dbA.classes.add({ ...baseClass, name: '8A-BeforeMistake' });
+    await dbA.students.add({
+      classId: origClassId,
+      order: 1,
+      studentId: 'M001',
+      nameKm: 'សិស្ស ដើម',
+      gender: 'ស្រី',
+      dateOfBirth: '2013-01-01',
+      status: 'active',
+      createdAt: 1732000000000,
+      updatedAt: 1732000000000,
+    });
+    await engineA.syncNow();
+
+    const manualPayload = await buildBackupPayload(1732100000000, dbA);
+    const manualMeta = await saveBackupPayloadToCloudSnapshot(fsA, TEACHER_UID, manualPayload, 'manual', {
+      now: 1732100000000,
+    });
+    expect(manualMeta.source).toBe('manual');
+
+    // 2. Teacher accidentally deletes the class & adds junk, synced to Cloud & Device B
+    await dbA.classes.delete(origClassId);
+    await dbA.classes.add({ ...baseClass, name: 'ថ្នាក់ច្រឡំ' });
+    await engineA.syncNow();
+    await engineB.pullChanges();
+    expect((await dbB.classes.toArray()).map((c) => c.name)).toEqual(['ថ្នាក់ច្រឡំ']);
+
+    // 3. List Cloud snapshots (1 query), verify SHA-256 & read payload, restore ('replace')
+    const list = await listCloudSnapshots(fsA, TEACHER_UID);
+    expect(list).toHaveLength(1);
+    expect(list[0]?.source).toBe('manual');
+
+    const verifiedPayload = await readCloudSnapshotPayload(fsA, TEACHER_UID, list[0]!.backupId);
+    await restoreBackupPayload(verifiedPayload, 'replace', dbA);
+    expect(await dbA.settings.get(SYNC_PENDING_FULL_REPLACE_KEY)).toBeDefined();
+
+    // 4. pushOutbox triggers pushFullReplace -> Device B pulls and matches restored snapshot!
+    await engineA.pushOutbox();
+    await engineB.pullChanges();
+
+    const classesOnB = await dbB.classes.toArray();
+    const studentsOnB = await dbB.students.toArray();
+    expect(classesOnB).toHaveLength(1);
+    expect(classesOnB[0]?.name).toBe('8A-BeforeMistake');
+    expect(studentsOnB).toHaveLength(1);
+    expect(studentsOnB[0]?.nameKm).toBe('សិស្ស ដើម');
+  });
+
+  it('7. Step 6b: readCloudSnapshotPayload rejects a snapshot whose chunk fails SHA-256 verification', async () => {
+    const dbA = await createDeviceDb('ShaFail');
+    const fsA = getTeacherFirestore('DeviceShaFail');
+    await dbA.classes.add({ ...baseClass, name: '8A-Intact' });
+
+    const payload = await buildBackupPayload(1732100000000, dbA);
+    const meta = await saveBackupPayloadToCloudSnapshot(fsA, TEACHER_UID, payload, 'manual', {
+      now: 1732100000000,
+    });
+
+    // Tamper with chunk 0 in Firestore
+    await setDoc(doc(fsA, 'users', TEACHER_UID, 'backups', meta.backupId, 'chunks', '0'), {
+      index: 0,
+      data: 'AAAA',
+    });
+
+    await expect(readCloudSnapshotPayload(fsA, TEACHER_UID, meta.backupId)).rejects.toThrow(
+      /SHA-256/
+    );
   });
 });

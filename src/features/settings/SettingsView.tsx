@@ -22,6 +22,7 @@ import {
 import { db, clearAllAppData, saveProfile, setSetting } from '../../db/database';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../auth/useAuthStore';
+import { getActiveSyncEngine } from '../../services/sync/useSyncStore';
 import {
   DEFAULT_ATTENDANCE_CONFIG,
   resolveScoreConfig,
@@ -40,6 +41,7 @@ import { AppleSegmentedControl } from '../../components/common/AppleSegmentedCon
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { BackupRestoreModal } from '../../components/common/BackupRestoreModal';
 import { AboutAppCard } from './AboutAppCard';
+import { CloudBackupCard } from './CloudBackupCard';
 import { DirectorSealCard } from './DirectorSealCard';
 import {
   downloadBackupJson,
@@ -288,6 +290,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
     if (!pendingPayload) return;
     const summary = await restoreBackupPayload(pendingPayload, mode);
     await hydratePreferences();
+    if (mode === 'replace') {
+      const engine = getActiveSyncEngine();
+      if (engine) {
+        void engine.pushOutbox().catch(() => {});
+      }
+    }
     addToast({
       type: 'success',
       title: 'ស្ដារទិន្នន័យជោគជ័យ!',
@@ -1042,6 +1050,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
           />
         </div>
       </AppleCard>
+
+      {/* Section 3b: Cloud Backups (daily / manual / pre-replace snapshots) */}
+      <CloudBackupCard />
 
       {/* Section 4: About / app updates */}
       <AboutAppCard />
