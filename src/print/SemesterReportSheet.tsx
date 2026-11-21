@@ -75,7 +75,7 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
 
               <div className="flex flex-wrap items-center justify-between text-[9pt] mb-1.5 px-1">
                 <div>
-                  ឈ្មោះសិស្ស៖ {row.student.nameKm}
+                  ឈ្មោះសិស្ស៖ <strong className="font-bold">{row.student.nameKm}</strong>
                 </div>
                 <div>
                   ថ្នាក់៖ {cls.name}
