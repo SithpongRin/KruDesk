@@ -1,4 +1,5 @@
 import React from 'react';
+import { KruDeskWordmark } from '../common/KruDeskWordmark';
 import clsx from 'clsx';
 import {
   LayoutDashboard,
@@ -18,7 +19,6 @@ import {
 import { useAppStore, type ActiveView } from '../../store/useAppStore';
 import { useAuthStore } from '../../features/auth/useAuthStore';
 import type { Profile } from '../../types/domain';
-import { MOEYS_EMBLEM_DATA_URI } from '../../utils/moeysEmblemDataUri';
 import { toKhmerNumerals } from '../../utils/khmerNumerals';
 
 interface AppleSidebarProps {
@@ -61,16 +61,9 @@ export const AppleSidebar: React.FC<AppleSidebarProps> = ({ profile }) => {
         <div className="p-5 pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-white dark:bg-[#2c2c2e] shadow-[0_2px_8px_rgba(0,0,0,0.06)] border border-black/[0.04] dark:border-white/[0.08] flex items-center justify-center p-1.5 overflow-hidden shrink-0">
-                <img
-                  src={MOEYS_EMBLEM_DATA_URI}
-                  alt="MoEYS Emblem"
-                  className="w-full h-full object-contain"
-                />
-              </div>
               <div className="min-w-0">
-                <h1 className="font-moul text-sm text-[#1d1d1f] dark:text-[#f5f5f7] tracking-tight truncate">
-                  KruDesk
+                <h1 className="truncate">
+                  <KruDeskWordmark className="text-2xl" />
                 </h1>
                 <p className="text-[11px] font-medium text-[#86868b] truncate">
                   ជំនួយការគ្រូបន្ទុកថ្នាក់

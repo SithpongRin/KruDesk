@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { KruDeskWordmark } from '../common/KruDeskWordmark';
 import { HardDriveUpload, ArrowRight } from 'lucide-react';
 import { saveProfile } from '../../db/database';
 import { useAppStore } from '../../store/useAppStore';
@@ -10,7 +11,6 @@ import {
   type KruDeskBackupPayload,
   type RestoreMode,
 } from '../../services/backup';
-import { MOEYS_EMBLEM_DATA_URI } from '../../utils/moeysEmblemDataUri';
 import { CAMBODIA_PROVINCES } from '../../lib/provinces';
 
 export const OnboardingView: React.FC = () => {
@@ -113,15 +113,9 @@ export const OnboardingView: React.FC = () => {
     <div className="min-h-screen w-full bg-[#f5f5f7] dark:bg-[#111214] flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-lg bg-white dark:bg-[#1c1c1e] rounded-3xl border border-black/[0.06] dark:border-white/[0.08] shadow-[0_20px_60px_rgba(0,0,0,0.08)] p-6 sm:p-8 space-y-6">
         <div className="text-center space-y-2.5">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-[#f5f5f7] dark:bg-white/[0.06] p-2.5 border border-black/[0.04] dark:border-white/[0.08] flex items-center justify-center">
-            <img
-              src={MOEYS_EMBLEM_DATA_URI}
-              alt="MoEYS Emblem"
-              className="w-full h-full object-contain"
-            />
-          </div>
-          <h1 className="font-moul text-xl text-[#1d1d1f] dark:text-[#f5f5f7]">
-            KruDesk — ជំនួយការគ្រូបន្ទុកថ្នាក់
+          <KruDeskWordmark className="text-4xl" />
+          <h1 className="font-moul text-lg text-[#1d1d1f] dark:text-[#f5f5f7]">
+            ជំនួយការគ្រូបន្ទុកថ្នាក់
           </h1>
           <p className="text-xs text-[#86868b] dark:text-[#98989d] leading-relaxed">
             សូមបំពេញព័ត៌មានមូលដ្ឋានខាងក្រោមដើម្បីចាប់ផ្ដើម។ ទិន្នន័យទាំងអស់រក្សាទុកក្នុងម៉ាស៊ីនរបស់អ្នក (Offline ១០០%)។

@@ -1,6 +1,6 @@
 import React from 'react';
+import { KruDeskWordmark } from '../../components/common/KruDeskWordmark';
 import { Clock, Ban, ShieldAlert, RefreshCw, LogOut, AlertCircle } from 'lucide-react';
-import { MOEYS_EMBLEM_DATA_URI } from '../../utils/moeysEmblemDataUri';
 import { AppleButton } from '../../components/common/AppleButton';
 import type { UserApprovalStatus } from './authCache';
 import { useAuthStore } from './useAuthStore';
@@ -38,8 +38,7 @@ export const AuthStatusScreen: React.FC<AuthStatusScreenProps> = ({ status }) =>
     <div className="min-h-screen w-screen flex flex-col items-center justify-center bg-[#f5f5f7] dark:bg-[#111214] p-4 font-battambang">
       <div className="w-full max-w-md bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-xl rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.08)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] border border-black/[0.06] dark:border-white/[0.08] p-7 sm:p-8 text-center">
         <div className="flex items-center justify-center gap-2.5 mb-5">
-          <img src={MOEYS_EMBLEM_DATA_URI} alt="MoEYS" className="w-8 h-8 object-contain" />
-          <span className="font-moul text-sm text-[#1d1d1f] dark:text-[#f5f5f7]">KruDesk</span>
+          <KruDeskWordmark className="text-2xl" />
         </div>
 
         <div
