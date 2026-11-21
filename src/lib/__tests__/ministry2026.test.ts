@@ -63,7 +63,7 @@ describe('MoEYS 2026-2027 instruction', () => {
     expect(formatAverage((sem1 + sem2) / 2)).toBe('35.82');
   });
 
-  it('grades 7–8 (§4): 14 exam subjects total 750 (÷ 15), example «ឃ» → annual 34.39', () => {
+  it('full 14-subject list (MoEYS §4, no longer the default preset): total 750 (÷ 15), example «ឃ» → annual 34.39', () => {
     const subjects = createLowerSecondarySubjects();
     const active = subjects.filter((s) => s.isActive !== false && !s.isBonus);
     expect(active).toHaveLength(14);
@@ -93,10 +93,17 @@ describe('MoEYS 2026-2027 instruction', () => {
     expect(row.average).toBeCloseTo(100 / 15, 5);
   });
 
-  it('getPresetSubjects gives grade 9 its own list; grades 7–8 keep the school list', () => {
-    expect(getPresetSubjects('lower-secondary', 9)).toEqual(createGrade9Subjects());
-    expect(getPresetSubjects('lower-secondary', 8)).toEqual(createLowerSecondarySubjects());
-    expect(getPresetSubjects('lower-secondary')).toEqual(createLowerSecondarySubjects());
+  it('getPresetSubjects: grades 7, 8 and 9 all use the 10-subject list (420 ÷ 8.4 + bonus) — teacher 2026-11-21', () => {
+    for (const grade of [7, 8, 9, undefined]) {
+      const preset = getPresetSubjects('lower-secondary', grade);
+      expect(preset).toEqual(createGrade9Subjects());
+      const counted = preset.filter((s) => s.isActive !== false && !s.isBonus);
+      expect(counted).toHaveLength(10);
+      expect(counted.reduce((sum, s) => sum + s.maxScore, 0)).toBe(420);
+      // coefficient = max ÷ 50 → sum 8.4
+      expect(counted.reduce((sum, s) => sum + s.maxScore / 50, 0)).toBeCloseTo(8.4, 10);
+      expect(preset.find((s) => s.id === 'foreign_lang')).toMatchObject({ maxScore: 50, isBonus: true });
+    }
   });
 
   it('merging the grade-9 preset turns the ភាសាបរទេស bonus on and keeps ids', () => {

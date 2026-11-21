@@ -14,10 +14,11 @@ export const CLASS_COLORS = [
 ] as const;
 
 /**
- * Grades 7–8 per MoEYS instruction ៦៧ អយក.សណន (2026-2027, §4.1):
+ * Full lower-secondary subject list (MoEYS instruction ៦៧ អយក.សណន, 2026-2027, §4.1):
  * 14 active subjects totalling 750 (÷ 15): តែងសេចក្ដី 60 + សរសេរតាមអាន 40, គណិតវិទ្យា 100,
  * others 50. Extra school-optional subjects (arts, ict, agriculture, extra_2/3) stay in the list
  * with isActive: false so teachers can turn them on if their school teaches them.
+ * The class preset for grades 7–9 is `createGrade9Subjects()` (built from this list).
  */
 export function createLowerSecondarySubjects(): Subject[] {
   const raw: Array<{
@@ -177,12 +178,13 @@ export function createUpperSecondarySubjects(
 }
 
 /**
- * Grade 9 per MoEYS instruction ៦៧ អយក.សណន (2026-2027, §2): monthly and semester scores use
- * the exam subjects only — 10 subjects totalling 420 (÷ 8.4), plus ភាសាបរទេស as a bonus
- * (only the part above 25 is added, not counted in the total). Same ids and column positions
- * as the grades 7–8 preset; the subjects grade 9 does not sit are switched off.
+ * Grades 7, 8 and 9 (teacher's decision 2026-11-21, following MoEYS instruction ៦៧ §2 for grade 9):
+ * monthly and semester scores use 10 subjects totalling 420 (÷ 8.4; each subject's coefficient =
+ * max ÷ 50), plus ភាសាបរទេស as a bonus (only the part above 25 is added, not counted in the
+ * total). Same ids and column positions as the full list above; the other subjects are switched
+ * off and a teacher can turn them on or add subjects for their school.
  */
-const GRADE_9_MAX_SCORES: Record<string, number> = {
+const LOWER_SECONDARY_MAX_SCORES: Record<string, number> = {
   kh_dictation: 40,
   kh_essay: 60,
   math: 100,
@@ -198,7 +200,7 @@ const GRADE_9_MAX_SCORES: Record<string, number> = {
 
 export function createGrade9Subjects(): Subject[] {
   return createLowerSecondarySubjects().map((s) => {
-    const max = GRADE_9_MAX_SCORES[s.id];
+    const max = LOWER_SECONDARY_MAX_SCORES[s.id];
     const { isActive: _a, isBonus: _b, ...base } = s;
     if (max === undefined) return { ...base, isActive: false };
     return {
@@ -209,14 +211,17 @@ export function createGrade9Subjects(): Subject[] {
   });
 }
 
-/** The preset's subjects for a class; grades 9, 10, 11 and 12 follow the ministry's lists. */
+/**
+ * The preset's subjects for a class. Lower secondary (grades 7, 8 and 9) all use the 10-subject
+ * list (420 ÷ 8.4 + ភាសាបរទេស bonus); grades 10, 11 and 12 follow the ministry's lists.
+ */
 export function getPresetSubjects(
   preset: PresetKey,
   gradeLevel?: number,
   track?: StudyTrack
 ): Subject[] {
   if (preset === 'upper-secondary') return createUpperSecondarySubjects(gradeLevel, track);
-  return gradeLevel === 9 ? createGrade9Subjects() : createLowerSecondarySubjects();
+  return createGrade9Subjects();
 }
 
 /**
