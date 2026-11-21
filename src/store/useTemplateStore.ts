@@ -10,6 +10,7 @@ import {
   TEMPLATE_2_ID,
 } from '../db/defaultTemplates';
 import { db } from '../db/database';
+import { registerInMemoryStoreReset } from '../features/auth/useAuthStore';
 import {
   calculateA4GridLayout,
   PHOTO_3X4_HEIGHT_MM,
@@ -209,3 +210,12 @@ export const useTemplateStore = create<TemplateStoreState>((set, get) => ({
     await db.settings.put({ key: ACTIVE_TEMPLATE_KEY, value: saved.id });
   },
 }));
+
+registerInMemoryStoreReset(() => {
+  useTemplateStore.setState({
+    currentTemplate: { ...defaultReferenceTemplate },
+    printSettings: { ...defaultPrintSettings },
+    isCustomized: false,
+    isInitialized: false,
+  });
+});

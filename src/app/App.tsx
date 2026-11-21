@@ -61,13 +61,28 @@ const AdminUsersView = lazy(() =>
 export const App: React.FC = () => {
   const { activeView, toasts, removeToast, theme, hydratePreferences, setIsOnline } =
     useAppStore();
-  const { authReady, authRequired, user, status, isAdmin, initAuth } = useAuthStore();
+  const {
+    authReady,
+    authRequired,
+    user,
+    status,
+    isAdmin,
+    activeDbName,
+    userDbReady,
+    initAuth,
+  } = useAuthStore();
   const [isReady, setIsReady] = useState(false);
 
+  const canAccessUserDb =
+    !authRequired || (Boolean(user) && (isAdmin || status === 'approved') && userDbReady);
+
   const profileQuery = useLiveQuery(async () => {
+    if (!canAccessUserDb) {
+      return { loaded: false, profile: undefined };
+    }
     const row = await db.settings.get('profile');
     return { loaded: true, profile: row?.value as Profile | undefined };
-  }, []);
+  }, [canAccessUserDb, activeDbName]);
   const isProfileLoaded = profileQuery?.loaded === true;
   const profile = profileQuery?.profile;
 
@@ -76,10 +91,14 @@ export const App: React.FC = () => {
   }, [initAuth]);
 
   useEffect(() => {
+    if (authRequired && !canAccessUserDb) {
+      setIsReady(true);
+      return;
+    }
     hydratePreferences()
       .catch((e) => console.error('Failed to hydrate preferences:', e))
       .finally(() => setIsReady(true));
-  }, [hydratePreferences]);
+  }, [authRequired, canAccessUserDb, activeDbName, hydratePreferences]);
 
   // Keep system dark-mode listener active when theme === 'system'
   useEffect(() => {
@@ -180,7 +199,8 @@ export const App: React.FC = () => {
 
   return (
     <AppInner
-      isReady={isReady && isProfileLoaded && authReady}
+      key={activeDbName}
+      isReady={isReady && isProfileLoaded && authReady && canAccessUserDb}
       profile={profile}
       activeView={activeView}
       isAdmin={isAdmin}

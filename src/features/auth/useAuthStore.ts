@@ -1,11 +1,22 @@
 import { create } from 'zustand';
 import type { User } from 'firebase/auth';
 import {
+  closeUserDb,
+  getUserDbName,
+  LEGACY_DB_NAME,
+  openDbForUser,
+} from '../../db/database';
+import {
   getFirebaseServices,
   isEmulatorEnabled,
   isFirebaseConfigured,
 } from '../../services/firebase/client';
-import { readCachedAuthStatus, type UserApprovalStatus } from './authCache';
+import { useAppStore } from '../../store/useAppStore';
+import {
+  readCachedAuthStatus,
+  writeCachedAuthStatus,
+  type UserApprovalStatus,
+} from './authCache';
 import {
   checkUserApprovalAndAdmin,
   signInWithEmulatorGoogle,
@@ -28,6 +39,8 @@ interface AuthState {
   authError: string | null;
   pendingUsersCount: number;
   managedUsers: ManagedUserRecord[];
+  activeDbName: string;
+  userDbReady: boolean;
 
   initAuth: () => () => void;
   signIn: () => Promise<void>;
@@ -37,8 +50,56 @@ interface AuthState {
 }
 
 let currentFirebaseUser: User | null = null;
+let openedDbUid: string | null = null;
 let unsubUserDoc: (() => void) | null = null;
 let unsubAdminUsers: (() => void) | null = null;
+
+let customReloadHandler: (() => void) | null = null;
+
+export function setPageReloadHandlerForTest(handler: (() => void) | null): void {
+  customReloadHandler = handler;
+}
+
+export function triggerPageReload(): void {
+  if (customReloadHandler) {
+    customReloadHandler();
+    return;
+  }
+  if (typeof window !== 'undefined' && window.location && typeof window.location.reload === 'function') {
+    try {
+      window.location.reload();
+    } catch {
+      // Ignore in test environments where window.location.reload is not implemented
+    }
+  }
+}
+
+export function getOpenedDbUid(): string | null {
+  return openedDbUid;
+}
+
+const storeResetListeners = new Set<() => void>();
+
+export function registerInMemoryStoreReset(listener: () => void): () => void {
+  storeResetListeners.add(listener);
+  return () => {
+    storeResetListeners.delete(listener);
+  };
+}
+
+export function resetInMemoryStores(): void {
+  useAppStore.setState({
+    selectedClassId: null,
+    activeView: 'dashboard',
+    hasUnsavedAttendance: false,
+    pendingViewAfterLeaveConfirm: null,
+    pendingOpenCreateClass: false,
+    pendingRollCallDate: null,
+  });
+  for (const listener of storeResetListeners) {
+    listener();
+  }
+}
 
 function cleanupDataSubscriptions() {
   if (unsubUserDoc) {
@@ -60,6 +121,57 @@ function toAuthUserProfile(fbUser: User): AuthUserProfile {
   };
 }
 
+/**
+ * Opens `KruDeskDB_<uid>` and hydrates preferences.
+ * If another user's database (`openedDbUid !== uid`) was already open in this page session,
+ * closes the previous DB, resets in-memory stores, and triggers a full page reload so no
+ * stale in-memory state from the previous user survives.
+ */
+export async function activateUserDatabase(uid: string): Promise<{ dbName: string; reloaded: boolean }> {
+  if (openedDbUid !== null && openedDbUid !== uid) {
+    deactivateUserDatabase();
+    triggerPageReload();
+    return { dbName: getUserDbName(uid), reloaded: true };
+  }
+  openedDbUid = uid;
+  await openDbForUser(uid);
+  await useAppStore.getState().hydratePreferences();
+  return { dbName: getUserDbName(uid), reloaded: false };
+}
+
+export function deactivateUserDatabase(): void {
+  openedDbUid = null;
+  closeUserDb();
+  resetInMemoryStores();
+}
+
+/**
+ * Handles transitioning a user to a non-approved status (`pending` | `rejected` | `disabled`).
+ * If the user previously had an active approved session/DB in this page load, updates the
+ * localStorage cache to the new status first (preventing any reload loop), closes the DB,
+ * resets in-memory stores, and triggers a single page reload.
+ */
+export function handleRevokedOrUnapprovedStatus(
+  uid: string,
+  email: string,
+  newStatus: Exclude<UserApprovalStatus, 'approved'>,
+  wasPreviouslyApprovedInSession: boolean
+): boolean {
+  writeCachedAuthStatus({
+    uid,
+    email,
+    status: newStatus,
+    isAdmin: false,
+    checkedAt: Date.now(),
+  });
+  deactivateUserDatabase();
+  if (wasPreviouslyApprovedInSession) {
+    triggerPageReload();
+    return true;
+  }
+  return false;
+}
+
 declare global {
   interface Window {
     __KRUDESK_EMULATOR_SIGN_IN__?: typeof signInWithEmulatorGoogle;
@@ -78,13 +190,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   authError: null,
   pendingUsersCount: 0,
   managedUsers: [],
+  activeDbName: LEGACY_DB_NAME,
+  userDbReady: !isFirebaseConfigured(),
 
   setAuthError: (msg) => set({ authError: msg }),
 
   initAuth: () => {
     const required = isFirebaseConfigured();
     if (!required) {
-      set({ authReady: true, authRequired: false });
+      set({
+        authReady: true,
+        authRequired: false,
+        activeDbName: LEGACY_DB_NAME,
+        userDbReady: true,
+      });
       return () => {};
     }
 
@@ -133,6 +252,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           currentFirebaseUser = fbUser;
 
           if (!fbUser) {
+            const hadOpenDb = openedDbUid !== null;
+            deactivateUserDatabase();
             set({
               user: null,
               status: null,
@@ -141,8 +262,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               authError: null,
               pendingUsersCount: 0,
               managedUsers: [],
+              activeDbName: LEGACY_DB_NAME,
+              userDbReady: false,
               authReady: true,
             });
+            if (hadOpenDb) {
+              triggerPageReload();
+            }
+            return;
+          }
+
+          // If a different user's DB was already opened in this session, reload cleanly
+          if (openedDbUid !== null && openedDbUid !== fbUser.uid) {
+            deactivateUserDatabase();
+            triggerPageReload();
             return;
           }
 
@@ -150,13 +283,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const cached = readCachedAuthStatus(fbUser.uid);
 
           // Optimistically apply cached status for the SAME uid while online check runs
-          if (cached) {
+          if (cached && (cached.isAdmin || cached.status === 'approved')) {
+            const { dbName, reloaded } = await activateUserDatabase(fbUser.uid);
+            if (reloaded || cancelled || currentFirebaseUser?.uid !== fbUser.uid) return;
             set({
               user: profile,
               status: cached.status,
               isAdmin: cached.isAdmin,
               isChecking: true,
               authError: null,
+              activeDbName: dbName,
+              userDbReady: true,
+              authReady: true,
+            });
+          } else if (cached) {
+            set({
+              user: profile,
+              status: cached.status,
+              isAdmin: cached.isAdmin,
+              isChecking: true,
+              authError: null,
+              userDbReady: false,
               authReady: true,
             });
           } else {
@@ -164,20 +311,46 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               user: profile,
               isChecking: true,
               authError: null,
+              userDbReady: false,
             });
           }
 
+          const wasApprovedBeforeCheck =
+            openedDbUid === fbUser.uid || get().status === 'approved' || get().isAdmin;
           const result = await checkUserApprovalAndAdmin(fbUser);
           if (cancelled || currentFirebaseUser?.uid !== fbUser.uid) return;
 
-          set({
-            user: profile,
-            status: result.status,
-            isAdmin: result.isAdmin,
-            isChecking: false,
-            authError: result.error || null,
-            authReady: true,
-          });
+          if (result.isAdmin || result.status === 'approved') {
+            const { dbName, reloaded } = await activateUserDatabase(fbUser.uid);
+            if (reloaded || cancelled || currentFirebaseUser?.uid !== fbUser.uid) return;
+            set({
+              user: profile,
+              status: result.status,
+              isAdmin: result.isAdmin,
+              isChecking: false,
+              authError: result.error || null,
+              activeDbName: dbName,
+              userDbReady: true,
+              authReady: true,
+            });
+          } else {
+            set({
+              user: profile,
+              status: result.status,
+              isAdmin: false,
+              isChecking: false,
+              authError: result.error || null,
+              activeDbName: LEGACY_DB_NAME,
+              userDbReady: false,
+              authReady: true,
+            });
+            handleRevokedOrUnapprovedStatus(
+              fbUser.uid,
+              fbUser.email || '',
+              result.status,
+              wasApprovedBeforeCheck
+            );
+          }
 
           if (result.isAdmin) {
             unsubAdminUsers = await subscribeAllUsersForAdmin((users) => {
@@ -192,9 +365,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             unsubUserDoc = await subscribeOwnUserStatus(
               fbUser.uid,
               fbUser.email || '',
-              (newStatus) => {
+              async (newStatus) => {
                 if (cancelled || currentFirebaseUser?.uid !== fbUser.uid) return;
-                set({ status: newStatus });
+                if (newStatus === 'approved') {
+                  const { dbName, reloaded } = await activateUserDatabase(fbUser.uid);
+                  if (reloaded || cancelled || currentFirebaseUser?.uid !== fbUser.uid) return;
+                  set({
+                    status: 'approved',
+                    activeDbName: dbName,
+                    userDbReady: true,
+                  });
+                } else {
+                  const wasApproved =
+                    openedDbUid === fbUser.uid || get().status === 'approved' || get().isAdmin;
+                  set({
+                    status: newStatus,
+                    activeDbName: LEGACY_DB_NAME,
+                    userDbReady: false,
+                  });
+                  handleRevokedOrUnapprovedStatus(
+                    fbUser.uid,
+                    fbUser.email || '',
+                    newStatus,
+                    wasApproved
+                  );
+                }
               }
             );
           }
@@ -248,29 +443,59 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!currentFirebaseUser) return;
     set({ isChecking: true, authError: null });
     const fbUser = currentFirebaseUser;
+    const wasApproved =
+      openedDbUid === fbUser.uid || get().status === 'approved' || get().isAdmin;
     const result = await checkUserApprovalAndAdmin(fbUser);
     if (currentFirebaseUser?.uid !== fbUser.uid) return;
 
-    set({
-      status: result.status,
-      isAdmin: result.isAdmin,
-      isChecking: false,
-      authError: result.error || null,
-    });
+    if (result.isAdmin || result.status === 'approved') {
+      const { dbName, reloaded } = await activateUserDatabase(fbUser.uid);
+      if (reloaded || currentFirebaseUser?.uid !== fbUser.uid) return;
+      set({
+        status: result.status,
+        isAdmin: result.isAdmin,
+        isChecking: false,
+        authError: result.error || null,
+        activeDbName: dbName,
+        userDbReady: true,
+      });
+    } else {
+      set({
+        status: result.status,
+        isAdmin: false,
+        isChecking: false,
+        authError: result.error || null,
+        activeDbName: LEGACY_DB_NAME,
+        userDbReady: false,
+      });
+      handleRevokedOrUnapprovedStatus(
+        fbUser.uid,
+        fbUser.email || '',
+        result.status,
+        wasApproved
+      );
+    }
   },
 
   signOut: async () => {
     cleanupDataSubscriptions();
     currentFirebaseUser = null;
-    await signOutFirebase();
-    set({
-      user: null,
-      status: null,
-      isAdmin: false,
-      isChecking: false,
-      authError: null,
-      pendingUsersCount: 0,
-      managedUsers: [],
-    });
+    deactivateUserDatabase();
+    try {
+      await signOutFirebase();
+    } finally {
+      set({
+        user: null,
+        status: null,
+        isAdmin: false,
+        isChecking: false,
+        authError: null,
+        pendingUsersCount: 0,
+        managedUsers: [],
+        activeDbName: LEGACY_DB_NAME,
+        userDbReady: false,
+      });
+      triggerPageReload();
+    }
   },
 }));

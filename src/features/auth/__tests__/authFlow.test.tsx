@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import 'fake-indexeddb/auto';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -11,7 +12,15 @@ import { isIosStandalonePwa, sanitizeDisplayName, sanitizePhotoURL } from '../au
 import { LoginScreen } from '../LoginScreen';
 import { AuthStatusScreen } from '../AuthStatusScreen';
 import { AdminUsersView } from '../AdminUsersView';
-import { useAuthStore } from '../useAuthStore';
+import {
+  activateUserDatabase,
+  deactivateUserDatabase,
+  getOpenedDbUid,
+  handleRevokedOrUnapprovedStatus,
+  setPageReloadHandlerForTest,
+  useAuthStore,
+} from '../useAuthStore';
+import { useTemplateStore } from '../../../store/useTemplateStore';
 import { AppleSidebar } from '../../../components/layout/AppleSidebar';
 
 describe('Auth & Admin UI and offline cache (§4)', () => {
@@ -32,6 +41,8 @@ describe('Auth & Admin UI and offline cache (§4)', () => {
   });
 
   afterEach(() => {
+    setPageReloadHandlerForTest(null);
+    deactivateUserDatabase();
     cleanup();
   });
 
@@ -282,5 +293,60 @@ describe('Auth & Admin UI and offline cache (§4)', () => {
     fireEvent.click(screen.getByRole('tab', { name: /បានបដិសេធ\/ផ្អាក/ }));
     expect(screen.getByText('គ្រូ ផ្អាក')).toBeTruthy();
     expect(screen.getByText('បើកវិញ')).toBeTruthy();
+  });
+
+  it('reloads page and resets in-memory stores on account switch or status downgrade from approved without looping', async () => {
+    const reloadSpy = vi.fn();
+    setPageReloadHandlerForTest(reloadSpy);
+
+    // 1. User A opens their database and initializes useTemplateStore in memory
+    const first = await activateUserDatabase('uid-user-a');
+    expect(first.reloaded).toBe(false);
+    expect(getOpenedDbUid()).toBe('uid-user-a');
+
+    useTemplateStore.setState({
+      isInitialized: true,
+      isCustomized: true,
+    });
+
+    // 2. Switching directly to User B while User A's DB is open resets stores and reloads
+    const second = await activateUserDatabase('uid-user-b');
+    expect(second.reloaded).toBe(true);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    expect(getOpenedDbUid()).toBeNull();
+    expect(useTemplateStore.getState().isInitialized).toBe(false);
+    expect(useTemplateStore.getState().isCustomized).toBe(false);
+
+    // After reload, User B opens cleanly as the first account of the new page load (no loop)
+    reloadSpy.mockClear();
+    const afterReloadB = await activateUserDatabase('uid-user-b');
+    expect(afterReloadB.reloaded).toBe(false);
+    expect(reloadSpy).toHaveBeenCalledTimes(0);
+    expect(getOpenedDbUid()).toBe('uid-user-b');
+
+    // 3. Status downgrade from approved -> disabled updates cache, resets stores, and reloads once
+    useTemplateStore.setState({ isInitialized: true });
+    const didReloadOnDisable = handleRevokedOrUnapprovedStatus(
+      'uid-user-b',
+      'b@example.com',
+      'disabled',
+      true
+    );
+    expect(didReloadOnDisable).toBe(true);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    expect(getOpenedDbUid()).toBeNull();
+    expect(useTemplateStore.getState().isInitialized).toBe(false);
+    expect(readCachedAuthStatus('uid-user-b')?.status).toBe('disabled');
+
+    // On the reloaded page, cached status is already 'disabled' (wasPreviouslyApprovedInSession = false) -> no loop!
+    reloadSpy.mockClear();
+    const didReloadAgain = handleRevokedOrUnapprovedStatus(
+      'uid-user-b',
+      'b@example.com',
+      'disabled',
+      false
+    );
+    expect(didReloadAgain).toBe(false);
+    expect(reloadSpy).toHaveBeenCalledTimes(0);
   });
 });
