@@ -12,9 +12,12 @@ import {
   setUpdateRegistration,
 } from './lib/appUpdate';
 import { useAppStore } from './store/useAppStore';
+import { initPwaInstallListeners } from './store/usePwaInstallStore';
 import { APP_COMMIT, consumeAppUpdatedNotice } from './lib/appVersion';
 import { getProfile } from './db/database';
 import './index.css';
+
+initPwaInstallListeners();
 
 window.addEventListener('vite:preloadError', (event) => {
   if (tryReloadOnceForStaleChunk()) {

@@ -118,17 +118,31 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
               <table className="w-full border-collapse text-[8.8pt]">
                 <thead>
                   <tr className="bg-slate-100">
-                    <th className="border border-black px-1.5 py-1 text-center w-9">ល.រ</th>
-                    <th className="border border-black px-1.5 py-1 text-center w-22">អត្តលេខ</th>
-                    <th className="border border-black px-2 py-1 text-left">គោត្តនាម និងនាម</th>
-                    <th className="border border-black px-2 py-1 text-left">ឈ្មោះឡាតាំង</th>
-                    <th className="border border-black px-1.5 py-1 text-center w-12">ភេទ</th>
-                    <th className="border border-black px-1.5 py-1 text-center w-24">
+                    <th className="border border-black px-1.5 py-1 text-center w-9 whitespace-nowrap">
+                      ល.រ
+                    </th>
+                    <th className="border border-black px-2 py-1 text-center whitespace-nowrap">
+                      អត្តលេខ
+                    </th>
+                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                      គោត្តនាម និងនាម
+                    </th>
+                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                      ឈ្មោះឡាតាំង
+                    </th>
+                    <th className="border border-black px-1.5 py-1 text-center w-12 whitespace-nowrap">
+                      ភេទ
+                    </th>
+                    <th className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
                       ថ្ងៃខែឆ្នាំកំណើត
                     </th>
-                    <th className="border border-black px-2 py-1 text-left">ឪពុកឈ្មោះ</th>
-                    <th className="border border-black px-2 py-1 text-left">ម្ដាយឈ្មោះ</th>
-                    <th className="border border-black px-1.5 py-1 text-center w-24">
+                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                      ឪពុកឈ្មោះ
+                    </th>
+                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                      ម្ដាយឈ្មោះ
+                    </th>
+                    <th className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
                       លេខទូរស័ព្ទ
                     </th>
                     <th className="border border-black px-2 py-1 text-left">ទីលំនៅបច្ចុប្បន្ន</th>
@@ -137,23 +151,31 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
                 <tbody>
                   {pageStudents.map((s) => (
                     <tr key={s.id ?? s.studentId}>
-                      <td className="border border-black px-1.5 py-1 text-center">
+                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
                         {fmt(s.order)}
                       </td>
-                      <td className="border border-black px-1.5 py-1 text-center font-mono text-[8.2pt]">
+                      <td className="border border-black px-2 py-1 text-center font-mono text-[8.2pt] whitespace-nowrap">
                         {fmt(s.studentId)}
                       </td>
-                      <td className="border border-black px-2 py-1 font-semibold">{s.nameKm}</td>
-                      <td className="border border-black px-2 py-1 text-[8.2pt]">
+                      <td className="border border-black px-2 py-1 font-semibold whitespace-nowrap">
+                        {s.nameKm}
+                      </td>
+                      <td className="border border-black px-2 py-1 text-[8.2pt] whitespace-nowrap">
                         {s.nameEn || ''}
                       </td>
-                      <td className="border border-black px-1.5 py-1 text-center">{s.gender}</td>
-                      <td className="border border-black px-1.5 py-1 text-center">
+                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                        {s.gender}
+                      </td>
+                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
                         {fmt(s.dateOfBirth)}
                       </td>
-                      <td className="border border-black px-2 py-1">{s.fatherName || ''}</td>
-                      <td className="border border-black px-2 py-1">{s.motherName || ''}</td>
-                      <td className="border border-black px-1.5 py-1 text-center">
+                      <td className="border border-black px-2 py-1 whitespace-nowrap">
+                        {s.fatherName || ''}
+                      </td>
+                      <td className="border border-black px-2 py-1 whitespace-nowrap">
+                        {s.motherName || ''}
+                      </td>
+                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
                         {s.phone || ''}
                       </td>
                       <td className="border border-black px-2 py-1 text-[8.2pt]">

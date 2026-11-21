@@ -43,6 +43,7 @@ import { BackupRestoreModal } from '../../components/common/BackupRestoreModal';
 import { AboutAppCard } from './AboutAppCard';
 import { CloudBackupCard } from './CloudBackupCard';
 import { DirectorSealCard } from './DirectorSealCard';
+import { InstallAppCard } from './InstallAppCard';
 import {
   downloadBackupJson,
   parseAndValidateBackup,
@@ -1076,6 +1077,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
 
       {/* Section 3b: Cloud Backups (daily / manual / pre-replace snapshots) */}
       <CloudBackupCard />
+
+      {/* Section 3c: Install PWA App (shown only when not installed) */}
+      <InstallAppCard />
 
       {/* Section 4: About / app updates */}
       <AboutAppCard />

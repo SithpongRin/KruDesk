@@ -274,7 +274,7 @@ export const RosterView: React.FC<RosterViewProps> = ({ profile }) => {
                     <td className="sticky left-0 z-10 bg-white dark:bg-[#1c1c1e] border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center text-[#86868b]">
                       {fmt(idx + 1)}
                     </td>
-                    <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center font-mono text-[11px]">
+                    <td className="border-r border-black/[0.06] dark:border-white/[0.08] px-2.5 py-2 text-center font-mono text-[11px] whitespace-nowrap">
                       {s.studentId || '—'}
                     </td>
                     <td className="sticky left-11 z-10 bg-white dark:bg-[#1c1c1e] border-r border-black/[0.06] dark:border-white/[0.08] px-3 py-2 font-medium text-[#1d1d1f] dark:text-[#f5f5f7] whitespace-nowrap">

@@ -76,6 +76,11 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
         const isShadedDay = (d: (typeof dayInfos)[number]) =>
           d.isNonSchoolDay || (!d.isFuture && !d.isTaken);
 
+        const hasLongStudentId = activeStudents.some((s) => (s.studentId || '').length > 8);
+        const idColWidthMm = hasLongStudentId ? 21.5 : 14.5;
+        const nameColWidthMm = hasLongStudentId ? 41 : 44;
+        const noteColWidthMm = hasLongStudentId ? 12.5 : 16.5;
+
         return studentPages.map((pg, pageIdx) => {
           const isLastPageOfMonth = pageIdx === studentPages.length - 1;
           const isVeryLastPage =
@@ -86,7 +91,8 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
           // accounting for Khmer Battambang glyph height + daily total row + signature.
           const rowHeightMm = pageRowCount > 39 ? 2.8 : pageRowCount > 30 ? 3.15 : 3.9;
           const fontSizePt = pageRowCount > 39 ? 7.4 : pageRowCount > 30 ? 8.0 : 8.8;
-          const idFontPt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 7.5 : 8.2;
+          const baseIdFontPt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 7.5 : 8.2;
+          const idFontPt = hasLongStudentId ? Math.min(baseIdFontPt, 6.8) : baseIdFontPt;
           const dayFontPt = pageRowCount > 39 ? 6.8 : pageRowCount > 30 ? 7.2 : 7.8;
           const signFontPt = pageRowCount > 39 ? 9.2 : pageRowCount > 30 ? 9.8 : 10.5;
           const signGapMm = pageRowCount > 39 ? 8 : pageRowCount > 30 ? 10 : 14;
@@ -178,14 +184,14 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                       <th
                         rowSpan={2}
                         className="border border-black text-center font-bold"
-                        style={{ width: '14.5mm' }}
+                        style={{ width: `${idColWidthMm}mm` }}
                       >
                         អត្តលេខ
                       </th>
                       <th
                         rowSpan={2}
                         className="border border-black px-1.5 text-left font-bold"
-                        style={{ width: '44mm' }}
+                        style={{ width: `${nameColWidthMm}mm` }}
                       >
                         គោត្តនាម និងនាម
                       </th>
@@ -213,7 +219,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                       <th
                         rowSpan={2}
                         className="border border-black text-center font-bold"
-                        style={{ width: '16.5mm', fontSize: `${dayFontPt}pt` }}
+                        style={{ width: `${noteColWidthMm}mm`, fontSize: `${dayFontPt}pt` }}
                       >
                         សេចក្ដីផ្សេងៗ
                       </th>

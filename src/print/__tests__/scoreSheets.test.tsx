@@ -289,5 +289,57 @@ describe('MonthlyScoreSheet & SemesterSheet active subject filtering and layout'
       el.style.gridTemplateColumns.includes('1fr auto 1fr')
     ) as HTMLElement | undefined;
     expect(parseFloat(rosterSig!.style.fontSize)).toBeGreaterThanOrEqual(10);
+    // Student ID cell must never wrap onto 2 lines
+    const rosterIdCell = rosterRender.container.querySelector(
+      'table.w-full tbody tr:first-child td:nth-child(2)'
+    );
+    expect(rosterIdCell?.className).toContain('whitespace-nowrap');
+  });
+
+  it('automatically widens អត្តលេខ column on AttendanceSheet and MonthlyScoreSheet for long IDs like KDL-2026-1161', () => {
+    const cls = makeClass();
+    const students = makeStudents(5).map((s, idx) => ({
+      ...s,
+      studentId: `KDL-2026-${1161 + idx}`,
+    }));
+
+    const attRender = render(
+      <AttendanceSheet
+        cls={cls}
+        students={students}
+        profile={TEST_PROFILE}
+        attendanceConfig={DEFAULT_ATTENDANCE_CONFIG}
+        holidayDates={new Set()}
+        todayKey="2026-11-21"
+        monthsData={[{ month: '2026-11', lookup: new Map(), takenDates: new Set() }]}
+      />
+    );
+    const attIdTh = Array.from(attRender.container.querySelectorAll('th')).find((th) =>
+      th.textContent?.includes('អត្តលេខ')
+    ) as HTMLElement | undefined;
+    expect(attIdTh?.style.width).toBe('21.5mm');
+    cleanup();
+
+    const scoreRender = render(
+      <MonthlyScoreSheet
+        cls={cls}
+        students={students}
+        profile={TEST_PROFILE}
+        scoreConfig={DEFAULT_SCORE_CONFIG}
+        sheets={[
+          {
+            id: '2026-11',
+            title: 'បញ្ជីពិន្ទុខែវិច្ឆិកា',
+            periodLabel: 'ខែ វិច្ឆិកា ឆ្នាំ 2026',
+            monthKey: '2026-11',
+            scoresByStudent: new Map(),
+          },
+        ]}
+      />
+    );
+    const scoreIdTh = Array.from(scoreRender.container.querySelectorAll('th')).find((th) =>
+      th.textContent?.includes('អត្តលេខ')
+    ) as HTMLElement | undefined;
+    expect(scoreIdTh?.style.width).toBe('22mm');
   });
 });

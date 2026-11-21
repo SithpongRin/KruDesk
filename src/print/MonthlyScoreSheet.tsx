@@ -105,9 +105,14 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
         const padHMm = isPortrait ? 5 : 6;
         const innerWidthMm = pageWidthMm - padHMm * 2;
 
+        const hasLongStudentId = activeStudents.some((s) => (s.studentId || '').length > 8);
         const cols = isPortrait
-          ? { no: 6, id: 12.5, name: 34, sex: 5.5, total: 10, avg: 10, rank: 9, note: 13 }
-          : { no: 7.5, id: 17, name: 42, sex: 7, total: 12, avg: 12, rank: 11, note: 17.5 };
+          ? hasLongStudentId
+            ? { no: 6, id: 19.5, name: 31, sex: 5.5, total: 10, avg: 10, rank: 9, note: 9 }
+            : { no: 6, id: 12.5, name: 34, sex: 5.5, total: 10, avg: 10, rank: 9, note: 13 }
+          : hasLongStudentId
+            ? { no: 7.5, id: 22, name: 40, sex: 7, total: 12, avg: 12, rank: 11, note: 14.5 }
+            : { no: 7.5, id: 17, name: 42, sex: 7, total: 12, avg: 12, rank: 11, note: 17.5 };
 
         // Calculate available width per subject column
         const subjectCount = Math.max(1, sortedSubjects.length);
@@ -165,7 +170,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
               : pageRowCount > 30
                 ? 7.3
                 : 8.2;
-          const idFontPt = isPortrait
+          const baseIdFontPt = isPortrait
             ? subjectCount > 13
               ? 6.8
               : 7.6
@@ -174,6 +179,9 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
               : pageRowCount > 30
                 ? 7.3
                 : 8.0;
+          const idFontPt = hasLongStudentId
+            ? Math.min(baseIdFontPt, isPortrait ? 6.2 : 6.9)
+            : baseIdFontPt;
           const signFontPt = isPortrait
             ? 10.5
             : pageRowCount > 39
