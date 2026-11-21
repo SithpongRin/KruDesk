@@ -47,7 +47,7 @@ export default defineConfig(({ mode }) => {
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['pwa-192x192.png', 'pwa-512x512.png', 'fonts/**/*', 'images/**/*'],
+      includeAssets: ['pwa-192x192.png', 'pwa-512x512.png', 'apple-touch-icon.png', 'favicon-64.png', 'fonts/**/*', 'images/**/*'],
       manifest: {
         name: 'KruDesk — ជំនួយការគ្រូបន្ទុកថ្នាក់',
         short_name: 'KruDesk',

@@ -1,7 +1,7 @@
 import React from 'react';
+import { KruDeskWordmark } from '../../components/common/KruDeskWordmark';
 import { AlertCircle, ShieldCheck } from 'lucide-react';
 import { isEmulatorEnabled } from '../../services/firebase/client';
-import { MOEYS_EMBLEM_DATA_URI } from '../../utils/moeysEmblemDataUri';
 import { signInWithEmulatorGoogle } from './authService';
 import { useAuthStore } from './useAuthStore';
 
@@ -12,16 +12,8 @@ export const LoginScreen: React.FC = () => {
   return (
     <div className="min-h-screen w-screen flex flex-col items-center justify-center bg-[#f5f5f7] dark:bg-[#111214] p-4 font-battambang">
       <div className="w-full max-w-md bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-xl rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.08)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] border border-black/[0.06] dark:border-white/[0.08] p-7 sm:p-9 text-center">
-        <div className="w-20 h-20 mx-auto rounded-3xl bg-[#f5f5f7] dark:bg-[#2c2c2e] shadow-sm p-3.5 flex items-center justify-center mb-5 border border-black/[0.04] dark:border-white/[0.08]">
-          <img
-            src={MOEYS_EMBLEM_DATA_URI}
-            alt="MoEYS Emblem"
-            className="w-full h-full object-contain"
-          />
-        </div>
-
-        <h1 className="text-xl font-bold text-[#1d1d1f] dark:text-[#f5f5f7] font-moul tracking-wide">
-          KruDesk
+        <h1 className="mb-1">
+          <KruDeskWordmark className="text-5xl" />
         </h1>
         <p className="text-xs text-[#6e6e73] dark:text-[#98989d] mt-1.5">
           ជំនួយការគ្រូបន្ទុកថ្នាក់ — គ្រប់គ្រងសិស្ស បញ្ជីវត្តមាន បញ្ជីពិន្ទុ និងកាតសិស្ស

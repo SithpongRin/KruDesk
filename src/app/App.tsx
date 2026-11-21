@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
+import { KruDeskWordmark } from '../components/common/KruDeskWordmark';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 import { db, saveProfile } from '../db/database';
@@ -14,7 +15,6 @@ import { AppleModal } from '../components/common/AppleModal';
 import { AppleButton } from '../components/common/AppleButton';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { PdfPreviewModal } from '../components/common/PdfPreviewModal';
-import { MOEYS_EMBLEM_DATA_URI } from '../utils/moeysEmblemDataUri';
 import { AuthStatusScreen } from '../features/auth/AuthStatusScreen';
 import { LoginScreen } from '../features/auth/LoginScreen';
 import { useAuthStore } from '../features/auth/useAuthStore';
@@ -223,15 +223,8 @@ export const App: React.FC = () => {
 
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#f5f5f7] dark:bg-[#111214] px-6">
-        <div className="w-16 h-16 rounded-3xl bg-white dark:bg-[#1c1c1e] shadow-md p-3 flex items-center justify-center mb-4 border border-black/[0.04] dark:border-white/[0.08]">
-          <img
-            src={MOEYS_EMBLEM_DATA_URI}
-            alt="MoEYS Logo"
-            className="w-full h-full object-contain"
-          />
-        </div>
-        <h2 className="text-base font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] font-moul tracking-wide">
-          KruDesk
+        <h2>
+          <KruDeskWordmark className="text-4xl" />
         </h2>
         <p className="text-xs text-[#6e6e73] dark:text-[#98989d] mt-2 font-battambang">
           {firstSignInSlow ? 'អ៊ីនធឺណិតយឺត…' : progressLabel}
@@ -313,15 +306,8 @@ const AppInner: React.FC<{
   if (!isReady) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-[#f5f5f7] dark:bg-[#111214]">
-        <div className="w-16 h-16 rounded-3xl bg-white dark:bg-[#1c1c1e] shadow-md p-3 flex items-center justify-center mb-4 border border-black/[0.04] dark:border-white/[0.08] animate-pulse">
-          <img
-            src={MOEYS_EMBLEM_DATA_URI}
-            alt="MoEYS Logo"
-            className="w-full h-full object-contain"
-          />
-        </div>
-        <h2 className="text-base font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] font-moul tracking-wide">
-          KruDesk
+        <h2 className="animate-pulse">
+          <KruDeskWordmark className="text-4xl" />
         </h2>
         <p className="text-xs text-[#86868b] mt-1 font-battambang">
           កំពុងរៀបចំប្រព័ន្ធ និងទិន្នន័យក្នុងម៉ាស៊ីន (IndexedDB)...

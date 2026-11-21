@@ -202,7 +202,7 @@ describe('Auth & Admin UI and offline cache (§4)', () => {
       </>
     );
     expect(screen.queryByText('គ្រប់គ្រងអ្នកប្រើ')).toBeNull();
-    expect(container.querySelector('h1.font-moul')?.textContent).toBe('KruDesk');
+    expect(container.querySelector('aside h1, h1')?.textContent).toBe('KruDesk');
     unmount();
 
     // Admin user with pending, approved (including own admin doc), and disabled users

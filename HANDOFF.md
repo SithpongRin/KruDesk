@@ -74,6 +74,7 @@ tracked file.
   including the uploader, ends up with that same copy. Stuck outbox entries go up on the next push.
 
 **Known items & decisions**
+- **Branding (teacher, 2026-11-21):** the app UI must not use the ministry emblem. Logo = the wordmark «KruDesk» (`KruDeskWordmark`: «Kru» #0b1b3f + «Desk» #1565f5, extra-bold system font). App icon = blue notebook with a «Kru DESK» label on a light-blue squircle (`public/pwa-*.png`, `apple-touch-icon.png`, `favicon-64.png`). The emblem stays only on student cards (school documents).
 - Teacher's decision for §1.6 (both device and cloud have data): **Replace, not merge** — both device and
   cloud snapshots are saved to `users/{uid}/backups` (plus extra local JSON download) before replacing.
 - Tombstones are never purged yet, so docs grow slowly → **plan a purge (e.g. tombstones older than 90 days) in step 6**.

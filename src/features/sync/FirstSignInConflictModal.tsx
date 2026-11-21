@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
+
 import { AlertTriangle, Cloud, HardDrive, Loader2, ShieldCheck } from 'lucide-react';
 import { AppleButton } from '../../components/common/AppleButton';
 import { useSyncStore } from '../../services/sync/useSyncStore';
 import type { FirstSignInConflictChoice } from '../../services/sync/firstSignIn';
-import { MOEYS_EMBLEM_DATA_URI } from '../../utils/moeysEmblemDataUri';
 
 export const FirstSignInConflictModal: React.FC = () => {
   const { firstSignInPhase, conflictSummary, conflictError, resolveConflict } = useSyncStore();
@@ -26,13 +26,6 @@ export const FirstSignInConflictModal: React.FC = () => {
       >
         <div className="p-6 space-y-5">
           <div className="flex items-start gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-[#f5f5f7] dark:bg-white/[0.08] p-2 flex items-center justify-center shrink-0">
-              <img
-                src={MOEYS_EMBLEM_DATA_URI}
-                alt="KruDesk"
-                className="w-full h-full object-contain"
-              />
-            </div>
             <div className="min-w-0">
               <h2
                 id="first-signin-conflict-title"
