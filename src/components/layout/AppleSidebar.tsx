@@ -10,6 +10,7 @@ import {
   Trophy,
   Award,
   CreditCard,
+  ShieldCheck,
   Settings,
   Wifi,
   WifiOff,
@@ -44,6 +45,23 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'settings', label: 'ការកំណត់', icon: <Settings size={18} /> },
 ];
 
+export const ADMIN_NAV_ITEM: NavItem = {
+  id: 'adminUsers',
+  label: 'គ្រប់គ្រងអ្នកប្រើ',
+  icon: <ShieldCheck size={18} />,
+};
+
+export function getNavItems(isAdmin: boolean): NavItem[] {
+  if (!isAdmin) return NAV_ITEMS;
+  const settingsIdx = NAV_ITEMS.findIndex((item) => item.id === 'settings');
+  if (settingsIdx === -1) return [...NAV_ITEMS, ADMIN_NAV_ITEM];
+  return [
+    ...NAV_ITEMS.slice(0, settingsIdx),
+    ADMIN_NAV_ITEM,
+    ...NAV_ITEMS.slice(settingsIdx),
+  ];
+}
+
 export const AppleSidebar: React.FC<AppleSidebarProps> = ({ profile }) => {
   const {
     activeView,
@@ -54,6 +72,7 @@ export const AppleSidebar: React.FC<AppleSidebarProps> = ({ profile }) => {
     useKhmerNumerals,
   } = useAppStore();
   const { isAdmin, pendingUsersCount } = useAuthStore();
+  const navItems = getNavItems(isAdmin);
 
   const renderNavContent = (isMobile = false) => (
     <>
@@ -92,7 +111,7 @@ export const AppleSidebar: React.FC<AppleSidebarProps> = ({ profile }) => {
         </div>
 
         <nav className="px-3 py-2 space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = activeView === item.id;
             return (
               <button
@@ -119,7 +138,7 @@ export const AppleSidebar: React.FC<AppleSidebarProps> = ({ profile }) => {
                 <span className="font-battambang leading-tight text-[13px] truncate flex-1">
                   {item.label}
                 </span>
-                {item.id === 'settings' && isAdmin && pendingUsersCount > 0 && (
+                {item.id === 'adminUsers' && isAdmin && pendingUsersCount > 0 && (
                   <span
                     aria-label="ចំនួនអ្នករង់ចាំអនុញ្ញាត"
                     className={clsx(

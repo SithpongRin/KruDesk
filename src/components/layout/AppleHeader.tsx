@@ -17,6 +17,7 @@ const VIEW_TITLES: Record<ActiveView, string> = {
   honorRoll: 'តារាងកិត្តិយស',
   certificates: 'ប័ណ្ណសរសើរ',
   cards: 'កាតសិស្ស',
+  adminUsers: 'គ្រប់គ្រងអ្នកប្រើ',
   settings: 'ការកំណត់',
 };
 

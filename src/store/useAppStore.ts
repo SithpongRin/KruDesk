@@ -13,6 +13,7 @@ export type ActiveView =
   | 'honorRoll'
   | 'certificates'
   | 'cards'
+  | 'adminUsers'
   | 'settings';
 
 export interface ToastMessage {

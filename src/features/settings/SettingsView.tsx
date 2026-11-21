@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Save,
@@ -22,8 +22,6 @@ import {
 import { db, clearAllAppData, saveProfile, setSetting } from '../../db/database';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../auth/useAuthStore';
-
-const AdminUsersCard = lazy(() => import('../auth/AdminUsersCard'));
 import {
   DEFAULT_ATTENDANCE_CONFIG,
   resolveScoreConfig,
@@ -383,19 +381,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
             </AppleButton>
           </div>
         </AppleCard>
-      )}
-
-      {/* Admin User Management Card — only rendered when isAdmin and lazy-loaded (§4.5) */}
-      {isAdmin && (
-        <Suspense
-          fallback={
-            <div className="p-6 text-center text-xs text-[#86868b]">
-              កំពុងផ្ទុកផ្ទាំងគ្រប់គ្រងអ្នកប្រើ...
-            </div>
-          }
-        >
-          <AdminUsersCard />
-        </Suspense>
       )}
 
       {/* Section 1: ព័ត៌មានគ្រូ និងសាលា */}

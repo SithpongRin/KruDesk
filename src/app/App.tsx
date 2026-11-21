@@ -54,6 +54,9 @@ const CertificatesView = lazy(() =>
 const CardsView = lazy(() =>
   import('../features/cards/CardsView').then((m) => ({ default: m.CardsView }))
 );
+const AdminUsersView = lazy(() =>
+  import('../features/auth/AdminUsersView').then((m) => ({ default: m.AdminUsersView }))
+);
 
 export const App: React.FC = () => {
   const { activeView, toasts, removeToast, theme, hydratePreferences, setIsOnline } =
@@ -180,6 +183,7 @@ export const App: React.FC = () => {
       isReady={isReady && isProfileLoaded && authReady}
       profile={profile}
       activeView={activeView}
+      isAdmin={isAdmin}
       toastPortal={toastPortal}
     />
   );
@@ -189,16 +193,24 @@ const AppInner: React.FC<{
   isReady: boolean;
   profile: Profile | undefined;
   activeView: ReturnType<typeof useAppStore.getState>['activeView'];
+  isAdmin: boolean;
   toastPortal: React.ReactNode;
-}> = ({ isReady, profile, activeView, toastPortal }) => {
+}> = ({ isReady, profile, activeView, isAdmin, toastPortal }) => {
   const [provinceDismissed, setProvinceDismissed] = useState(false);
   const [selectedProvince, setSelectedProvince] = useState('កណ្ដាល');
   const [savingProvince, setSavingProvince] = useState(false);
   const {
+    setActiveView,
     pendingViewAfterLeaveConfirm,
     confirmLeaveUnsavedAttendance,
     cancelLeaveUnsavedAttendance,
   } = useAppStore();
+
+  useEffect(() => {
+    if (activeView === 'adminUsers' && !isAdmin) {
+      setActiveView('dashboard');
+    }
+  }, [activeView, isAdmin, setActiveView]);
 
   if (!isReady) {
     return (
@@ -255,6 +267,8 @@ const AppInner: React.FC<{
         return <CertificatesView profile={profile} />;
       case 'cards':
         return <CardsView profile={profile} />;
+      case 'adminUsers':
+        return isAdmin ? <AdminUsersView /> : <DashboardView profile={profile} />;
       case 'settings':
         return <SettingsView profile={profile} />;
       default:

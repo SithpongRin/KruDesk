@@ -4,7 +4,7 @@ import { MoreHorizontal, X } from 'lucide-react';
 import { useAppStore, type ActiveView } from '../../store/useAppStore';
 import { useAuthStore } from '../../features/auth/useAuthStore';
 import { toKhmerNumerals } from '../../utils/khmerNumerals';
-import { NAV_ITEMS } from './AppleSidebar';
+import { getNavItems } from './AppleSidebar';
 
 const PRIMARY_MOBILE_IDS = new Set<ActiveView>(['dashboard', 'students', 'attendance', 'scores']);
 
@@ -13,8 +13,9 @@ export const MobileBottomNav: React.FC = () => {
   const { isAdmin, pendingUsersCount } = useAuthStore();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const primaryItems = NAV_ITEMS.filter((item) => PRIMARY_MOBILE_IDS.has(item.id));
-  const moreItems = NAV_ITEMS.filter((item) => !PRIMARY_MOBILE_IDS.has(item.id));
+  const navItems = getNavItems(isAdmin);
+  const primaryItems = navItems.filter((item) => PRIMARY_MOBILE_IDS.has(item.id));
+  const moreItems = navItems.filter((item) => !PRIMARY_MOBILE_IDS.has(item.id));
   const isMoreActive = moreItems.some((item) => item.id === activeView);
 
   return (
@@ -63,7 +64,7 @@ export const MobileBottomNav: React.FC = () => {
                     <span className="text-[11px] font-battambang leading-tight">
                       {item.label}
                     </span>
-                    {item.id === 'settings' && isAdmin && pendingUsersCount > 0 && (
+                    {item.id === 'adminUsers' && isAdmin && pendingUsersCount > 0 && (
                       <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-[#ff9500] text-white text-[10px] font-bold leading-none">
                         {useKhmerNumerals ? toKhmerNumerals(pendingUsersCount) : pendingUsersCount}
                       </span>
@@ -124,6 +125,11 @@ export const MobileBottomNav: React.FC = () => {
         >
           <div className="relative">
             <MoreHorizontal size={18} />
+            {isAdmin && pendingUsersCount > 0 && (
+              <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full bg-[#ff9500] text-white text-[9px] font-bold leading-tight">
+                {useKhmerNumerals ? toKhmerNumerals(pendingUsersCount) : pendingUsersCount}
+              </span>
+            )}
             {isMoreActive && (
               <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#0071e3]" />
             )}

@@ -52,3 +52,5 @@ private_samples/
 
 # Local prompt with the admin email — never commit
 GEMINI_FIREBASE_PROMPT.md
+GEMINI_CLOUD_SYNC_PROMPT.md
+GEMINI_CLOUD_SYNC_PROMPT.md

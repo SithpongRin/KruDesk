@@ -10,7 +10,7 @@ import {
 import { isIosStandalonePwa, sanitizeDisplayName, sanitizePhotoURL } from '../authService';
 import { LoginScreen } from '../LoginScreen';
 import { AuthStatusScreen } from '../AuthStatusScreen';
-import { AdminUsersCard } from '../AdminUsersCard';
+import { AdminUsersView } from '../AdminUsersView';
 import { useAuthStore } from '../useAuthStore';
 import { AppleSidebar } from '../../../components/layout/AppleSidebar';
 
@@ -166,8 +166,8 @@ describe('Auth & Admin UI and offline cache (§4)', () => {
     expect(signOutSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('renders AdminUsersCard only for admin, hides action buttons on admin own row, and shows pending badge in sidebar', () => {
-    // Non-admin: AdminUsersCard renders nothing
+  it('renders AdminUsersView and Sidebar menu item only for admin, hides action buttons on admin own row, and shows pending badge on គ្រប់គ្រងអ្នកប្រើ', () => {
+    // Non-admin: AdminUsersView renders nothing and Sidebar hides គ្រប់គ្រងអ្នកប្រើ
     useAuthStore.setState({
       isAdmin: false,
       user: {
@@ -177,8 +177,21 @@ describe('Auth & Admin UI and offline cache (§4)', () => {
         photoURL: null,
       },
     });
-    const { container, unmount } = render(<AdminUsersCard />);
-    expect(container.innerHTML).toBe('');
+    const { container, unmount } = render(
+      <>
+        <AppleSidebar
+          profile={{
+            teacherName: 'គ្រូ ធម្មតា',
+            schoolName: 'សាលាសាកល្បង',
+            directorName: 'នាយក',
+            academicYear: '2026-2027',
+          }}
+        />
+        <AdminUsersView />
+      </>
+    );
+    expect(screen.queryByText('គ្រប់គ្រងអ្នកប្រើ')).toBeNull();
+    expect(container.querySelector('h1.font-moul')?.textContent).toBe('KruDesk');
     unmount();
 
     // Admin user with pending, approved (including own admin doc), and disabled users
@@ -245,12 +258,14 @@ describe('Auth & Admin UI and offline cache (§4)', () => {
             academicYear: '2026-2027',
           }}
         />
-        <AdminUsersCard />
+        <AdminUsersView />
       </>
     );
 
-    // Sidebar pending count badge is visible on Settings
-    expect(screen.getAllByLabelText('ចំនួនអ្នករង់ចាំអនុញ្ញាត').length).toBeGreaterThanOrEqual(1);
+    // Sidebar pending count badge is visible on គ្រប់គ្រងអ្នកប្រើ
+    const badges = screen.getAllByLabelText('ចំនួនអ្នករង់ចាំអនុញ្ញាត');
+    expect(badges.length).toBeGreaterThanOrEqual(1);
+    expect(badges[0]?.closest('button')?.textContent).toContain('គ្រប់គ្រងអ្នកប្រើ');
 
     // Pending tab shows pending user with «អនុញ្ញាត» and «បដិសេធ»
     expect(screen.getByText('គ្រូ រង់ចាំ')).toBeTruthy();
