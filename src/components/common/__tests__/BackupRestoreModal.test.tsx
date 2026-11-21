@@ -81,4 +81,22 @@ describe('BackupRestoreModal', () => {
     fireEvent.click(screen.getByText('ស្ដារទិន្នន័យឥឡូវនេះ'));
     await waitFor(() => expect(onConfirmRestore).toHaveBeenCalledWith('merge'));
   });
+
+  it('warns that replace mode replaces data on every signed-in device', () => {
+    render(
+      <BackupRestoreModal
+        isOpen={true}
+        onClose={() => {}}
+        payload={makePayload(1)}
+        fileName="test.json"
+        onConfirmRestore={vi.fn().mockResolvedValue(undefined)}
+        allowMerge={true}
+      />
+    );
+
+    fireEvent.click(screen.getByText('ជំនួសទិន្នន័យទាំងអស់'));
+    expect(
+      screen.getByText(/ការជំនួសទិន្នន័យទាំងអស់នឹងជំនួសទិន្នន័យនៅលើឧបករណ៍ទាំងអស់ដែលចូលគណនីនេះ/)
+    ).toBeDefined();
+  });
 });

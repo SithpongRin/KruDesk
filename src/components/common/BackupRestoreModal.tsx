@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { HardDriveUpload, CheckCircle2, Layers, RefreshCw } from 'lucide-react';
+import { HardDriveUpload, CheckCircle2, Layers, RefreshCw, AlertTriangle } from 'lucide-react';
 import { AppleModal } from '../common/AppleModal';
 import { AppleButton } from '../common/AppleButton';
 import { AppleBadge } from '../common/AppleBadge';
@@ -155,7 +155,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
                   <span>ជំនួសទិន្នន័យទាំងអស់</span>
                 </div>
                 <p className="text-[11px] text-[#86868b] mt-1">
-                  លុបទិន្នន័យបច្ចុប្បន្ន ហើយដាក់ជំនួសដោយទិន្នន័យក្នុង Backup ទាំងស្រុង
+                  លុបទិន្នន័យបច្ចុប្បន្ន ហើយដាក់ជំនួសដោយទិន្នន័យក្នុង Backup ទាំងស្រុងនៅលើឧបករណ៍ទាំងអស់ដែលចូលគណនីនេះ
                 </p>
               </button>
 
@@ -177,6 +177,15 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
                 </p>
               </button>
             </div>
+          </div>
+        )}
+
+        {mode === 'replace' && (
+          <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-xs text-amber-900 dark:text-amber-200">
+            <AlertTriangle size={15} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <span>
+              សម្គាល់៖ ការជំនួសទិន្នន័យទាំងអស់នឹងជំនួសទិន្នន័យនៅលើឧបករណ៍ទាំងអស់ដែលចូលគណនីនេះ។
+            </span>
           </div>
         )}
       </div>

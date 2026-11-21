@@ -3,11 +3,61 @@
 > **ខ្មែរ (សង្ខេប)** ៖ ឯកសារនេះប្រាប់ AI ថ្មី (Claude ឬ Gemini) ពីស្ថានភាពគម្រោង ការសម្រេចចិត្តរបស់គ្រូ
 > វិធានធ្វើការ និងការងារដែលនៅសល់។ ចាប់ផ្ដើមឆាតថ្មីដោយឲ្យ AI អានឯកសារនេះមុនគេ។
 >
-> Last updated: 2026-11-20 (handed back to Gemini) · Live commit: see `git log -1` on `main` (check Settings → «អំពីកម្មវិធី»)
+> Last updated: 2026-11-21 (Claude, before new chats) · Live commit: see `git log -1` on `main` (check Settings → «អំពីកម្មវិធី»)
 
 ---
 
-## 0. ⚠️ Current state — read this first (2026-11-20, end of the Claude chat)
+## 00. ⚠️ Current state — read this first (2026-11-21): Firebase login + cloud sync
+
+**Plan files (git-ignored, local only — read both):** `GEMINI_FIREBASE_PROMPT.md` (login, admin approval,
+rules, Vercel) and `GEMINI_CLOUD_SYNC_PROMPT.md` (cloud sync; replaces steps 5–6 of the first one).
+The admin email lives ONLY in Firestore `config/admin` and in those git-ignored files — never write it in a
+tracked file.
+
+**Hosting & project**
+- New main site: **https://krudesk.vercel.app** (Vercel Hobby, project `krudesk`, auto-deploys from `main`,
+  build = `npm test && npm run build`). Old site `sithpongrin.github.io/KruDesk/` still deploys from `main`
+  without auth (teachers download their old backups there). Vite `base` is `/` on Vercel, `/KruDesk/` otherwise.
+- Firebase project **`krudesk-1fa42`** (Spark, free). Owner = the teacher's admin account only. Firestore
+  `(default)` in `asia-southeast1`. Auth: Google only. `config/admin` exists. `firestore.rules` deployed
+  (version with `users/*`, `backups`, but NOT yet the `docs` rule).
+- Vercel Production `VITE_FIREBASE_AUTH_DOMAIN = krudesk.vercel.app` + rewrite `/__/auth/*` →
+  firebaseapp.com (login on iOS PWA). Fail-closed: a Vercel build without Firebase env (or with the
+  emulator flag) fails on purpose (`build/validateVercelBuildEnv.ts`).
+
+**Done and committed**
+- `8cb4262` Vercel base path · `4797914` Google sign-in, pending/approved/rejected/disabled screens,
+  offline status cache, rules + rules tests (pushed, live).
+- `d8d938b` Admin menu «គ្រប់គ្រងអ្នកប្រើ» in the Sidebar (Admin only) — **not pushed**.
+- `43be585` per-account Dexie `KruDeskDB_<uid>` (old `KruDeskDB` never deleted), safe random integer ids
+  for classes/students/holidays (Dexie v5 + `outbox` table), full reload on sign-out/account switch — **not pushed**.
+- **Cloud sync step 3 (committed locally, not pushed):** `src/services/sync/{syncCodec,syncEngine,photoCompression}.ts`,
+  atomic Dexie DBCore outbox middleware (`src/db/database.ts`, enabled only on `KruDeskDB_<uid>`),
+  `docs` rule in `firestore.rules`, `tests/syncEngine.emulator.test.ts`. All 6 review issues + A–D fixed:
+  per-transaction remote-apply marker, `class → students → photo → others` apply order + durable
+  `syncPendingPhotos`, atomic same-tx outbox + `pendingPhoto` compressed at push time, tombstones
+  `{ __deleted: true, ts }` + self-heal, whole-doc 900 KB check keeping oversized entries without blocking
+  other docs, per-entry photo error catch (unreadable Blobs stay in outbox without blocking other docs),
+  single-flight `opChain` lock, full-replace sync for restore / «លុបទិន្នន័យទាំងអស់» with every-device
+  Khmer warnings. Verified: `npm test` 192/192, `npm run test:rules` 18/18 (plus Claude's 7/7 repro), build OK.
+
+**Known items & decisions**
+- Teacher's decision for §1.6 (both device and cloud have data): **Replace, not merge** — first download the
+  device backup JSON and save a cloud snapshot to `users/{uid}/backups`, then confirm in Khmer that every device
+  will be replaced.
+- Tombstones are never purged yet, so docs grow slowly → **plan a purge (e.g. tombstones older than 90 days) in step 6**.
+
+**Next steps:** step 4 (hook SyncEngine into app, header sync status, first sign-in flows §1.6), step 5
+(deploy `docs` rule — Claude reviews first), step 6 (daily cloud snapshots, tombstone purge, import of old
+`KruDeskDB` / backups), step 7 (docs). Push to `main` only when sync works end-to-end. Do not let other
+teachers use it before then (data is still per-device).
+
+**Emulator notes (Java 24 on this PC):** run `npm run test:rules`. If the emulator fails with "Unable to
+establish loopback connection", set `JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=D:/KruDesk/.firebase/jtmp`
+(create the folder first). If port `8088` is "taken", an orphaned `demo-krudesk` java emulator is still
+running — stop it, or run vitest directly with `FIRESTORE_EMULATOR_HOST=127.0.0.1:8088` against it.
+
+## 0. Earlier state (2026-11-20) — done, kept for history
 
 **Live = `eb31a41`.** The working tree has **uncommitted work by Gemini** (13 files, on top of `eb31a41`):
 - Task 1: ministry presets for grades 10, 11, 12 (`createGrade10/11/12Subjects`, `track?: 'science' | 'social'`

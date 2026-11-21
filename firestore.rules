@@ -104,6 +104,11 @@ service cloud.firestore {
           allow read, write: if (isApproved() || isAdmin()) && request.auth.uid == uid;
         }
       }
+
+      // Per-teacher synced documents — strictly owner-only AND must be approved (or admin).
+      match /docs/{docId} {
+        allow read, write: if (isApproved() || isAdmin()) && request.auth.uid == uid;
+      }
     }
 
     // Everything else is denied by default.

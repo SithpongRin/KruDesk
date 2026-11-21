@@ -303,7 +303,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
     if (wipeStep === 2) {
       setIsWiping(true);
       try {
-        await clearAllAppData();
+        await clearAllAppData(db, { syncToCloud: true });
         setSelectedClassId(null);
         setWipeStep(0);
         addToast({
@@ -1054,7 +1054,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
             <span>លុបទិន្នន័យទាំងអស់</span>
           </h4>
           <p className="text-xs text-red-700 dark:text-red-300/80 mt-1">
-            សម្អាតទិន្នន័យថ្នាក់ សិស្ស វត្តមាន ពិន្ទុ និងការកំណត់ទាំងអស់ចេញពីកម្មវិធីរុករក។ សូមទាញយក Backup ជាមុន!
+            សម្អាតទិន្នន័យថ្នាក់ សិស្ស វត្តមាន ពិន្ទុ និងការកំណត់ទាំងអស់នៅលើឧបករណ៍ទាំងអស់ដែលចូលគណនីនេះ។ សូមទាញយក Backup ជាមុន!
           </p>
         </div>
 
@@ -1084,7 +1084,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
         onClose={() => setWipeStep(0)}
         onConfirm={handleConfirmWipe}
         title="លុបទិន្នន័យទាំងអស់ (ជំហានទី ១/២)"
-        message="តើអ្នកពិតជាចង់លុបទិន្នន័យទាំងអស់ក្នុង KruDesk មែនទេ? ទិន្នន័យដែលគ្មាន Backup មិនអាចទាញយកមកវិញបានទេ។"
+        message="តើអ្នកពិតជាចង់លុបទិន្នន័យទាំងអស់ក្នុង KruDesk មែនទេ? ទិន្នន័យនឹងត្រូវលុបនៅលើឧបករណ៍ទាំងអស់ដែលចូលគណនីនេះ ហើយទិន្នន័យដែលគ្មាន Backup មិនអាចទាញយកមកវិញបានទេ។"
         confirmLabel="បន្តទៅការបញ្ជាក់ចុងក្រោយ"
         variant="danger"
       />
@@ -1094,7 +1094,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
         onClose={() => setWipeStep(0)}
         onConfirm={handleConfirmWipe}
         title="បញ្ជាក់ចុងក្រោយ (ជំហានទី ២/២)"
-        message="សកម្មភាពនេះនឹងលុបថ្នាក់រៀន សិស្ស វត្តមាន ពិន្ទុ និងព័ត៌មានសាលាទាំងស្រុងភ្លាមៗ។ ចុច «លុបទាំងអស់» ដើម្បីបញ្ជាក់។"
+        message="សកម្មភាពនេះនឹងលុបថ្នាក់រៀន សិស្ស វត្តមាន ពិន្ទុ និងព័ត៌មានសាលាទាំងស្រុងភ្លាមៗ ហើយទិន្នន័យនឹងត្រូវលុបនៅលើឧបករណ៍ទាំងអស់ដែលចូលគណនីនេះ។ ចុច «លុបទាំងអស់» ដើម្បីបញ្ជាក់។"
         confirmLabel={isWiping ? 'កំពុងលុប...' : 'លុបទាំងអស់'}
         variant="danger"
         isLoading={isWiping}

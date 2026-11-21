@@ -4,9 +4,16 @@ import {
   deriveSessionsFromAbsenceRows,
   markMigratedSessionsInBatch,
   setSetting,
+  type KruDeskDatabase,
 } from '../db/database';
 import { normalizeMigratedClassSubjects } from '../db/subjectMigration';
 import { toLocalDateKey } from '../lib/khmerDate';
+import {
+  isInternalSyncSettingKey,
+  SYNC_DEVICE_ID_KEY,
+  SYNC_LAST_PULLED_AT_KEY,
+  SYNC_PENDING_FULL_REPLACE_KEY,
+} from './sync/syncCodec';
 import type {
   AppSetting,
   Attendance,
@@ -159,15 +166,18 @@ function applyMigratedFlagToRestoredSessions(sessions: AttendanceSession[]): Att
   );
 }
 
-async function normalizeRestoredClassSubjects(classIds: Iterable<number>): Promise<void> {
+async function normalizeRestoredClassSubjects(
+  classIds: Iterable<number>,
+  targetDb: KruDeskDatabase = db
+): Promise<void> {
   const uniqueIds = new Set(classIds);
   if (uniqueIds.size === 0) return;
   const [allMonthly, allExams] = await Promise.all([
-    db.monthlyScores.toArray(),
-    db.semesterExams.toArray(),
+    targetDb.monthlyScores.toArray(),
+    targetDb.semesterExams.toArray(),
   ]);
   for (const cid of uniqueIds) {
-    const cls = await db.classes.get(cid);
+    const cls = await targetDb.classes.get(cid);
     if (!cls) continue;
     const { subjects, changed } = normalizeMigratedClassSubjects(
       cls.subjects ?? [],
@@ -175,7 +185,7 @@ async function normalizeRestoredClassSubjects(classIds: Iterable<number>): Promi
       allExams.filter((s) => s.classId === cid)
     );
     if (changed) {
-      await db.classes.update(cid, { subjects });
+      await targetDb.classes.update(cid, { subjects });
     }
   }
 }
@@ -210,9 +220,12 @@ export function dataUrlToBlob(dataUrl: string): Blob | undefined {
   }
 }
 
-export async function buildBackupPayload(now: number = Date.now()): Promise<KruDeskBackupPayload> {
+export async function buildBackupPayload(
+  now: number = Date.now(),
+  targetDb: KruDeskDatabase = db
+): Promise<KruDeskBackupPayload> {
   const [
-    settings,
+    rawSettings,
     classes,
     students,
     attendance,
@@ -222,16 +235,17 @@ export async function buildBackupPayload(now: number = Date.now()): Promise<KruD
     semesterExams,
     templates,
   ] = await Promise.all([
-    db.settings.toArray(),
-    db.classes.toArray(),
-    db.students.toArray(),
-    db.attendance.toArray(),
-    db.attendanceSessions.toArray(),
-    db.holidays.toArray(),
-    db.monthlyScores.toArray(),
-    db.semesterExams.toArray(),
-    db.templates.toArray(),
+    targetDb.settings.toArray(),
+    targetDb.classes.toArray(),
+    targetDb.students.toArray(),
+    targetDb.attendance.toArray(),
+    targetDb.attendanceSessions.toArray(),
+    targetDb.holidays.toArray(),
+    targetDb.monthlyScores.toArray(),
+    targetDb.semesterExams.toArray(),
+    targetDb.templates.toArray(),
   ]);
+  const settings = rawSettings.filter((s) => !isInternalSyncSettingKey(s.key));
 
   const serializedStudents = await Promise.all(
     students.map(async (s) => {
@@ -329,47 +343,53 @@ export function summarizeBackup(payload: KruDeskBackupPayload): RestoreSummary {
 
 export async function restoreBackupPayload(
   payload: KruDeskBackupPayload,
-  mode: RestoreMode
+  mode: RestoreMode,
+  targetDb: KruDeskDatabase = db
 ): Promise<RestoreSummary> {
   // Re-validate with Zod before touching IndexedDB
   const validated = KruDeskBackupSchema.parse(payload);
   const { data } = validated;
 
-  await db.transaction(
+  await targetDb.transaction(
     'rw',
     [
-      db.settings,
-      db.classes,
-      db.students,
-      db.attendance,
-      db.attendanceSessions,
-      db.holidays,
-      db.monthlyScores,
-      db.semesterExams,
-      db.templates,
+      targetDb.settings,
+      targetDb.classes,
+      targetDb.students,
+      targetDb.attendance,
+      targetDb.attendanceSessions,
+      targetDb.holidays,
+      targetDb.monthlyScores,
+      targetDb.semesterExams,
+      targetDb.templates,
     ],
     async () => {
       const classIdMap = new Map<number, number>();
       const studentIdMap = new Map<number, number>();
 
       if (mode === 'replace') {
+        const [deviceIdRow, lastPulledRow] = await Promise.all([
+          targetDb.settings.get(SYNC_DEVICE_ID_KEY),
+          targetDb.settings.get(SYNC_LAST_PULLED_AT_KEY),
+        ]);
+
         await Promise.all([
-          db.settings.clear(),
-          db.classes.clear(),
-          db.students.clear(),
-          db.attendance.clear(),
-          db.attendanceSessions.clear(),
-          db.holidays.clear(),
-          db.monthlyScores.clear(),
-          db.semesterExams.clear(),
-          db.templates.clear(),
+          targetDb.settings.clear(),
+          targetDb.classes.clear(),
+          targetDb.students.clear(),
+          targetDb.attendance.clear(),
+          targetDb.attendanceSessions.clear(),
+          targetDb.holidays.clear(),
+          targetDb.monthlyScores.clear(),
+          targetDb.semesterExams.clear(),
+          targetDb.templates.clear(),
         ]);
 
         for (const cls of data.classes) {
           const oldId = cls.id;
           const record: SchoolClass = { ...cls };
           delete record.id;
-          const newId = await db.classes.add(record);
+          const newId = await targetDb.classes.add(record);
           if (oldId !== undefined) classIdMap.set(oldId, newId);
         }
 
@@ -383,7 +403,7 @@ export async function restoreBackupPayload(
             classId: mappedClassId,
             ...(photoBlob ? { photoBlob } : {}),
           };
-          const newId = await db.students.add(record);
+          const newId = await targetDb.students.add(record);
           if (oldId !== undefined) studentIdMap.set(oldId, newId);
         }
 
@@ -392,7 +412,7 @@ export async function restoreBackupPayload(
           classId: classIdMap.get(a.classId) ?? a.classId,
           studentRef: studentIdMap.get(a.studentRef) ?? a.studentRef,
         }));
-        if (attendanceRows.length > 0) await db.attendance.bulkPut(attendanceRows);
+        if (attendanceRows.length > 0) await targetDb.attendance.bulkPut(attendanceRows);
 
         const sessionRows: AttendanceSession[] =
           validated.schemaVersion === 1 || data.attendanceSessions === undefined
@@ -403,43 +423,59 @@ export async function restoreBackupPayload(
                   classId: classIdMap.get(s.classId) ?? s.classId,
                 }))
               );
-        if (sessionRows.length > 0) await db.attendanceSessions.bulkPut(sessionRows);
+        if (sessionRows.length > 0) await targetDb.attendanceSessions.bulkPut(sessionRows);
 
         const holidayRows: Holiday[] = data.holidays.map(({ id: _id, ...h }) => h);
-        if (holidayRows.length > 0) await db.holidays.bulkAdd(holidayRows);
+        if (holidayRows.length > 0) await targetDb.holidays.bulkAdd(holidayRows);
 
         const monthlyRows: MonthlyScore[] = data.monthlyScores.map((m) => ({
           ...m,
           classId: classIdMap.get(m.classId) ?? m.classId,
           studentRef: studentIdMap.get(m.studentRef) ?? m.studentRef,
         }));
-        if (monthlyRows.length > 0) await db.monthlyScores.bulkPut(monthlyRows);
+        if (monthlyRows.length > 0) await targetDb.monthlyScores.bulkPut(monthlyRows);
 
         const semesterRows: SemesterExam[] = data.semesterExams.map((s) => ({
           ...s,
           classId: classIdMap.get(s.classId) ?? s.classId,
           studentRef: studentIdMap.get(s.studentRef) ?? s.studentRef,
         }));
-        if (semesterRows.length > 0) await db.semesterExams.bulkPut(semesterRows);
+        if (semesterRows.length > 0) await targetDb.semesterExams.bulkPut(semesterRows);
 
         if (validated.schemaVersion < 3) {
-          await normalizeRestoredClassSubjects(classIdMap.values());
+          await normalizeRestoredClassSubjects(classIdMap.values(), targetDb);
         }
 
-        const settingRows: AppSetting[] = data.settings.map((s) => {
-          if (s.key === 'selectedClassId' && typeof s.value === 'number') {
-            return { key: s.key, value: classIdMap.get(s.value) ?? s.value };
-          }
-          return { key: s.key, value: s.value };
-        });
-        if (settingRows.length > 0) await db.settings.bulkPut(settingRows);
+        const settingRows: AppSetting[] = data.settings
+          .filter((s) => !isInternalSyncSettingKey(s.key))
+          .map((s) => {
+            if (s.key === 'selectedClassId' && typeof s.value === 'number') {
+              return { key: s.key, value: classIdMap.get(s.value) ?? s.value };
+            }
+            return { key: s.key, value: s.value };
+          });
+        if (settingRows.length > 0) await targetDb.settings.bulkPut(settingRows);
 
         if (data.templates.length > 0) {
-          await db.templates.bulkPut(data.templates as unknown as CardTemplate[]);
+          await targetDb.templates.bulkPut(data.templates as unknown as CardTemplate[]);
+        }
+
+        // Preserve local sync metadata and flag a full cloud replace so every device matches this restore
+        if (deviceIdRow) {
+          await targetDb.settings.put(deviceIdRow);
+        }
+        if (lastPulledRow) {
+          await targetDb.settings.put(lastPulledRow);
+        }
+        if (targetDb.outboxEnabled) {
+          await targetDb.settings.put({
+            key: SYNC_PENDING_FULL_REPLACE_KEY,
+            value: Date.now(),
+          });
         }
       } else {
         // Merge mode
-        const existingClasses = await db.classes.toArray();
+        const existingClasses = await targetDb.classes.toArray();
         for (const cls of data.classes) {
           const match = existingClasses.find(
             (c) => c.name === cls.name && c.academicYear === cls.academicYear
@@ -448,12 +484,12 @@ export async function restoreBackupPayload(
             if (cls.id !== undefined) classIdMap.set(cls.id, match.id);
           } else {
             const { id: oldId, ...rest } = cls;
-            const newId = await db.classes.add(rest);
+            const newId = await targetDb.classes.add(rest);
             if (oldId !== undefined) classIdMap.set(oldId, newId);
           }
         }
 
-        const existingStudents = await db.students.toArray();
+        const existingStudents = await targetDb.students.toArray();
         for (const st of data.students) {
           const mappedClassId = classIdMap.get(st.classId) ?? st.classId;
           const match = existingStudents.find(
@@ -464,7 +500,7 @@ export async function restoreBackupPayload(
           } else {
             const { id: oldId, photoBase64, ...rest } = st;
             const photoBlob = photoBase64 ? dataUrlToBlob(photoBase64) : undefined;
-            const newId = await db.students.add({
+            const newId = await targetDb.students.add({
               ...rest,
               classId: mappedClassId,
               ...(photoBlob ? { photoBlob } : {}),
@@ -478,7 +514,7 @@ export async function restoreBackupPayload(
           classId: classIdMap.get(a.classId) ?? a.classId,
           studentRef: studentIdMap.get(a.studentRef) ?? a.studentRef,
         }));
-        if (attendanceRows.length > 0) await db.attendance.bulkPut(attendanceRows);
+        if (attendanceRows.length > 0) await targetDb.attendance.bulkPut(attendanceRows);
 
         const sessionRows: AttendanceSession[] =
           validated.schemaVersion === 1 || data.attendanceSessions === undefined
@@ -489,12 +525,12 @@ export async function restoreBackupPayload(
                   classId: classIdMap.get(s.classId) ?? s.classId,
                 }))
               );
-        if (sessionRows.length > 0) await db.attendanceSessions.bulkPut(sessionRows);
+        if (sessionRows.length > 0) await targetDb.attendanceSessions.bulkPut(sessionRows);
 
         for (const h of data.holidays) {
-          const existingHoliday = await db.holidays.where('date').equals(h.date).first();
+          const existingHoliday = await targetDb.holidays.where('date').equals(h.date).first();
           if (!existingHoliday) {
-            await db.holidays.add({ date: h.date, label: h.label });
+            await targetDb.holidays.add({ date: h.date, label: h.label });
           }
         }
 
@@ -503,36 +539,41 @@ export async function restoreBackupPayload(
           classId: classIdMap.get(m.classId) ?? m.classId,
           studentRef: studentIdMap.get(m.studentRef) ?? m.studentRef,
         }));
-        if (monthlyRows.length > 0) await db.monthlyScores.bulkPut(monthlyRows);
+        if (monthlyRows.length > 0) await targetDb.monthlyScores.bulkPut(monthlyRows);
 
         const semesterRows: SemesterExam[] = data.semesterExams.map((s) => ({
           ...s,
           classId: classIdMap.get(s.classId) ?? s.classId,
           studentRef: studentIdMap.get(s.studentRef) ?? s.studentRef,
         }));
-        if (semesterRows.length > 0) await db.semesterExams.bulkPut(semesterRows);
+        if (semesterRows.length > 0) await targetDb.semesterExams.bulkPut(semesterRows);
 
         if (validated.schemaVersion < 3) {
-          await normalizeRestoredClassSubjects(classIdMap.values());
+          await normalizeRestoredClassSubjects(classIdMap.values(), targetDb);
         }
 
         for (const s of data.settings) {
-          const existing = await db.settings.get(s.key);
+          if (isInternalSyncSettingKey(s.key)) continue;
+          const existing = await targetDb.settings.get(s.key);
           if (!existing) {
             const val =
               s.key === 'selectedClassId' && typeof s.value === 'number'
                 ? (classIdMap.get(s.value) ?? s.value)
                 : s.value;
-            await db.settings.put({ key: s.key, value: val });
+            await targetDb.settings.put({ key: s.key, value: val });
           }
         }
 
         if (data.templates.length > 0) {
-          await db.templates.bulkPut(data.templates as unknown as CardTemplate[]);
+          await targetDb.templates.bulkPut(data.templates as unknown as CardTemplate[]);
         }
       }
     }
   );
+
+  if (mode === 'replace' && targetDb.outboxEnabled) {
+    targetDb.notifyOutboxListeners();
+  }
 
   return summarizeBackup(validated);
 }
