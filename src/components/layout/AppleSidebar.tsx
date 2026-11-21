@@ -15,7 +15,9 @@ import {
   Wifi,
   WifiOff,
   X,
+  Send,
 } from 'lucide-react';
+import { ADMIN_TELEGRAM_URL, TELEGRAM_BLUE } from '../../lib/contact';
 import { useAppStore, type ActiveView } from '../../store/useAppStore';
 import { useAuthStore } from '../../features/auth/useAuthStore';
 import type { Profile } from '../../types/domain';
@@ -133,6 +135,21 @@ export const AppleSidebar: React.FC<AppleSidebarProps> = ({ profile }) => {
 
       {/* Sidebar Footer: Teacher name + School name + Offline ✓ badge */}
       <div className="p-4 border-t border-black/[0.06] dark:border-white/[0.08] space-y-2.5">
+        <a
+          href={ADMIN_TELEGRAM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="sidebar-contact-telegram"
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium text-[#1d1d1f] dark:text-[#e5e5ea] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] active:scale-[0.98] transition-all"
+        >
+          <span
+            className="w-6 h-6 rounded-full flex items-center justify-center text-white shrink-0"
+            style={{ backgroundColor: TELEGRAM_BLUE }}
+          >
+            <Send size={13} />
+          </span>
+          <span className="font-battambang text-[13px] truncate">ទាក់ទង Admin (Telegram)</span>
+        </a>
         <div className="bg-white/80 dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/[0.08] rounded-2xl p-3 shadow-sm">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
