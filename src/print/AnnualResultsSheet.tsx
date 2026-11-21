@@ -90,7 +90,7 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
                 </>
               )}
 
-              <table className="w-full border-collapse text-[8pt]">
+              <table className="w-full border-collapse text-[8.5pt]">
                 <thead>
                   <tr className="bg-slate-100">
                     <th rowSpan={2} className="border border-black px-1 py-1 text-center w-7">
@@ -103,31 +103,31 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
                       ភេទ
                     </th>
                     <th rowSpan={2} className="border border-black p-0 align-middle w-[11mm]">
-                      <RotatedHeaderText text="ប្រចាំឆមាសទី ១" heightMm={19} widthMm={10} fontSizePt={7} />
+                      <RotatedHeaderText text="ប្រចាំឆមាសទី ១" heightMm={19} widthMm={10} fontSizePt={7.5} />
                     </th>
                     <th rowSpan={2} className="border border-black p-0 align-middle w-[11mm]">
-                      <RotatedHeaderText text="ប្រចាំឆមាសទី ២" heightMm={19} widthMm={10} fontSizePt={7} />
+                      <RotatedHeaderText text="ប្រចាំឆមាសទី ២" heightMm={19} widthMm={10} fontSizePt={7.5} />
                     </th>
                     <th rowSpan={2} className="border border-black p-0 align-middle w-[11mm]">
-                      <RotatedHeaderText text="មធ្យម" heightMm={19} widthMm={10} fontSizePt={7} />
+                      <RotatedHeaderText text="មធ្យម" heightMm={19} widthMm={10} fontSizePt={7.5} />
                     </th>
                     <th rowSpan={2} className="border border-black p-0 align-middle w-[10mm]">
-                      <RotatedHeaderText text="ចំណាត់ថ្នាក់" heightMm={19} widthMm={9} fontSizePt={7} />
+                      <RotatedHeaderText text="ចំណាត់ថ្នាក់" heightMm={19} widthMm={9} fontSizePt={7.5} />
                     </th>
                     <th rowSpan={2} className="border border-black p-0 align-middle w-[8mm]">
-                      <RotatedHeaderText text="និទ្ទេស" heightMm={19} widthMm={7.5} fontSizePt={7} />
+                      <RotatedHeaderText text="និទ្ទេស" heightMm={19} widthMm={7.5} fontSizePt={7.5} />
                     </th>
                     <th rowSpan={2} className="border border-black p-0 align-middle w-[9mm]">
-                      <RotatedHeaderText text="លទ្ធផល" heightMm={19} widthMm={8} fontSizePt={7} />
+                      <RotatedHeaderText text="លទ្ធផល" heightMm={19} widthMm={8} fontSizePt={7.5} />
                     </th>
                     <th colSpan={3} className="border border-black px-1 py-0.5 text-center">
                       ចំនួនអវត្តមាន
                     </th>
                     <th rowSpan={2} className="border border-black p-0 align-middle w-[15mm]">
-                      <RotatedHeaderText text="ផ្សេងៗ" heightMm={19} widthMm={14} fontSizePt={7} />
+                      <RotatedHeaderText text="ផ្សេងៗ" heightMm={19} widthMm={14} fontSizePt={7.5} />
                     </th>
                   </tr>
-                  <tr className="bg-slate-100 text-[7.3pt]">
+                  <tr className="bg-slate-100 text-[7.8pt]">
                     <th className="border border-black px-1 py-0.5 text-center w-6">ច្ប</th>
                     <th className="border border-black px-1 py-0.5 text-center w-7">អ.ច្ប</th>
                     <th className="border border-black px-1 py-0.5 text-center w-7">សរុប</th>
@@ -139,7 +139,7 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
                       <td className="border border-black px-1 py-0.5 text-center">
                         {fmt(page.startIndex + idx + 1)}
                       </td>
-                      <td className="border border-black px-1.5 py-0.5 font-medium truncate max-w-[36mm]">
+                      <td className="border border-black px-1.5 py-0.5 font-medium truncate max-w-[40mm]">
                         {r.student.nameKm}
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center">
@@ -214,7 +214,12 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
                   </div>
 
                   <div className="mt-2">
-                    <DocumentSignature profile={profile} signOptions={signOptions} gapMm={13} />
+                    <DocumentSignature
+                      profile={profile}
+                      signOptions={signOptions}
+                      fontSizePt={9.5}
+                      gapMm={16}
+                    />
                   </div>
                 </div>
               )}

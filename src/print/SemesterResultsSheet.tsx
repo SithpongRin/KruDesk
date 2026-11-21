@@ -90,7 +90,7 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                 </>
               )}
 
-              <table className="w-full border-collapse text-[8pt]">
+              <table className="w-full border-collapse text-[8.4pt]">
                 <thead>
                   <tr className="bg-slate-100">
                     <th rowSpan={2} className="border border-black px-1 py-1 text-center w-6">
@@ -146,7 +146,7 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                       <td className="border border-black px-1 py-0.5 text-center">
                         {fmt(page.startIndex + idx + 1)}
                       </td>
-                      <td className="border border-black px-1.5 py-0.5 font-medium truncate max-w-[34mm]">
+                      <td className="border border-black px-1.5 py-0.5 font-medium truncate max-w-[38mm]">
                         {r.student.nameKm}
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center">
@@ -236,7 +236,12 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                   </div>
 
                   <div className="mt-2">
-                    <DocumentSignature profile={profile} signOptions={signOptions} gapMm={13} />
+                    <DocumentSignature
+                      profile={profile}
+                      signOptions={signOptions}
+                      fontSizePt={9.5}
+                      gapMm={16}
+                    />
                   </div>
                 </div>
               )}

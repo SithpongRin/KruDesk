@@ -96,7 +96,7 @@ export const MonthlyResultsSheet: React.FC<MonthlyResultsSheetProps> = ({
                 </>
               )}
 
-              <table className="w-full border-collapse text-[8.2pt]">
+              <table className="w-full border-collapse text-[8.8pt]">
                 <thead>
                   <tr className="bg-slate-100">
                     <th rowSpan={2} className="border border-black px-1 py-1 text-center w-7">
@@ -130,7 +130,7 @@ export const MonthlyResultsSheet: React.FC<MonthlyResultsSheetProps> = ({
                       ផ្សេងៗ
                     </th>
                   </tr>
-                  <tr className="bg-slate-100 text-[7.5pt]">
+                  <tr className="bg-slate-100 text-[8pt]">
                     <th className="border border-black px-1 py-0.5 text-center w-7">ច្ប</th>
                     <th className="border border-black px-1 py-0.5 text-center w-8">អ.ច្ប</th>
                     <th className="border border-black px-1 py-0.5 text-center w-8">សរុប</th>
@@ -142,7 +142,7 @@ export const MonthlyResultsSheet: React.FC<MonthlyResultsSheetProps> = ({
                       <td className="border border-black px-1 py-0.5 text-center">
                         {fmt(page.startIndex + idx + 1)}
                       </td>
-                      <td className="border border-black px-1.5 py-0.5 font-medium truncate max-w-[42mm]">
+                      <td className="border border-black px-1.5 py-0.5 font-medium truncate max-w-[46mm]">
                         {r.student.nameKm}
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center">
@@ -214,7 +214,12 @@ export const MonthlyResultsSheet: React.FC<MonthlyResultsSheetProps> = ({
                   </div>
 
                   <div className="mt-2">
-                    <DocumentSignature profile={profile} signOptions={signOptions} gapMm={13} />
+                    <DocumentSignature
+                      profile={profile}
+                      signOptions={signOptions}
+                      fontSizePt={9.5}
+                      gapMm={16}
+                    />
                   </div>
                 </div>
               )}

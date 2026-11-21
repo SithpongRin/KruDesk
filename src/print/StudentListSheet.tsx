@@ -54,7 +54,7 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
             style={{
               width: '297mm',
               height: '210mm',
-              padding: '10mm 12mm',
+              padding: '8mm 10mm',
               boxSizing: 'border-box',
               backgroundColor: '#ffffff',
               color: '#000000',
@@ -62,30 +62,29 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
               pageBreakAfter: !isLastPage ? 'always' : 'auto',
               display: 'flex',
               flexDirection: 'column',
-              justifyContent: 'space-between',
             }}
           >
             <div>
               {/* Institutional Header */}
               <div className="flex items-start justify-between mb-2">
-                <div className="text-[11px] leading-snug">
+                <div className="text-[9.5pt] leading-snug">
                   <div className="font-bold">{profile.schoolName}</div>
                   <div>
-                    ថ្នាក់ទី {cls.name} — ឆ្នាំសិក្សា {fmt(cls.academicYear)}
+                    ថ្នាក់ទី <strong>{cls.name}</strong> — ឆ្នាំសិក្សា <strong>{fmt(cls.academicYear)}</strong>
                   </div>
                 </div>
 
                 <div className="text-center">
                   <h2
                     style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
-                    className="text-[14px] font-normal"
+                    className="text-[12pt] font-normal"
                   >
                     បញ្ជីឈ្មោះសិស្ស
                   </h2>
                 </div>
 
                 {/* Male / Female / Total summary box */}
-                <table className="border-collapse text-[10px]">
+                <table className="border-collapse text-[8.5pt]">
                   <thead>
                     <tr>
                       <th className="border border-black px-2.5 py-0.5 font-bold bg-slate-100">
@@ -116,11 +115,11 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
               </div>
 
               {/* Students Table */}
-              <table className="w-full border-collapse text-[10px]">
+              <table className="w-full border-collapse text-[8.8pt]">
                 <thead>
                   <tr className="bg-slate-100">
                     <th className="border border-black px-1.5 py-1 text-center w-9">ល.រ</th>
-                    <th className="border border-black px-1.5 py-1 text-center w-24">អត្តលេខ</th>
+                    <th className="border border-black px-1.5 py-1 text-center w-22">អត្តលេខ</th>
                     <th className="border border-black px-2 py-1 text-left">គោត្តនាម និងនាម</th>
                     <th className="border border-black px-2 py-1 text-left">ឈ្មោះឡាតាំង</th>
                     <th className="border border-black px-1.5 py-1 text-center w-12">ភេទ</th>
@@ -141,11 +140,11 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
                       <td className="border border-black px-1.5 py-1 text-center">
                         {fmt(s.order)}
                       </td>
-                      <td className="border border-black px-1.5 py-1 text-center font-mono text-[9.5px]">
-                        {s.studentId}
+                      <td className="border border-black px-1.5 py-1 text-center font-mono text-[8.2pt]">
+                        {fmt(s.studentId)}
                       </td>
                       <td className="border border-black px-2 py-1 font-semibold">{s.nameKm}</td>
-                      <td className="border border-black px-2 py-1 text-[9.5px]">
+                      <td className="border border-black px-2 py-1 text-[8.2pt]">
                         {s.nameEn || ''}
                       </td>
                       <td className="border border-black px-1.5 py-1 text-center">{s.gender}</td>
@@ -157,7 +156,7 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
                       <td className="border border-black px-1.5 py-1 text-center">
                         {s.phone || ''}
                       </td>
-                      <td className="border border-black px-2 py-1 text-[9.5px]">
+                      <td className="border border-black px-2 py-1 text-[8.2pt]">
                         {s.address || ''}
                       </td>
                     </tr>
@@ -166,20 +165,22 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
               </table>
             </div>
 
-            {/* Footer: Signature block ONLY on the LAST page with ~18mm blank sign space */}
+            {/* Footer: Signature block ONLY on the LAST page, right below the table */}
             {isLastPage ? (
-              <DocumentSignature
-                profile={profile}
-                fontSizePt={8}
-                gapMm={16}
-                middle={
-                  <div className="text-[9.5px] text-slate-500">
-                    ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}
-                  </div>
-                }
-              />
+              <div style={{ marginTop: '4mm' }}>
+                <DocumentSignature
+                  profile={profile}
+                  fontSizePt={10}
+                  gapMm={15}
+                  middle={
+                    <div className="text-[8.5pt] text-slate-500">
+                      ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}
+                    </div>
+                  }
+                />
+              </div>
             ) : (
-              <div className="text-center text-[9.5px] text-slate-500 pt-2">
+              <div className="mt-auto text-center text-[8.5pt] text-slate-500 pt-2">
                 ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}
               </div>
             )}

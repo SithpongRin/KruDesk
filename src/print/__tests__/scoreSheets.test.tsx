@@ -6,6 +6,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render, cleanup } from '@testing-library/react';
 import { MonthlyScoreSheet } from '../MonthlyScoreSheet';
 import { SemesterSheet } from '../SemesterSheet';
+import { AttendanceSheet } from '../AttendanceSheet';
+import { StudentListSheet } from '../StudentListSheet';
+import { RosterSheet } from '../RosterSheet';
 import { createGrade9Subjects } from '../../db/presets';
 import {
   collapseGroupedSubjects,
@@ -13,7 +16,13 @@ import {
   sortSubjects,
   type SemesterStudentSummary,
 } from '../../lib/grading';
-import { DEFAULT_SCORE_CONFIG, type Profile, type SchoolClass, type Student } from '../../types/domain';
+import {
+  DEFAULT_ATTENDANCE_CONFIG,
+  DEFAULT_SCORE_CONFIG,
+  type Profile,
+  type SchoolClass,
+  type Student,
+} from '../../types/domain';
 
 const TEST_PROFILE: Profile = {
   teacherName: 'លោកគ្រូ សុខ ដារ៉ា',
@@ -214,5 +223,71 @@ describe('MonthlyScoreSheet & SemesterSheet active subject filtering and layout'
 
     const firstRowCells = container.querySelectorAll('table.w-full tbody tr:first-child td');
     expect(firstRowCells.length).toBe(4 + activeSubjects.length + 4);
+  });
+
+  it('AttendanceSheet widens name column (44mm), puts month in title, centers footer label, and places larger signature right below table', () => {
+    const cls = makeClass();
+    const students = makeStudents(39);
+
+    const { container } = render(
+      <AttendanceSheet
+        cls={cls}
+        students={students}
+        profile={TEST_PROFILE}
+        attendanceConfig={DEFAULT_ATTENDANCE_CONFIG}
+        holidayDates={new Set()}
+        todayKey="2026-11-21"
+        monthsData={[
+          {
+            month: '2026-11',
+            lookup: new Map(),
+            takenDates: new Set(['2026-11-02']),
+          },
+        ]}
+      />
+    );
+
+    const pageEl = container.querySelector('[data-print-page]') as HTMLElement;
+    expect(pageEl.style.justifyContent).not.toBe('space-between');
+    expect(container.textContent).toContain('បញ្ជីវត្តមានខែវិច្ឆិកា');
+
+    const nameTh = Array.from(container.querySelectorAll('th')).find((th) =>
+      th.textContent?.includes('គោត្តនាម និងនាម')
+    ) as HTMLElement | undefined;
+    expect(nameTh?.style.width).toBe('44mm');
+
+    const table = container.querySelector('table.w-full') as HTMLElement;
+    expect(parseFloat(table.style.fontSize)).toBeGreaterThanOrEqual(8);
+
+    const sigGrid = Array.from(container.querySelectorAll('div')).find((el) =>
+      el.style.gridTemplateColumns.includes('1fr auto 1fr')
+    ) as HTMLElement | undefined;
+    expect(parseFloat(sigGrid!.style.fontSize)).toBeGreaterThanOrEqual(9.5);
+  });
+
+  it('StudentListSheet and RosterSheet render readable fonts and keep signature right below the table', () => {
+    const cls = makeClass();
+    const students = makeStudents(10);
+
+    const listRender = render(
+      <StudentListSheet cls={cls} students={students} profile={TEST_PROFILE} />
+    );
+    const listPage = listRender.container.querySelector('[data-print-page]') as HTMLElement;
+    expect(listPage.style.justifyContent).not.toBe('space-between');
+    const listSig = Array.from(listRender.container.querySelectorAll('div')).find((el) =>
+      el.style.gridTemplateColumns.includes('1fr auto 1fr')
+    ) as HTMLElement | undefined;
+    expect(parseFloat(listSig!.style.fontSize)).toBeGreaterThanOrEqual(10);
+    cleanup();
+
+    const rosterRender = render(
+      <RosterSheet cls={cls} students={students} profile={TEST_PROFILE} />
+    );
+    const rosterPage = rosterRender.container.querySelector('[data-print-page]') as HTMLElement;
+    expect(rosterPage.style.justifyContent).not.toBe('space-between');
+    const rosterSig = Array.from(rosterRender.container.querySelectorAll('div')).find((el) =>
+      el.style.gridTemplateColumns.includes('1fr auto 1fr')
+    ) as HTMLElement | undefined;
+    expect(parseFloat(rosterSig!.style.fontSize)).toBeGreaterThanOrEqual(10);
   });
 });
