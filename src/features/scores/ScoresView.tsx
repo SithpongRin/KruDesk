@@ -85,6 +85,7 @@ import {
   ensurePrintFontsReady,
   exportPrintNodesToPdf,
   nextPaint,
+  type PageOrientation,
   type PaperSize,
 } from '../../services/pdfExport';
 
@@ -255,6 +256,7 @@ type PrintStageState =
       cls: SchoolClass;
       students: Student[];
       sheets: MonthlyScoreSheetPageData[];
+      orientation: PageOrientation;
     }
   | {
       kind: 'semester';
@@ -1102,11 +1104,13 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
     classId,
     months,
     paperSize = 'A4',
+    orientation = 'landscape',
   }: {
     format: ExportFormat;
     classId: number;
     months: string[];
     paperSize?: PaperSize;
+    orientation?: PageOrientation;
   }) => {
     await flushPendingSaves();
     const cls = classes?.find((c) => c.id === classId);
@@ -1245,7 +1249,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
       return;
     }
 
-    setPrintStage({ kind: 'monthly', cls, students: sortedClsStudents, sheets });
+    setPrintStage({ kind: 'monthly', cls, students: sortedClsStudents, sheets, orientation });
     await new Promise((r) => setTimeout(r, 80));
     await nextPaint();
 
@@ -1286,7 +1290,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
               });
       const exported = await exportPrintNodesToPdf(pageNodes, {
         fileName,
-        orientation: 'landscape',
+        orientation,
         pageSize: 'A4',
         pixelRatio: 3,
       });
@@ -2330,6 +2334,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
         defaultClassId={currentClass?.id ?? null}
         showMonthPicker={activeTab === 'monthly'}
         showPaperSizePicker={activeTab === 'semester'}
+        showOrientationPicker={activeTab !== 'semester'}
         defaultMonth={selectedMonth}
         onExport={handleExport}
       />
@@ -2356,6 +2361,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                 profile={profile}
                 sheets={printStage.sheets}
                 scoreConfig={scoreConfig}
+                orientation={printStage.orientation}
                 useKhmerDigits={useKhmerNumerals}
               />
             ) : (
@@ -2378,6 +2384,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
                 profile={profile}
                 sheets={printStage.sheets}
                 scoreConfig={scoreConfig}
+                orientation={printStage.orientation}
                 useKhmerDigits={useKhmerNumerals}
               />
             ) : (

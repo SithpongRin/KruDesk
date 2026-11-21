@@ -3,6 +3,7 @@ import type { Profile, SchoolClass, ScoreConfig } from '../types/domain';
 import {
   collapseGroupedSubjects,
   formatAverage,
+  isSubjectActive,
   type SemesterStudentSummary,
 } from '../lib/grading';
 import type { PaperSize } from '../services/pdfExport';
@@ -45,7 +46,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
     return fmt(Number.isInteger(val) ? val : Number(val.toFixed(1)));
   };
 
-  const sortedSubjects = collapseGroupedSubjects(cls.subjects);
+  const sortedSubjects = collapseGroupedSubjects(cls.subjects.filter(isSubjectActive));
   const maleCount = summaries.filter((s) => s.student.gender === 'ប្រុស').length;
   const femaleCount = summaries.filter((s) => s.student.gender === 'ស្រី').length;
 
@@ -109,14 +110,20 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
     </div>
   );
 
-  const renderSignature = (signGapMm: number, pageLabel: string) => (
-    <DocumentSignature
-      profile={profile}
-      fontSizePt={8.5}
-      // two date lines above the teacher's title: keep the page height as before
-      gapMm={Math.max(6, signGapMm - 4)}
-      middle={<div className="text-[8pt] text-slate-500">{pageLabel}</div>}
-    />
+  const renderSignature = (
+    signGapMm: number,
+    pageLabel: string,
+    signFontPt = 10,
+    marginTopMm = 4
+  ) => (
+    <div style={{ marginTop: `${marginTopMm}mm` }}>
+      <DocumentSignature
+        profile={profile}
+        fontSizePt={signFontPt}
+        gapMm={signGapMm}
+        middle={<div className="text-[8.5pt] text-slate-500">{pageLabel}</div>}
+      />
+    </div>
   );
 
   if (paperSize === 'A3') {
@@ -152,7 +159,6 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                 pageBreakAfter: !isVeryLast ? 'always' : 'auto',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'space-between',
               }}
             >
               <div>
@@ -341,9 +347,9 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
               </div>
 
               {isVeryLast
-                ? renderSignature(16, `ទំព័រ ${fmt(chunkIdx + 1)} / ${fmt(chunks.length)}`)
+                ? renderSignature(14, `ទំព័រ ${fmt(chunkIdx + 1)} / ${fmt(chunks.length)}`, 10.5, 5)
                 : (
-                  <div className="text-center text-[8pt] text-slate-500 pt-1">
+                  <div className="mt-auto text-center text-[8.5pt] text-slate-500 pt-1">
                     ទំព័រ {fmt(chunkIdx + 1)} / {fmt(chunks.length)}
                   </div>
                 )}
@@ -356,21 +362,24 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
 
   // Default A4 Landscape: Page 1 = Semester 1, Page 2 = Semester 2 + Annual Result + Signature
   const subjCount = Math.max(1, sortedSubjects.length);
-  const fixedPage1Mm = 5.5 + 30 + 5 + 47.5; // student + 5 sem summaries = 88mm
-  const pairWidthP1 = Math.max(8, Math.min(14, (285 - fixedPage1Mm) / subjCount));
+  const fixedPage1Mm = 6.5 + 34 + 5.5 + 49; // student + 5 sem summaries = 95mm
+  const pairWidthP1 = Math.max(8, Math.min(18, (285 - fixedPage1Mm) / subjCount));
 
-  const fixedPage2Mm = 5.5 + 29 + 5 + 45.5 + 24; // + 3 annual cols = 109mm
-  const pairWidthP2 = Math.max(7.2, Math.min(14, (285 - fixedPage2Mm) / subjCount));
+  const fixedPage2Mm = 6.5 + 32 + 5.5 + 47 + 25; // + 3 annual cols = 116mm
+  const pairWidthP2 = Math.max(7.2, Math.min(16, (285 - fixedPage2Mm) / subjCount));
 
   return (
     <div className="bg-white text-black font-battambang">
       {chunks.map((chunk, chunkIdx) => {
         const isLastChunk = chunkIdx === chunks.length - 1;
-        const isDense = chunk.items.length > 36;
-        const rowHeightMm = isDense ? 3.1 : 4.0;
-        const fontSizePt = isDense ? 6.4 : 7.2;
-        const headerHeightMm = isDense ? 19 : 23;
-        const signGapMm = isDense ? 11 : 16;
+        const pageRowCount = chunk.items.length;
+        const rowHeightMm = pageRowCount > 39 ? 2.9 : pageRowCount > 30 ? 3.2 : 3.9;
+        const fontSizePt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 7.6 : 8.2;
+        const headerHeightMm = pageRowCount > 39 ? 18 : pageRowCount > 30 ? 19 : 22;
+        const headerFontPt = pageRowCount > 39 ? 6.5 : pageRowCount > 30 ? 7.0 : 7.4;
+        const signFontPt = pageRowCount > 39 ? 9.5 : pageRowCount > 30 ? 10 : 10.5;
+        const signGapMm = pageRowCount > 39 ? 9 : pageRowCount > 30 ? 10 : 13;
+        const signMarginTopMm = pageRowCount > 39 ? 2.5 : pageRowCount > 30 ? 3 : 5;
 
         return (
           <React.Fragment key={`a4-${chunkIdx}`}>
@@ -388,7 +397,6 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                 pageBreakAfter: 'always',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'space-between',
               }}
             >
               <div>
@@ -400,13 +408,13 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                 >
                   <thead>
                     <tr className="bg-slate-100">
-                      <th rowSpan={3} className="border border-black text-center font-bold" style={{ width: '5.5mm' }}>
+                      <th rowSpan={3} className="border border-black text-center font-bold" style={{ width: '6.5mm' }}>
                         ល.រ
                       </th>
-                      <th rowSpan={3} className="border border-black px-1 text-left font-bold" style={{ width: '30mm' }}>
+                      <th rowSpan={3} className="border border-black px-1 text-left font-bold" style={{ width: '34mm' }}>
                         គោត្តនាម និងនាម
                       </th>
-                      <th rowSpan={3} className="border border-black text-center font-bold" style={{ width: '5mm' }}>
+                      <th rowSpan={3} className="border border-black text-center font-bold" style={{ width: '5.5mm' }}>
                         ភេទ
                       </th>
                       <th
@@ -428,29 +436,29 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                           <RotatedHeaderText
                             text={subj.name}
                             heightMm={headerHeightMm}
-                            widthMm={pairWidthP1 - 0.4}
-                            fontSizePt={5.8}
+                            widthMm={Math.min(16, pairWidthP1 - 0.6)}
+                            fontSizePt={headerFontPt}
                           />
                         </th>
                       ))}
-                      <th rowSpan={2} className="border border-black p-0" style={{ width: '10mm' }}>
-                        <RotatedHeaderText text="សរុបពិន្ទុប្រឡង" heightMm={headerHeightMm + 3.6} widthMm={9.5} fontSizePt={6} />
+                      <th rowSpan={2} className="border border-black p-0" style={{ width: '10.2mm' }}>
+                        <RotatedHeaderText text="សរុបពិន្ទុប្រឡង" heightMm={headerHeightMm + 3.6} widthMm={9.5} fontSizePt={headerFontPt} />
                       </th>
-                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9.5mm' }}>
-                        <RotatedHeaderText text="មធ្យមប្រចាំខែ" heightMm={headerHeightMm + 3.6} widthMm={9} fontSizePt={6} />
+                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9.8mm' }}>
+                        <RotatedHeaderText text="មធ្យមប្រចាំខែ" heightMm={headerHeightMm + 3.6} widthMm={9.2} fontSizePt={headerFontPt} />
                       </th>
-                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9.5mm' }}>
-                        <RotatedHeaderText text="មធ្យមប្រឡង" heightMm={headerHeightMm + 3.6} widthMm={9} fontSizePt={6} />
+                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9.8mm' }}>
+                        <RotatedHeaderText text="មធ្យមប្រឡង" heightMm={headerHeightMm + 3.6} widthMm={9.2} fontSizePt={headerFontPt} />
                       </th>
-                      <th rowSpan={2} className="border border-black p-0" style={{ width: '10mm' }}>
-                        <RotatedHeaderText text="មធ្យមឆមាស" heightMm={headerHeightMm + 3.6} widthMm={9.5} fontSizePt={6} />
+                      <th rowSpan={2} className="border border-black p-0" style={{ width: '10.2mm' }}>
+                        <RotatedHeaderText text="មធ្យមឆមាស" heightMm={headerHeightMm + 3.6} widthMm={9.5} fontSizePt={headerFontPt} />
                       </th>
-                      <th rowSpan={2} className="border border-black p-0" style={{ width: '8.5mm' }}>
-                        <RotatedHeaderText text="ចំណាត់ថ្នាក់" heightMm={headerHeightMm + 3.6} widthMm={8} fontSizePt={5.8} />
+                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9mm' }}>
+                        <RotatedHeaderText text="ចំណាត់ថ្នាក់" heightMm={headerHeightMm + 3.6} widthMm={8.4} fontSizePt={Math.max(6.2, headerFontPt - 0.2)} />
                       </th>
                     </tr>
 
-                    <tr className="bg-slate-50" style={{ height: '3.6mm', fontSize: '5.5pt' }}>
+                    <tr className="bg-slate-50" style={{ height: '3.6mm', fontSize: `${Math.max(6, fontSizePt - 1)}pt` }}>
                       {sortedSubjects.flatMap((subj) => [
                         <th key={`p1-p-${subj.id}`} className="border border-black text-center font-bold">
                           ពិន្ទុ
@@ -512,7 +520,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                 </table>
               </div>
 
-              <div className="text-center text-[8pt] text-slate-500 pt-1">
+              <div className="mt-auto text-center text-[8.5pt] text-slate-500 pt-1">
                 ទំព័រ {fmt(chunkIdx * 2 + 1)} / {fmt(chunks.length * 2)} (ឆមាសទី {fmt(1)})
               </div>
             </div>
@@ -531,7 +539,6 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                 pageBreakAfter: !isLastChunk ? 'always' : 'auto',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'space-between',
               }}
             >
               <div>
@@ -543,13 +550,13 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                 >
                   <thead>
                     <tr className="bg-slate-100">
-                      <th rowSpan={3} className="border border-black text-center font-bold" style={{ width: '5.5mm' }}>
+                      <th rowSpan={3} className="border border-black text-center font-bold" style={{ width: '6.5mm' }}>
                         ល.រ
                       </th>
-                      <th rowSpan={3} className="border border-black px-1 text-left font-bold" style={{ width: '29mm' }}>
+                      <th rowSpan={3} className="border border-black px-1 text-left font-bold" style={{ width: '32mm' }}>
                         គោត្តនាម និងនាម
                       </th>
-                      <th rowSpan={3} className="border border-black text-center font-bold" style={{ width: '5mm' }}>
+                      <th rowSpan={3} className="border border-black text-center font-bold" style={{ width: '5.5mm' }}>
                         ភេទ
                       </th>
                       <th
@@ -577,39 +584,39 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                           <RotatedHeaderText
                             text={subj.name}
                             heightMm={headerHeightMm}
-                            widthMm={pairWidthP2 - 0.4}
-                            fontSizePt={5.6}
+                            widthMm={Math.min(15, pairWidthP2 - 0.6)}
+                            fontSizePt={headerFontPt}
                           />
                         </th>
                       ))}
+                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9.8mm' }}>
+                        <RotatedHeaderText text="សរុបពិន្ទុប្រឡង" heightMm={headerHeightMm + 3.6} widthMm={9.2} fontSizePt={headerFontPt} />
+                      </th>
                       <th rowSpan={2} className="border border-black p-0" style={{ width: '9.5mm' }}>
-                        <RotatedHeaderText text="សរុបពិន្ទុប្រឡង" heightMm={headerHeightMm + 3.6} widthMm={9} fontSizePt={5.8} />
+                        <RotatedHeaderText text="មធ្យមប្រចាំខែ" heightMm={headerHeightMm + 3.6} widthMm={9} fontSizePt={headerFontPt} />
                       </th>
-                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9.2mm' }}>
-                        <RotatedHeaderText text="មធ្យមប្រចាំខែ" heightMm={headerHeightMm + 3.6} widthMm={8.8} fontSizePt={5.8} />
+                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9.5mm' }}>
+                        <RotatedHeaderText text="មធ្យមប្រឡង" heightMm={headerHeightMm + 3.6} widthMm={9} fontSizePt={headerFontPt} />
                       </th>
-                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9.2mm' }}>
-                        <RotatedHeaderText text="មធ្យមប្រឡង" heightMm={headerHeightMm + 3.6} widthMm={8.8} fontSizePt={5.8} />
+                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9.5mm' }}>
+                        <RotatedHeaderText text="មធ្យមឆមាស" heightMm={headerHeightMm + 3.6} widthMm={9} fontSizePt={headerFontPt} />
                       </th>
-                      <th rowSpan={2} className="border border-black p-0" style={{ width: '9.2mm' }}>
-                        <RotatedHeaderText text="មធ្យមឆមាស" heightMm={headerHeightMm + 3.6} widthMm={8.8} fontSizePt={5.8} />
-                      </th>
-                      <th rowSpan={2} className="border border-black p-0" style={{ width: '8.4mm' }}>
-                        <RotatedHeaderText text="ចំណាត់ថ្នាក់" heightMm={headerHeightMm + 3.6} widthMm={8} fontSizePt={5.6} />
+                      <th rowSpan={2} className="border border-black p-0" style={{ width: '8.7mm' }}>
+                        <RotatedHeaderText text="ចំណាត់ថ្នាក់" heightMm={headerHeightMm + 3.6} widthMm={8.2} fontSizePt={Math.max(6.2, headerFontPt - 0.2)} />
                       </th>
 
-                      <th rowSpan={2} className="border border-black p-0 bg-slate-200" style={{ width: '9mm' }}>
-                        <RotatedHeaderText text="មធ្យមប្រចាំឆ្នាំ" heightMm={headerHeightMm + 3.6} widthMm={8.5} fontSizePt={5.8} />
+                      <th rowSpan={2} className="border border-black p-0 bg-slate-200" style={{ width: '9.5mm' }}>
+                        <RotatedHeaderText text="មធ្យមប្រចាំឆ្នាំ" heightMm={headerHeightMm + 3.6} widthMm={9} fontSizePt={headerFontPt} />
                       </th>
-                      <th rowSpan={2} className="border border-black p-0 bg-slate-200" style={{ width: '7.5mm' }}>
-                        <RotatedHeaderText text="ចំណាត់ថ្នាក់ឆ្នាំ" heightMm={headerHeightMm + 3.6} widthMm={7} fontSizePt={5.6} />
+                      <th rowSpan={2} className="border border-black p-0 bg-slate-200" style={{ width: '8mm' }}>
+                        <RotatedHeaderText text="ចំណាត់ថ្នាក់ឆ្នាំ" heightMm={headerHeightMm + 3.6} widthMm={7.4} fontSizePt={Math.max(6.2, headerFontPt - 0.2)} />
                       </th>
-                      <th rowSpan={2} className="border border-black text-center font-bold bg-slate-200" style={{ width: '7mm', fontSize: '5.8pt' }}>
+                      <th rowSpan={2} className="border border-black text-center font-bold bg-slate-200" style={{ width: '7.5mm', fontSize: `${Math.max(6.2, headerFontPt - 0.2)}pt` }}>
                         លទ្ធផល
                       </th>
                     </tr>
 
-                    <tr className="bg-slate-50" style={{ height: '3.6mm', fontSize: '5.4pt' }}>
+                    <tr className="bg-slate-50" style={{ height: '3.6mm', fontSize: `${Math.max(6, fontSizePt - 1)}pt` }}>
                       {sortedSubjects.flatMap((subj) => [
                         <th key={`p2-p-${subj.id}`} className="border border-black text-center font-bold">
                           ពិន្ទុ
@@ -669,7 +676,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                           <td className="border border-black text-center font-bold">
                             {row.annualRank ? fmt(row.annualRank) : ''}
                           </td>
-                          <td className="border border-black text-center text-[6pt]">
+                          <td className="border border-black text-center" style={{ fontSize: `${Math.max(6.5, fontSizePt - 0.6)}pt` }}>
                             {row.annualPassed === true
                               ? 'ជាប់'
                               : row.annualPassed === false
@@ -686,10 +693,12 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
               {isLastChunk
                 ? renderSignature(
                     signGapMm,
-                    `ទំព័រ ${fmt(chunkIdx * 2 + 2)} / ${fmt(chunks.length * 2)}`
+                    `ទំព័រ ${fmt(chunkIdx * 2 + 2)} / ${fmt(chunks.length * 2)}`,
+                    signFontPt,
+                    signMarginTopMm
                   )
                 : (
-                  <div className="text-center text-[8pt] text-slate-500 pt-1">
+                  <div className="mt-auto text-center text-[8.5pt] text-slate-500 pt-1">
                     ទំព័រ {fmt(chunkIdx * 2 + 2)} / {fmt(chunks.length * 2)}
                   </div>
                 )}

@@ -6,6 +6,8 @@ import {
   CalendarCheck,
   CheckCircle2,
   ClipboardList,
+  Cloud,
+  CloudOff,
   CreditCard,
   GraduationCap,
   HardDriveDownload,
@@ -13,6 +15,7 @@ import {
 } from 'lucide-react';
 import { db } from '../../db/database';
 import { useAppStore } from '../../store/useAppStore';
+import { useSyncStore } from '../../services/sync/useSyncStore';
 import {
   DEFAULT_ATTENDANCE_CONFIG,
   type AttendanceConfig,
@@ -60,6 +63,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
     useKhmerNumerals ? toKhmerNumerals(val) : toArabicNumerals(String(val));
 
   const todayKey = toLocalDateKey();
+  const syncEnabled = useSyncStore((s) => s.enabled);
+  const syncStatus = useSyncStore((s) => s.status);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [storagePersisted, setStoragePersisted] = useState<boolean | null>(null);
   const [isRequestingPersist, setIsRequestingPersist] = useState(false);
@@ -297,80 +302,157 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ profile }) => {
         </div>
       </div>
 
-      {/* Backup Reminder Banner Card (turns orange after 7 days without backup or never backed up) */}
-      <div
-        data-testid="backup-reminder-card"
-        className={`rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-          isBackupOverdue
-            ? 'bg-orange-50 dark:bg-orange-500/15 border-orange-300 dark:border-orange-500/40'
-            : 'bg-white dark:bg-[#1c1c1e] border-black/[0.06] dark:border-white/[0.08]'
-        }`}
-      >
-        <div className="flex items-start gap-3">
-          {isBackupOverdue ? (
-            <div className="w-10 h-10 rounded-xl bg-orange-500/15 text-[#ff9500] flex items-center justify-center shrink-0">
-              <AlertTriangle size={20} />
-            </div>
-          ) : (
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-[#34c759] flex items-center justify-center shrink-0">
-              <CheckCircle2 size={20} />
-            </div>
-          )}
-
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-sm font-bold text-[#1d1d1f] dark:text-[#f5f5f7]">
-                {backupAgeDays === null
-                  ? 'អ្នកមិនទាន់បាន Backup ទិន្នន័យនៅឡើយទេ'
-                  : isBackupOverdue
-                    ? `ដល់ពេល Backup ហើយ (${fmtNum(backupAgeDays)} ថ្ងៃមុន)`
-                    : 'ការបម្រុងទុកទិន្នន័យទាន់ពេលវេលា'}
-              </h2>
-              <AppleBadge variant={isBackupOverdue ? 'orange' : 'green'} size="sm">
-                {backupAgeDays === null
-                  ? 'មិនទាន់ Backup'
-                  : backupAgeDays === 0
-                    ? 'ថ្ងៃនេះ'
-                    : `${fmtNum(backupAgeDays)} ថ្ងៃមុន`}
-              </AppleBadge>
-            </div>
-            <p className="text-xs text-[#6e6e73] dark:text-[#d1d1d6] mt-0.5">
-              {lastBackupAt
-                ? `បម្រុងទុកចុងក្រោយ៖ ${formatDateTimeKm(lastBackupAt, useKhmerNumerals)}`
-                : 'ទិន្នន័យទាំងអស់រក្សាទុកក្នុងកម្មវិធីរុករក — សូមទាញយក .json ទុករាល់សប្ដាហ៍ដើម្បីកុំឱ្យបាត់បង់។'}
-            </p>
-            {storagePersisted === false && (
-              <div
-                data-testid="storage-persist-warning"
-                className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#6e6e73] dark:text-[#d1d1d6]"
-              >
-                <span>
-                  ការរក្សាទុកអចិន្ត្រៃយ៍មិនទាន់បានបើកទេ — ការដំឡើងកម្មវិធី (Chrome → Install KruDesk) ជួយរក្សាទិន្នន័យឱ្យមានសុវត្ថិភាព។
-                </span>
-                <button
-                  type="button"
-                  onClick={handleRequestPersist}
-                  disabled={isRequestingPersist}
-                  className="px-2 py-0.5 rounded-lg bg-black/[0.06] dark:bg-white/[0.1] hover:bg-black/[0.12] dark:hover:bg-white/[0.18] text-[#1d1d1f] dark:text-[#f5f5f7] font-semibold transition-colors disabled:opacity-50"
-                >
-                  {isRequestingPersist ? 'កំពុងស្នើសុំ...' : 'ស្នើសុំរក្សាទុកអចិន្ត្រៃយ៍'}
-                </button>
+      {/* Cloud Sync & Backup Status Card (when Cloud DB is active) or Local Backup Reminder (offline-only mode) */}
+      {syncEnabled ? (
+        <div
+          data-testid="backup-reminder-card"
+          className={`rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+            syncStatus.state === 'error'
+              ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30'
+              : 'bg-white dark:bg-[#1c1c1e] border-black/[0.06] dark:border-white/[0.08]'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            {syncStatus.state === 'error' ? (
+              <div className="w-10 h-10 rounded-xl bg-red-500/15 text-[#ff3b30] flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+            ) : syncStatus.state === 'offline' ? (
+              <div className="w-10 h-10 rounded-xl bg-orange-500/15 text-[#ff9500] flex items-center justify-center shrink-0">
+                <CloudOff size={20} />
+              </div>
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-[#34c759] flex items-center justify-center shrink-0">
+                <Cloud size={20} />
               </div>
             )}
-          </div>
-        </div>
 
-        <AppleButton
-          variant={isBackupOverdue ? 'primary' : 'secondary'}
-          size="sm"
-          icon={<HardDriveDownload size={15} />}
-          onClick={handleQuickBackup}
-          disabled={isBackingUp}
-          className="shrink-0"
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm font-bold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                  {syncStatus.state === 'offline'
+                    ? 'កំពុងប្រើប្រាស់ក្រៅបណ្ដាញ (រក្សាទុកក្នុងម៉ាស៊ីនបណ្ដោះអាសន្ន)'
+                    : syncStatus.state === 'error'
+                      ? 'ការ Sync ទៅ Cloud មានបញ្ហាបណ្ដោះអាសន្ន'
+                      : 'ទិន្នន័យត្រូវបានរក្សាទុកលើ Cloud ដោយស្វ័យប្រវត្តិ'}
+                </h2>
+                <AppleBadge
+                  variant={
+                    syncStatus.state === 'error'
+                      ? 'red'
+                      : syncStatus.state === 'offline'
+                        ? 'orange'
+                        : syncStatus.state === 'syncing'
+                          ? 'blue'
+                          : 'green'
+                  }
+                  size="sm"
+                >
+                  {syncStatus.state === 'error'
+                    ? 'Sync មានបញ្ហា'
+                    : syncStatus.state === 'offline'
+                      ? 'អស់អ៊ីនធឺណិត'
+                      : syncStatus.state === 'syncing'
+                        ? 'កំពុង Sync...'
+                        : 'បាន Sync លើ Cloud'}
+                </AppleBadge>
+              </div>
+              <p className="text-xs text-[#6e6e73] dark:text-[#d1d1d6] mt-0.5">
+                {syncStatus.state === 'offline'
+                  ? 'ទិន្នន័យដែលអ្នកកែប្រែនឹង Sync ទៅ Cloud Database ដោយស្វ័យប្រវត្តិពេលភ្ជាប់អ៊ីនធឺណិតឡើងវិញ។'
+                  : syncStatus.lastSyncedAt
+                    ? `Sync ចុងក្រោយ៖ ${formatDateTimeKm(syncStatus.lastSyncedAt, useKhmerNumerals)} • ប្រព័ន្ធបម្រុងទុកលើ Cloud ប្រចាំថ្ងៃដោយស្វ័យប្រវត្តិ`
+                    : 'ទិន្នន័យត្រូវបាន Sync ទៅ Cloud Database និងបម្រុងទុកប្រចាំថ្ងៃដោយស្វ័យប្រវត្តិ។'}
+              </p>
+            </div>
+          </div>
+
+          <AppleButton
+            variant="secondary"
+            size="sm"
+            icon={<HardDriveDownload size={15} />}
+            onClick={handleQuickBackup}
+            disabled={isBackingUp}
+            className="shrink-0"
+          >
+            {isBackingUp ? 'កំពុងបង្កើត...' : 'ទាញយក .json បន្ថែម'}
+          </AppleButton>
+        </div>
+      ) : (
+        <div
+          data-testid="backup-reminder-card"
+          className={`rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+            isBackupOverdue
+              ? 'bg-orange-50 dark:bg-orange-500/15 border-orange-300 dark:border-orange-500/40'
+              : 'bg-white dark:bg-[#1c1c1e] border-black/[0.06] dark:border-white/[0.08]'
+          }`}
         >
-          {isBackingUp ? 'កំពុងបង្កើត...' : 'ទាញយក Backup ឥឡូវ'}
-        </AppleButton>
-      </div>
+          <div className="flex items-start gap-3">
+            {isBackupOverdue ? (
+              <div className="w-10 h-10 rounded-xl bg-orange-500/15 text-[#ff9500] flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 text-[#34c759] flex items-center justify-center shrink-0">
+                <CheckCircle2 size={20} />
+              </div>
+            )}
+
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm font-bold text-[#1d1d1f] dark:text-[#f5f5f7]">
+                  {backupAgeDays === null
+                    ? 'អ្នកមិនទាន់បាន Backup ទិន្នន័យនៅឡើយទេ'
+                    : isBackupOverdue
+                      ? `ដល់ពេល Backup ហើយ (${fmtNum(backupAgeDays)} ថ្ងៃមុន)`
+                      : 'ការបម្រុងទុកទិន្នន័យទាន់ពេលវេលា'}
+                </h2>
+                <AppleBadge variant={isBackupOverdue ? 'orange' : 'green'} size="sm">
+                  {backupAgeDays === null
+                    ? 'មិនទាន់ Backup'
+                    : backupAgeDays === 0
+                      ? 'ថ្ងៃនេះ'
+                      : `${fmtNum(backupAgeDays)} ថ្ងៃមុន`}
+                </AppleBadge>
+              </div>
+              <p className="text-xs text-[#6e6e73] dark:text-[#d1d1d6] mt-0.5">
+                {lastBackupAt
+                  ? `បម្រុងទុកចុងក្រោយ៖ ${formatDateTimeKm(lastBackupAt, useKhmerNumerals)}`
+                  : 'ទិន្នន័យទាំងអស់រក្សាទុកក្នុងកម្មវិធីរុករក — សូមទាញយក .json ទុករាល់សប្ដាហ៍ដើម្បីកុំឱ្យបាត់បង់។'}
+              </p>
+              {storagePersisted === false && (
+                <div
+                  data-testid="storage-persist-warning"
+                  className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[#6e6e73] dark:text-[#d1d1d6]"
+                >
+                  <span>
+                    ការរក្សាទុកអចិន្ត្រៃយ៍មិនទាន់បានបើកទេ — ការដំឡើងកម្មវិធី (Chrome → Install KruDesk) ជួយរក្សាទិន្នន័យឱ្យមានសុវត្ថិភាព។
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleRequestPersist}
+                    disabled={isRequestingPersist}
+                    className="px-2 py-0.5 rounded-lg bg-black/[0.06] dark:bg-white/[0.1] hover:bg-black/[0.12] dark:hover:bg-white/[0.18] text-[#1d1d1f] dark:text-[#f5f5f7] font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {isRequestingPersist ? 'កំពុងស្នើសុំ...' : 'ស្នើសុំរក្សាទុកអចិន្ត្រៃយ៍'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <AppleButton
+            variant={isBackupOverdue ? 'primary' : 'secondary'}
+            size="sm"
+            icon={<HardDriveDownload size={15} />}
+            onClick={handleQuickBackup}
+            disabled={isBackingUp}
+            className="shrink-0"
+          >
+            {isBackingUp ? 'កំពុងបង្កើត...' : 'ទាញយក Backup ឥឡូវ'}
+          </AppleButton>
+        </div>
+      )}
 
       {/* Top KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

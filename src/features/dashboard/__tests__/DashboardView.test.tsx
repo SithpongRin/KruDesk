@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import { db, clearAllAppData, setSetting } from '../../../db/database';
 import { useAppStore } from '../../../store/useAppStore';
+import { useSyncStore } from '../../../services/sync/useSyncStore';
 import { toLocalDateKey } from '../../../lib/khmerDate';
 import { DashboardView } from '../DashboardView';
 import type { Profile } from '../../../types/domain';
@@ -21,6 +22,10 @@ describe('DashboardView stats & backup reminder', () => {
   beforeEach(async () => {
     await db.open();
     await clearAllAppData();
+    useSyncStore.setState({
+      enabled: false,
+      status: { state: 'synced', pendingCount: 0, lastSyncedAt: null, errorMessage: null },
+    });
   });
 
   afterEach(() => {
@@ -142,6 +147,30 @@ describe('DashboardView stats & backup reminder', () => {
     fireEvent.click(screen.getByText('ស្នើសុំរក្សាទុកអចិន្ត្រៃយ៍'));
     await waitFor(() => {
       expect(persistMock).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('storage-persist-warning')).toBeNull();
+    });
+  });
+
+  it('shows Cloud Database sync status instead of local-only backup warning when Cloud Sync is enabled', async () => {
+    useSyncStore.setState({
+      enabled: true,
+      status: {
+        state: 'synced',
+        pendingCount: 0,
+        lastSyncedAt: Date.now(),
+        errorMessage: null,
+      },
+    });
+
+    render(<DashboardView profile={TEST_PROFILE} />);
+
+    await waitFor(() => {
+      const card = screen.getByTestId('backup-reminder-card');
+      expect(card.className).not.toContain('bg-orange-50');
+      expect(card.textContent).toContain('ទិន្នន័យត្រូវបានរក្សាទុកលើ Cloud ដោយស្វ័យប្រវត្តិ');
+      expect(card.textContent).toContain('បាន Sync លើ Cloud');
+      expect(card.textContent).not.toContain('ក្នុងកម្មវិធីរុករក');
+      expect(card.textContent).not.toContain('អ្នកមិនទាន់បាន Backup ទិន្នន័យនៅឡើយទេ');
       expect(screen.queryByTestId('storage-persist-warning')).toBeNull();
     });
   });

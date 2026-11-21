@@ -12,6 +12,7 @@ import {
 } from '../lib/grading';
 import { getActiveStudentsOrdered } from '../lib/attendance';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
+import type { PageOrientation } from '../services/pdfExport';
 import { RotatedHeaderText } from './RotatedHeaderText';
 import { DocumentSignature } from './DocumentSignature';
 
@@ -30,6 +31,7 @@ interface MonthlyScoreSheetProps {
   profile: Profile;
   sheets: MonthlyScoreSheetPageData[];
   scoreConfig: ScoreConfig;
+  orientation?: PageOrientation;
   useKhmerDigits?: boolean;
 }
 
@@ -41,12 +43,13 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
   profile,
   sheets,
   scoreConfig,
+  orientation = 'landscape',
   useKhmerDigits = false,
 }) => {
   const fmt = (val: number | string) =>
     useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
 
-  const sortedSubjects = sortSubjects(cls.subjects);
+  const sortedSubjects = sortSubjects(cls.subjects).filter(isSubjectActive);
   const headerSpans = buildSubjectHeaderSpans(sortedSubjects);
   const columnNumbers = buildSubjectColumnNumbers(headerSpans);
   const hasAnyGroup = headerSpans.some((sp) => sp.subjects.length > 1 && sp.group);
@@ -95,31 +98,110 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
           studentPages.push({ items: [], startIndex: 0 });
         }
 
-        const firstPageCount = Math.max(1, studentPages[0].items.length);
-        const isDense = firstPageCount > 36;
-        const rowHeightMm = isDense ? 2.85 : 3.9;
-        const fontSizePt = isDense ? 6.8 : 8.2;
-        const headerHeightMm = isDense ? 17.5 : 24;
-        const signGapMm = isDense ? 9 : 16;
+        const isPortrait = orientation === 'portrait';
+        const pageWidthMm = isPortrait ? 210 : 297;
+        const pageHeightMm = isPortrait ? 297 : 210;
+        const padVMm = isPortrait ? 5 : 3.5;
+        const padHMm = isPortrait ? 5 : 6;
+        const innerWidthMm = pageWidthMm - padHMm * 2;
 
-        // Calculate available width per subject column (~174mm for subjects)
+        const cols = isPortrait
+          ? { no: 6, id: 12.5, name: 34, sex: 5.5, total: 10, avg: 10, rank: 9, note: 13 }
+          : { no: 7.5, id: 17, name: 42, sex: 7, total: 12, avg: 12, rank: 11, note: 17.5 };
+
+        // Calculate available width per subject column
         const subjectCount = Math.max(1, sortedSubjects.length);
-        const fixedWidthMm = 6.5 + 15.5 + 35 + 6 + 10.5 + 10.5 + 9.5 + 15; // ~108.5mm
-        const usableWidthMm = 285 - fixedWidthMm;
-        const subjectColWidthMm = Math.max(7.5, Math.min(16, usableWidthMm / subjectCount));
+        const fixedWidthMm =
+          cols.no + cols.id + cols.name + cols.sex + cols.total + cols.avg + cols.rank + cols.note;
+        const usableWidthMm = innerWidthMm - fixedWidthMm;
+        const subjectColWidthMm = Math.max(isPortrait ? 5.6 : 7.5, usableWidthMm / subjectCount);
+        const rotatedBoxWidthMm = Math.min(
+          isPortrait ? 12 : 18,
+          Math.max(5.0, subjectColWidthMm - 0.6)
+        );
 
         return studentPages.map((pg, pageIdx) => {
           const isLastPageOfSheet = pageIdx === studentPages.length - 1;
           const isVeryLastPage = sIdx === sheets.length - 1 && isLastPageOfSheet;
+          const pageRowCount = pg.items.length;
+
+          // Adaptive typography & spacing tuned for A4 landscape (203mm usable height)
+          // and A4 portrait (287mm usable height).
+          const rowHeightMm = isPortrait
+            ? pageRowCount > 39
+              ? 4.3
+              : pageRowCount > 30
+                ? 4.8
+                : 5.4
+            : pageRowCount > 39
+              ? 2.95
+              : pageRowCount > 30
+                ? 3.25
+                : 3.9;
+          const fontSizePt = isPortrait
+            ? subjectCount > 13
+              ? 7.4
+              : 8.4
+            : pageRowCount > 39
+              ? 7.6
+              : pageRowCount > 30
+                ? 8.2
+                : 9.0;
+          const headerHeightMm = isPortrait
+            ? 24
+            : pageRowCount > 39
+              ? 18.5
+              : pageRowCount > 30
+                ? 19.5
+                : 23;
+          const headerFontPt = isPortrait
+            ? subjectCount > 13
+              ? 6.8
+              : 7.6
+            : pageRowCount > 39
+              ? 7.2
+              : pageRowCount > 30
+                ? 7.8
+                : 8.4;
+          const idFontPt = isPortrait
+            ? subjectCount > 13
+              ? 6.8
+              : 7.6
+            : pageRowCount > 39
+              ? 7.2
+              : pageRowCount > 30
+                ? 7.8
+                : 8.2;
+          const signFontPt = isPortrait
+            ? 10.5
+            : pageRowCount > 39
+              ? 9.5
+              : pageRowCount > 30
+                ? 10
+                : 10.5;
+          const signGapMm = isPortrait
+            ? 14
+            : pageRowCount > 39
+              ? 9
+              : pageRowCount > 30
+                ? 10
+                : 14;
+          const signMarginTopMm = isPortrait
+            ? 6
+            : pageRowCount > 39
+              ? 2.5
+              : pageRowCount > 30
+                ? 3
+                : 5;
 
           return (
             <div
               key={`${sheet.id}-${pageIdx}`}
               data-print-page
               style={{
-                width: '297mm',
-                height: '210mm',
-                padding: '3.5mm 6mm',
+                width: `${pageWidthMm}mm`,
+                height: `${pageHeightMm}mm`,
+                padding: `${padVMm}mm ${padHMm}mm`,
                 boxSizing: 'border-box',
                 backgroundColor: '#ffffff',
                 color: '#000000',
@@ -127,13 +209,16 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                 pageBreakAfter: !isVeryLastPage ? 'always' : 'auto',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'space-between',
               }}
             >
               <div>
                 {/* Header matching reference/01_monthly_scores.webp */}
-                <div className="flex items-center justify-between mb-1 gap-2">
-                  <div className="text-[9pt] flex flex-wrap items-center gap-x-3">
+                <div className="flex items-center justify-between mb-1.5 gap-2">
+                  <div
+                    className={`${
+                      isPortrait ? 'text-[8.2pt] gap-x-2' : 'text-[9.5pt] gap-x-3'
+                    } flex flex-wrap items-center`}
+                  >
                     <span>
                       <strong className="font-bold">{profile.schoolName}</strong>
                     </span>
@@ -150,34 +235,36 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
 
                   <div
                     style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
-                    className="text-[10.5pt] shrink-0"
+                    className={`${isPortrait ? 'text-[10pt]' : 'text-[11.5pt]'} shrink-0`}
                   >
                     {sheet.title}
                   </div>
 
-                  <table className="border-collapse text-[8pt] shrink-0">
+                  <table
+                    className={`border-collapse ${isPortrait ? 'text-[7.5pt]' : 'text-[8.5pt]'} shrink-0`}
+                  >
                     <thead>
                       <tr>
-                        <th className="border border-black px-2 py-0.5 bg-slate-100 font-bold">
+                        <th className="border border-black px-1.5 py-0.5 bg-slate-100 font-bold">
                           ប្រុស
                         </th>
-                        <th className="border border-black px-2 py-0.5 bg-slate-100 font-bold">
+                        <th className="border border-black px-1.5 py-0.5 bg-slate-100 font-bold">
                           ស្រី
                         </th>
-                        <th className="border border-black px-2 py-0.5 bg-slate-100 font-bold">
+                        <th className="border border-black px-1.5 py-0.5 bg-slate-100 font-bold">
                           សរុប
                         </th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td className="border border-black px-2 py-0.5 text-center font-bold">
+                        <td className="border border-black px-1.5 py-0.5 text-center font-bold">
                           {fmt(maleCount)}
                         </td>
-                        <td className="border border-black px-2 py-0.5 text-center font-bold">
+                        <td className="border border-black px-1.5 py-0.5 text-center font-bold">
                           {fmt(femaleCount)}
                         </td>
-                        <td className="border border-black px-2 py-0.5 text-center font-bold">
+                        <td className="border border-black px-1.5 py-0.5 text-center font-bold">
                           {fmt(activeStudents.length)}
                         </td>
                       </tr>
@@ -195,28 +282,28 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                       <th
                         rowSpan={hasAnyGroup ? 2 : 1}
                         className="border border-black text-center font-bold"
-                        style={{ width: '6.5mm' }}
+                        style={{ width: `${cols.no}mm` }}
                       >
                         ល.រ
                       </th>
                       <th
                         rowSpan={hasAnyGroup ? 2 : 1}
                         className="border border-black text-center font-bold"
-                        style={{ width: '15.5mm' }}
+                        style={{ width: `${cols.id}mm` }}
                       >
                         អត្តលេខ
                       </th>
                       <th
                         rowSpan={hasAnyGroup ? 2 : 1}
-                        className="border border-black px-1 text-left font-bold"
-                        style={{ width: '35mm' }}
+                        className="border border-black px-1.5 text-left font-bold"
+                        style={{ width: `${cols.name}mm` }}
                       >
                         គោត្តនាម និងនាម
                       </th>
                       <th
                         rowSpan={hasAnyGroup ? 2 : 1}
                         className="border border-black text-center font-bold"
-                        style={{ width: '6mm' }}
+                        style={{ width: `${cols.sex}mm` }}
                       >
                         ភេទ
                       </th>
@@ -227,7 +314,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                             key={span.key}
                             colSpan={span.subjects.length}
                             className="border border-black text-center font-bold px-0.5 py-0.5"
-                            style={{ fontSize: '6.8pt', height: '4.2mm' }}
+                            style={{ fontSize: `${headerFontPt}pt`, height: '4.6mm' }}
                           >
                             {span.group}
                           </th>
@@ -240,9 +327,9 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                           >
                             <RotatedHeaderText
                               text={span.subjects[0].name}
-                              heightMm={hasAnyGroup ? headerHeightMm + 4.2 : headerHeightMm}
-                              widthMm={subjectColWidthMm - 0.5}
-                              fontSizePt={6.3}
+                              heightMm={hasAnyGroup ? headerHeightMm + 4.6 : headerHeightMm}
+                              widthMm={rotatedBoxWidthMm}
+                              fontSizePt={headerFontPt}
                             />
                           </th>
                         )
@@ -251,43 +338,43 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                       <th
                         rowSpan={hasAnyGroup ? 2 : 1}
                         className="border border-black p-0 align-middle"
-                        style={{ width: '10.5mm' }}
+                        style={{ width: `${cols.total}mm` }}
                       >
                         <RotatedHeaderText
                           text="ពិន្ទុសរុប"
-                          heightMm={hasAnyGroup ? headerHeightMm + 4.2 : headerHeightMm}
-                          widthMm={10}
-                          fontSizePt={6.8}
+                          heightMm={hasAnyGroup ? headerHeightMm + 4.6 : headerHeightMm}
+                          widthMm={cols.total - 0.8}
+                          fontSizePt={headerFontPt}
                         />
                       </th>
                       <th
                         rowSpan={hasAnyGroup ? 2 : 1}
                         className="border border-black p-0 align-middle"
-                        style={{ width: '10.5mm' }}
+                        style={{ width: `${cols.avg}mm` }}
                       >
                         <RotatedHeaderText
                           text="មធ្យមភាគ"
-                          heightMm={hasAnyGroup ? headerHeightMm + 4.2 : headerHeightMm}
-                          widthMm={10}
-                          fontSizePt={6.8}
+                          heightMm={hasAnyGroup ? headerHeightMm + 4.6 : headerHeightMm}
+                          widthMm={cols.avg - 0.8}
+                          fontSizePt={headerFontPt}
                         />
                       </th>
                       <th
                         rowSpan={hasAnyGroup ? 2 : 1}
                         className="border border-black p-0 align-middle"
-                        style={{ width: '9.5mm' }}
+                        style={{ width: `${cols.rank}mm` }}
                       >
                         <RotatedHeaderText
                           text="ចំណាត់ថ្នាក់"
-                          heightMm={hasAnyGroup ? headerHeightMm + 4.2 : headerHeightMm}
-                          widthMm={9}
-                          fontSizePt={6.6}
+                          heightMm={hasAnyGroup ? headerHeightMm + 4.6 : headerHeightMm}
+                          widthMm={cols.rank - 0.8}
+                          fontSizePt={Math.max(6.6, headerFontPt - 0.2)}
                         />
                       </th>
                       <th
                         rowSpan={hasAnyGroup ? 2 : 1}
                         className="border border-black text-center font-bold px-0.5"
-                        style={{ width: '15mm', fontSize: '7pt' }}
+                        style={{ width: `${cols.note}mm`, fontSize: `${Math.max(6.6, headerFontPt - 0.2)}pt` }}
                       >
                         សេចក្ដីផ្សេងៗ
                       </th>
@@ -307,16 +394,19 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                               <RotatedHeaderText
                                 text={subj.name}
                                 heightMm={headerHeightMm}
-                                widthMm={subjectColWidthMm - 0.5}
-                                fontSizePt={6.3}
+                                widthMm={rotatedBoxWidthMm}
+                                fontSizePt={headerFontPt}
                               />
                             </th>
                           ))}
                       </tr>
                     )}
 
-                    {/* Paper-form subject column numbers: grouped spans share one merged number (1..15 + blank extras) */}
-                    <tr className="bg-slate-50" style={{ height: '3.2mm', fontSize: '6.5pt' }}>
+                    {/* Paper-form subject column numbers: grouped spans share one merged number */}
+                    <tr
+                      className="bg-slate-50"
+                      style={{ height: '3.8mm', fontSize: `${Math.max(7, fontSizePt - 0.8)}pt` }}
+                    >
                       <th colSpan={4} className="border border-black text-right px-1.5 font-medium">
                         លេខរៀងមុខវិជ្ជា
                       </th>
@@ -353,10 +443,13 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                           <td className="border border-black text-center leading-none p-0">
                             {fmt(rowNum)}
                           </td>
-                          <td className="border border-black text-center font-mono text-[6.3pt] truncate px-0.5 py-0 leading-none">
+                          <td
+                            className="border border-black text-center font-mono truncate px-0.5 py-0 leading-none"
+                            style={{ fontSize: `${idFontPt}pt` }}
+                          >
                             {fmt(student.studentId)}
                           </td>
-                          <td className="border border-black px-1 py-0 truncate font-medium leading-none">
+                          <td className="border border-black px-1.5 py-0 truncate font-medium leading-none">
                             {student.nameKm}
                           </td>
                           <td className="border border-black text-center leading-none p-0">
@@ -364,7 +457,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                           </td>
 
                           {sortedSubjects.map((subj) => {
-                            const val = isSubjectActive(subj) ? scoreRecord[subj.id] : undefined;
+                            const val = scoreRecord[subj.id];
                             return (
                               <td
                                 key={`${student.id}-${subj.id}`}
@@ -404,7 +497,10 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                               ? fmt(ranked.rank)
                               : ''}
                           </td>
-                          <td className="border border-black px-0.5 truncate text-[6.5pt] leading-none">
+                          <td
+                            className="border border-black px-1 truncate leading-none"
+                            style={{ fontSize: `${idFontPt}pt` }}
+                          >
                             {note}
                           </td>
                         </tr>
@@ -415,21 +511,22 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
               </div>
 
               {isLastPageOfSheet ? (
-                <DocumentSignature
-                  profile={profile}
-                  fontSizePt={8.5}
-                  // two date lines above the teacher's title: keep the page height as before
-                  gapMm={Math.max(6, signGapMm - 4)}
-                  middle={
-                    studentPages.length > 1 && (
-                      <div className="text-[8pt] text-slate-500">
-                        ទំព័រ {fmt(pageIdx + 1)} / {fmt(studentPages.length)}
-                      </div>
-                    )
-                  }
-                />
+                <div style={{ marginTop: `${signMarginTopMm}mm` }}>
+                  <DocumentSignature
+                    profile={profile}
+                    fontSizePt={signFontPt}
+                    gapMm={signGapMm}
+                    middle={
+                      studentPages.length > 1 && (
+                        <div className="text-[8.5pt] text-slate-500">
+                          ទំព័រ {fmt(pageIdx + 1)} / {fmt(studentPages.length)}
+                        </div>
+                      )
+                    }
+                  />
+                </div>
               ) : (
-                <div className="text-center text-[8pt] text-slate-500 pt-1">
+                <div className="mt-auto text-center text-[8.5pt] text-slate-500 pt-1">
                   ទំព័រ {fmt(pageIdx + 1)} / {fmt(studentPages.length)}
                 </div>
               )}

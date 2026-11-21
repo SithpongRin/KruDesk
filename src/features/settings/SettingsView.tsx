@@ -22,7 +22,7 @@ import {
 import { db, clearAllAppData, saveProfile, setSetting } from '../../db/database';
 import { useAppStore } from '../../store/useAppStore';
 import { useAuthStore } from '../auth/useAuthStore';
-import { getActiveSyncEngine } from '../../services/sync/useSyncStore';
+import { getActiveSyncEngine, useSyncStore } from '../../services/sync/useSyncStore';
 import {
   DEFAULT_ATTENDANCE_CONFIG,
   resolveScoreConfig,
@@ -74,6 +74,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
     setSelectedClassId,
   } = useAppStore();
   const { user, isAdmin, signOut } = useAuthStore();
+  const syncEnabled = useSyncStore((s) => s.enabled);
 
   const [teacherName, setTeacherName] = useState(profile.teacherName);
   const [schoolName, setSchoolName] = useState(profile.schoolName);
@@ -954,8 +955,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
 
       {/* Section 3: Backup & Restore */}
       <AppleCard
-        title="Backup & Restore"
-        subtitle="ទាញយកទិន្នន័យទាំងអស់ជាឯកសារ .json (រួមទាំងរូបថត) ឬស្ដារមកវិញ"
+        title="Backup & Restore (.json)"
+        subtitle={
+          syncEnabled
+            ? 'ទាញយកឯកសារ .json ទុកបន្ថែមក្នុងម៉ាស៊ីន ឬស្ដារទិន្នន័យពីឯកសារ .json'
+            : 'ទាញយកទិន្នន័យទាំងអស់ជាឯកសារ .json (រួមទាំងរូបថត) ឬស្ដារមកវិញ'
+        }
         headerAction={
           lastBackupAt ? (
             <AppleBadge variant="green" size="sm">
@@ -965,6 +970,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
                   ? 'ថ្ងៃនេះ'
                   : `${useKhmerNumerals ? toKhmerNumerals(daysAgo(lastBackupAt)) : daysAgo(lastBackupAt)} ថ្ងៃមុន`}
               </span>
+            </AppleBadge>
+          ) : syncEnabled ? (
+            <AppleBadge variant="blue" size="sm">
+              ស្រេចចិត្ត
             </AppleBadge>
           ) : (
             <AppleBadge variant="orange" size="sm">
@@ -983,44 +992,58 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
             </div>
           )}
 
-          {/* Storage persistence status */}
-          <div
-            className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
-              storagePersisted
-                ? 'bg-[#edf9f0] dark:bg-emerald-500/10 border-[#c8eed0] dark:border-emerald-500/20 text-[#1d1d1f] dark:text-emerald-100'
-                : 'bg-orange-50/80 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/25 text-[#1d1d1f] dark:text-orange-100'
-            }`}
-          >
-            <div className="flex items-start gap-2.5">
-              {storagePersisted ? (
-                <ShieldCheck size={18} className="text-[#34c759] shrink-0 mt-0.5" />
-              ) : (
-                <ShieldAlert size={18} className="text-[#ff9500] shrink-0 mt-0.5" />
-              )}
+          {/* Cloud sync info (when Cloud DB is active) or local storage persistence status */}
+          {syncEnabled ? (
+            <div className="p-3.5 rounded-2xl border flex items-start gap-2.5 text-xs bg-[#edf9f0] dark:bg-emerald-500/10 border-[#c8eed0] dark:border-emerald-500/20 text-[#1d1d1f] dark:text-emerald-100">
+              <ShieldCheck size={18} className="text-[#34c759] shrink-0 mt-0.5" />
               <div>
                 <div className="font-semibold">
-                  {storagePersisted
-                    ? 'ការផ្ទុកទិន្នន័យអចិន្ត្រៃយ៍ត្រូវបានអនុញ្ញាត (Storage Persisted)'
-                    : 'ការផ្ទុកទិន្នន័យមិនទាន់ការពារជាអចិន្ត្រៃយ៍នៅឡើយទេ'}
+                  ទិន្នន័យត្រូវបានរក្សាទុកលើ Cloud ដោយស្វ័យប្រវត្តិ
                 </div>
                 <p className="text-[11px] text-[#6e6e73] dark:text-[#d1d1d6] mt-0.5 leading-relaxed">
-                  {storagePersisted
-                    ? 'កម្មវិធីរុករកការពារ IndexedDB មិនឱ្យលុបដោយស្វ័យប្រវត្តិទេ ប៉ុន្តែគួរទាញយក Backup ទុកជាប្រចាំដើម្បីសុវត្ថិភាពខ្ពស់បំផុត។'
-                    : 'កម្មវិធីរុករកអាចសម្អាតទិន្នន័យ IndexedDB ដោយស្វ័យប្រវត្តិ ប្រសិនបើម៉ាស៊ីនអស់ទំហំផ្ទុក ឬមិនបើកប្រើរយៈពេលយូរ។ ដូច្នេះសូមទាញយកឯកសារ Backup ជាប្រចាំ!'}
+                  ទិន្នន័យទាំងអស់ត្រូវបាន Sync ទៅ Cloud Database និងមាន Cloud Backup ប្រចាំថ្ងៃ។ ការទាញយកឯកសារ .json ខាងក្រោមគឺជាជម្រើសបន្ថែមប្រសិនបើអ្នកចង់រក្សាទុកក្នុងម៉ាស៊ីនផ្ទាល់ខ្លួន។
                 </p>
               </div>
             </div>
-            {!storagePersisted && (
-              <AppleButton
-                variant="secondary"
-                size="sm"
-                onClick={handleRequestPersist}
-                className="shrink-0"
-              >
-                ស្នើសុំការពារទិន្នន័យ
-              </AppleButton>
-            )}
-          </div>
+          ) : (
+            <div
+              className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+                storagePersisted
+                  ? 'bg-[#edf9f0] dark:bg-emerald-500/10 border-[#c8eed0] dark:border-emerald-500/20 text-[#1d1d1f] dark:text-emerald-100'
+                  : 'bg-orange-50/80 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/25 text-[#1d1d1f] dark:text-orange-100'
+              }`}
+            >
+              <div className="flex items-start gap-2.5">
+                {storagePersisted ? (
+                  <ShieldCheck size={18} className="text-[#34c759] shrink-0 mt-0.5" />
+                ) : (
+                  <ShieldAlert size={18} className="text-[#ff9500] shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <div className="font-semibold">
+                    {storagePersisted
+                      ? 'ការផ្ទុកទិន្នន័យអចិន្ត្រៃយ៍ត្រូវបានអនុញ្ញាត (Storage Persisted)'
+                      : 'ការផ្ទុកទិន្នន័យមិនទាន់ការពារជាអចិន្ត្រៃយ៍នៅឡើយទេ'}
+                  </div>
+                  <p className="text-[11px] text-[#6e6e73] dark:text-[#d1d1d6] mt-0.5 leading-relaxed">
+                    {storagePersisted
+                      ? 'កម្មវិធីរុករកការពារ IndexedDB មិនឱ្យលុបដោយស្វ័យប្រវត្តិទេ ប៉ុន្តែគួរទាញយក Backup ទុកជាប្រចាំដើម្បីសុវត្ថិភាពខ្ពស់បំផុត។'
+                      : 'កម្មវិធីរុករកអាចសម្អាតទិន្នន័យ IndexedDB ដោយស្វ័យប្រវត្តិ ប្រសិនបើម៉ាស៊ីនអស់ទំហំផ្ទុក ឬមិនបើកប្រើរយៈពេលយូរ។ ដូច្នេះសូមទាញយកឯកសារ Backup ជាប្រចាំ!'}
+                  </p>
+                </div>
+              </div>
+              {!storagePersisted && (
+                <AppleButton
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleRequestPersist}
+                  className="shrink-0"
+                >
+                  ស្នើសុំការពារទិន្នន័យ
+                </AppleButton>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <AppleButton

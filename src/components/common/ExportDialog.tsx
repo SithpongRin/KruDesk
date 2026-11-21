@@ -3,7 +3,7 @@ import { FileSpreadsheet, FileText, Printer } from 'lucide-react';
 import { AppleModal } from './AppleModal';
 import { AppleButton } from './AppleButton';
 import type { SchoolClass } from '../../types/domain';
-import type { PaperSize } from '../../services/pdfExport';
+import type { PageOrientation, PaperSize } from '../../services/pdfExport';
 import { formatKhmerMonthYear, parseYearMonth } from '../../lib/khmerDate';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -17,12 +17,15 @@ interface ExportDialogProps {
   defaultClassId: number | null;
   showMonthPicker?: boolean;
   showPaperSizePicker?: boolean;
+  showOrientationPicker?: boolean;
+  defaultOrientation?: PageOrientation;
   defaultMonth?: string;
   onExport: (params: {
     format: ExportFormat;
     classId: number;
     months: string[];
     paperSize?: PaperSize;
+    orientation?: PageOrientation;
   }) => Promise<void>;
 }
 
@@ -34,6 +37,8 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   defaultClassId,
   showMonthPicker = false,
   showPaperSizePicker = false,
+  showOrientationPicker = false,
+  defaultOrientation = 'landscape',
   defaultMonth,
   onExport,
 }) => {
@@ -43,6 +48,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
   const [format, setFormat] = useState<ExportFormat>('excel');
   const [paperSize, setPaperSize] = useState<PaperSize>('A4');
+  const [orientation, setOrientation] = useState<PageOrientation>(defaultOrientation);
   const [classId, setClassId] = useState<number>(defaultClassId ?? classes[0]?.id ?? 0);
   const [selectedMonths, setSelectedMonths] = useState<string[]>([baseMonth]);
   const [isExporting, setIsExporting] = useState(false);
@@ -65,8 +71,9 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     if (isOpen) {
       setClassId(defaultClassId ?? classes[0]?.id ?? 0);
       setSelectedMonths([baseMonth]);
+      setOrientation(defaultOrientation);
     }
-  }, [isOpen, defaultClassId, classes, baseMonth]);
+  }, [isOpen, defaultClassId, classes, baseMonth, defaultOrientation]);
 
   const toggleMonth = (ym: string) => {
     setSelectedMonths((prev) => {
@@ -86,6 +93,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
         classId,
         months: showMonthPicker ? selectedMonths : [baseMonth],
         paperSize: showPaperSizePicker ? paperSize : undefined,
+        orientation: showOrientationPicker ? orientation : undefined,
       });
       onClose();
     } finally {
@@ -219,6 +227,38 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
             </button>
           </div>
         </div>
+
+        {showOrientationPicker && format !== 'excel' && (
+          <div>
+            <span className="block text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] mb-2">
+              ទិសក្រដាស (A4)
+            </span>
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => setOrientation('landscape')}
+                className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
+                  orientation === 'landscape'
+                    ? 'border-[#0071e3] bg-[#e8f2ff]/60 dark:bg-blue-500/15 text-[#0071e3]'
+                    : 'border-black/[0.08] dark:border-white/[0.1] text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-[#f5f5f7] dark:hover:bg-white/[0.06]'
+                }`}
+              >
+                ផ្ដេក (Landscape)
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrientation('portrait')}
+                className={`px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
+                  orientation === 'portrait'
+                    ? 'border-[#0071e3] bg-[#e8f2ff]/60 dark:bg-blue-500/15 text-[#0071e3]'
+                    : 'border-black/[0.08] dark:border-white/[0.1] text-[#1d1d1f] dark:text-[#f5f5f7] hover:bg-[#f5f5f7] dark:hover:bg-white/[0.06]'
+                }`}
+              >
+                បញ្ឈរ (Portrait)
+              </button>
+            </div>
+          </div>
+        )}
 
         {showPaperSizePicker && format !== 'excel' && (
           <div>
