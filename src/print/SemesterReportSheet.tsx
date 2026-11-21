@@ -269,14 +269,17 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
               <DocumentSignature
                 profile={profile}
                 signOptions={signOptions}
-                gapMm={10}
+                gapMm={subjectRows.length > 13 ? 14 : 18}
               />
 
-              <div className="mt-2.5 text-[8.5pt]">
-                <div className="text-center mb-1">
+              <div
+                className="text-[8.5pt]"
+                style={{ marginTop: subjectRows.length > 13 ? '5mm' : '9mm' }}
+              >
+                <div className="text-center mb-1.5">
                   មតិរបស់មាតាបិតា-អាណាព្យាបាលសិស្ស
                 </div>
-                <div className="space-y-2.5 pt-1 mx-[14mm]">
+                <div className="space-y-3 pt-1 mx-[14mm]">
                   <div className="border-b border-dotted border-slate-700 h-3" />
                   <div className="border-b border-dotted border-slate-700 h-3" />
                   <div className="border-b border-dotted border-slate-700 h-3" />
