@@ -33,8 +33,10 @@ output
 .env.*
 !.env.example
 
-# Agent temp
+# Agent & CLI temp
 .gemini
+.firebase/
+.vercel/
 
 # Exported files and backups may contain real student data — never commit them
 *.pdf

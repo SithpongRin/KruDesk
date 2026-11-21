@@ -16,8 +16,10 @@ import {
   X,
 } from 'lucide-react';
 import { useAppStore, type ActiveView } from '../../store/useAppStore';
+import { useAuthStore } from '../../features/auth/useAuthStore';
 import type { Profile } from '../../types/domain';
 import { MOEYS_EMBLEM_DATA_URI } from '../../utils/moeysEmblemDataUri';
+import { toKhmerNumerals } from '../../utils/khmerNumerals';
 
 interface AppleSidebarProps {
   profile: Profile;
@@ -43,8 +45,15 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export const AppleSidebar: React.FC<AppleSidebarProps> = ({ profile }) => {
-  const { activeView, setActiveView, isMobileSidebarOpen, setIsMobileSidebarOpen, isOnline } =
-    useAppStore();
+  const {
+    activeView,
+    setActiveView,
+    isMobileSidebarOpen,
+    setIsMobileSidebarOpen,
+    isOnline,
+    useKhmerNumerals,
+  } = useAppStore();
+  const { isAdmin, pendingUsersCount } = useAuthStore();
 
   const renderNavContent = (isMobile = false) => (
     <>
@@ -107,9 +116,22 @@ export const AppleSidebar: React.FC<AppleSidebarProps> = ({ profile }) => {
                 >
                   {item.icon}
                 </span>
-                <span className="font-battambang leading-tight text-[13px] truncate">
+                <span className="font-battambang leading-tight text-[13px] truncate flex-1">
                   {item.label}
                 </span>
+                {item.id === 'settings' && isAdmin && pendingUsersCount > 0 && (
+                  <span
+                    aria-label="ចំនួនអ្នករង់ចាំអនុញ្ញាត"
+                    className={clsx(
+                      'px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none shrink-0',
+                      isActive
+                        ? 'bg-white text-[#0071e3]'
+                        : 'bg-[#ff9500] text-white'
+                    )}
+                  >
+                    {useKhmerNumerals ? toKhmerNumerals(pendingUsersCount) : pendingUsersCount}
+                  </span>
+                )}
               </button>
             );
           })}

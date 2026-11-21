@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Menu, Calendar, BookOpen } from 'lucide-react';
+import { Menu, Calendar, BookOpen, LogOut } from 'lucide-react';
 import { db } from '../../db/database';
 import { useAppStore, type ActiveView } from '../../store/useAppStore';
+import { useAuthStore } from '../../features/auth/useAuthStore';
 import { KHMER_MONTHS, parseYearMonth } from '../../lib/khmerDate';
 import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
 
@@ -29,6 +30,7 @@ export const AppleHeader: React.FC = () => {
     useKhmerNumerals,
     toggleMobileSidebar,
   } = useAppStore();
+  const { user, signOut } = useAuthStore();
 
   const classes = useLiveQuery(async () => {
     const list = await db.classes.toArray();
@@ -137,6 +139,40 @@ export const AppleHeader: React.FC = () => {
             ))}
           </select>
         </div>
+
+        {/* Signed-in account pill & Sign out (§4.6) */}
+        {user && (
+          <div className="flex items-center gap-2 pl-2 border-l border-black/[0.06] dark:border-white/[0.08]">
+            {user.photoURL ? (
+              <img
+                src={user.photoURL}
+                alt={user.displayName || user.email}
+                referrerPolicy="no-referrer"
+                className="w-7 h-7 rounded-full object-cover shrink-0 border border-black/[0.08] dark:border-white/[0.1]"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-[#0071e3]/15 text-[#0071e3] font-bold text-xs flex items-center justify-center shrink-0">
+                {(user.displayName || user.email || '?').slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <span
+              title={user.email}
+              className="hidden lg:inline-block text-xs text-[#6e6e73] dark:text-[#98989d] max-w-[150px] truncate"
+            >
+              {user.email}
+            </span>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              title="ចាកចេញ"
+              aria-label="ចាកចេញ"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-red-50 dark:hover:bg-red-500/15 text-xs font-medium text-[#1d1d1f] dark:text-[#f5f5f7] hover:text-[#ff3b30] dark:hover:text-red-300 border border-black/[0.05] dark:border-white/[0.08] transition-colors"
+            >
+              <LogOut size={13} />
+              <span className="hidden sm:inline">ចាកចេញ</span>
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

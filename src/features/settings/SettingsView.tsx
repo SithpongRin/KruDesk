@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Save,
@@ -17,9 +17,13 @@ import {
   X,
   ShieldCheck,
   ShieldAlert,
+  LogOut,
 } from 'lucide-react';
 import { db, clearAllAppData, saveProfile, setSetting } from '../../db/database';
 import { useAppStore } from '../../store/useAppStore';
+import { useAuthStore } from '../auth/useAuthStore';
+
+const AdminUsersCard = lazy(() => import('../auth/AdminUsersCard'));
 import {
   DEFAULT_ATTENDANCE_CONFIG,
   resolveScoreConfig,
@@ -69,6 +73,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
     hydratePreferences,
     setSelectedClassId,
   } = useAppStore();
+  const { user, isAdmin, signOut } = useAuthStore();
 
   const [teacherName, setTeacherName] = useState(profile.teacherName);
   const [schoolName, setSchoolName] = useState(profile.schoolName);
@@ -330,6 +335,68 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile }) => {
           គ្រប់គ្រងព័ត៌មានគ្រូ និងសាលា រូបរាងបង្ហាញ និងការបម្រុងទុកទិន្នន័យ
         </p>
       </div>
+
+      {/* Signed-in Google Account Card (§4.6) */}
+      {user && (
+        <AppleCard
+          title="គណនី Google ដែលកំពុងប្រើប្រាស់"
+          subtitle="គណនីដែលបានភ្ជាប់សម្រាប់ចូលប្រើប្រាស់ប្រព័ន្ធ KruDesk"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              {user.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || user.email}
+                  referrerPolicy="no-referrer"
+                  className="w-11 h-11 rounded-full object-cover shrink-0 border border-black/[0.08] dark:border-white/[0.1]"
+                />
+              ) : (
+                <div className="w-11 h-11 rounded-full bg-[#0071e3]/15 text-[#0071e3] font-bold text-base flex items-center justify-center shrink-0">
+                  {(user.displayName || user.email || '?').slice(0, 1).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] truncate">
+                    {user.displayName || user.email}
+                  </span>
+                  {isAdmin && (
+                    <AppleBadge variant="blue" size="sm">
+                      Admin
+                    </AppleBadge>
+                  )}
+                </div>
+                <div className="text-xs text-[#6e6e73] dark:text-[#98989d] truncate">
+                  {user.email}
+                </div>
+              </div>
+            </div>
+
+            <AppleButton
+              variant="secondary"
+              size="sm"
+              icon={<LogOut size={15} />}
+              onClick={() => void signOut()}
+            >
+              ចាកចេញ
+            </AppleButton>
+          </div>
+        </AppleCard>
+      )}
+
+      {/* Admin User Management Card — only rendered when isAdmin and lazy-loaded (§4.5) */}
+      {isAdmin && (
+        <Suspense
+          fallback={
+            <div className="p-6 text-center text-xs text-[#86868b]">
+              កំពុងផ្ទុកផ្ទាំងគ្រប់គ្រងអ្នកប្រើ...
+            </div>
+          }
+        >
+          <AdminUsersCard />
+        </Suspense>
+      )}
 
       {/* Section 1: ព័ត៌មានគ្រូ និងសាលា */}
       <AppleCard

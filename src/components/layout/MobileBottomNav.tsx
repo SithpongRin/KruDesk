@@ -2,12 +2,15 @@ import React, { useState } from 'react';
 import clsx from 'clsx';
 import { MoreHorizontal, X } from 'lucide-react';
 import { useAppStore, type ActiveView } from '../../store/useAppStore';
+import { useAuthStore } from '../../features/auth/useAuthStore';
+import { toKhmerNumerals } from '../../utils/khmerNumerals';
 import { NAV_ITEMS } from './AppleSidebar';
 
 const PRIMARY_MOBILE_IDS = new Set<ActiveView>(['dashboard', 'students', 'attendance', 'scores']);
 
 export const MobileBottomNav: React.FC = () => {
-  const { activeView, setActiveView } = useAppStore();
+  const { activeView, setActiveView, useKhmerNumerals } = useAppStore();
+  const { isAdmin, pendingUsersCount } = useAuthStore();
   const [moreOpen, setMoreOpen] = useState(false);
 
   const primaryItems = NAV_ITEMS.filter((item) => PRIMARY_MOBILE_IDS.has(item.id));
@@ -50,7 +53,7 @@ export const MobileBottomNav: React.FC = () => {
                       setMoreOpen(false);
                     }}
                     className={clsx(
-                      'flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border text-center transition-all active:scale-95',
+                      'relative flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl border text-center transition-all active:scale-95',
                       isActive
                         ? 'bg-[#0071e3] text-white border-[#0071e3]'
                         : 'bg-[#f5f5f7] dark:bg-white/[0.06] text-[#1d1d1f] dark:text-[#f5f5f7] border-black/[0.04] dark:border-white/[0.08]'
@@ -60,6 +63,11 @@ export const MobileBottomNav: React.FC = () => {
                     <span className="text-[11px] font-battambang leading-tight">
                       {item.label}
                     </span>
+                    {item.id === 'settings' && isAdmin && pendingUsersCount > 0 && (
+                      <span className="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-full bg-[#ff9500] text-white text-[10px] font-bold leading-none">
+                        {useKhmerNumerals ? toKhmerNumerals(pendingUsersCount) : pendingUsersCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}

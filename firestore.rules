@@ -1,0 +1,114 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: config
+// Document ID: admin
+// Fields:
+//   - email: string (required, immutable via client rules) - single admin email
+//
+// Collection: users
+// Document ID: {uid} (Firebase Auth UID)
+// Fields:
+//   - email: string (required on create, matches auth token email)
+//   - displayName: string (optional/nullable, refreshable by owner)
+//   - photoURL: string (optional/nullable, refreshable by owner)
+//   - status: string ('pending' | 'approved' | 'rejected' | 'disabled')
+//   - createdAt: timestamp (required on create, equals request.time)
+//   - reviewedAt: timestamp (set by admin on status review, equals request.time)
+//   - reviewedBy: string (set by admin on status review, equals admin email)
+//
+// Subcollection: users/{uid}/backups/{backupId} and nested subcollections
+//   - Owner-only backup documents and chunks, accessible only when the owner
+//     is approved (or is the admin themselves).
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function googleVerified() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email_verified == true
+        && request.auth.token.email is string;
+    }
+
+    function isAdmin() {
+      return googleVerified()
+        && exists(/databases/$(database)/documents/config/admin)
+        && request.auth.token.email.lower()
+             == get(/databases/$(database)/documents/config/admin).data.email.lower();
+    }
+
+    function isApproved() {
+      return googleVerified()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    function validProfileFields(data) {
+      return (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() <= 200))
+        && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 2048));
+    }
+
+    // Admin config document — written ONLY via Firebase Console, never by any client.
+    match /config/{doc} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Teacher approval registry
+    match /users/{uid} {
+      // A user may read their own doc; admin may read any user doc.
+      allow get: if (googleVerified() && request.auth.uid == uid) || isAdmin();
+      allow list: if isAdmin();
+
+      // A newly signed-in user may create ONLY their own doc, and ONLY with status == 'pending'.
+      allow create: if googleVerified()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email', 'displayName', 'photoURL', 'status', 'createdAt'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.createdAt == request.time
+        && validProfileFields(request.resource.data);
+
+      // Only the admin may update a user doc (to approve / reject / disable),
+      // OR the user themselves may refresh displayName / photoURL WITHOUT touching status or email.
+      allow update: if (
+          googleVerified()
+          && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL'])
+          && validProfileFields(request.resource.data)
+        ) || (
+          isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reviewedAt', 'reviewedBy'])
+          && request.resource.data.status in ['pending', 'approved', 'rejected', 'disabled']
+          && request.resource.data.reviewedBy == request.auth.token.email
+          && request.resource.data.reviewedAt == request.time
+        );
+
+      allow delete: if isAdmin();
+
+      // Per-teacher backup storage — strictly owner-only AND must be approved (or admin).
+      // Notice: even the admin CANNOT read or write another teacher's backups.
+      match /backups/{backupId} {
+        allow read, write: if (isApproved() || isAdmin()) && request.auth.uid == uid;
+
+        match /{rest=**} {
+          allow read, write: if (isApproved() || isAdmin()) && request.auth.uid == uid;
+        }
+      }
+    }
+
+    // Everything else is denied by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

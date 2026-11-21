@@ -1,9 +1,10 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
+import { validateVercelBuildEnv } from './build/validateVercelBuildEnv';
 
 const pkg = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8')) as {
   version: string;
@@ -23,8 +24,12 @@ function resolveCommit(): string {
   }
 }
 
-export default defineConfig({
-  base: appBase,
+export default defineConfig(({ mode }) => {
+  const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
+  validateVercelBuildEnv(env);
+
+  return {
+    base: appBase,
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __APP_COMMIT__: JSON.stringify(resolveCommit()),
@@ -71,7 +76,11 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,ttf,woff,woff2}'],
-        navigateFallbackDenylist: [/^\/(?:KruDesk\/)?sw\.js$/, /^\/(?:KruDesk\/)?workbox-/],
+        navigateFallbackDenylist: [
+          /^\/__\//,
+          /^\/(?:KruDesk\/)?sw\.js$/,
+          /^\/(?:KruDesk\/)?workbox-/,
+        ],
       },
     }),
   ],
@@ -90,4 +99,5 @@ export default defineConfig({
       },
     },
   },
+  };
 });

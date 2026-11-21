@@ -14,6 +14,9 @@ import { AppleButton } from '../components/common/AppleButton';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { PdfPreviewModal } from '../components/common/PdfPreviewModal';
 import { MOEYS_EMBLEM_DATA_URI } from '../utils/moeysEmblemDataUri';
+import { AuthStatusScreen } from '../features/auth/AuthStatusScreen';
+import { LoginScreen } from '../features/auth/LoginScreen';
+import { useAuthStore } from '../features/auth/useAuthStore';
 
 const DashboardView = lazy(() =>
   import('../features/dashboard/DashboardView').then((m) => ({ default: m.DashboardView }))
@@ -55,6 +58,7 @@ const CardsView = lazy(() =>
 export const App: React.FC = () => {
   const { activeView, toasts, removeToast, theme, hydratePreferences, setIsOnline } =
     useAppStore();
+  const { authReady, authRequired, user, status, isAdmin, initAuth } = useAuthStore();
   const [isReady, setIsReady] = useState(false);
 
   const profileQuery = useLiveQuery(async () => {
@@ -63,6 +67,10 @@ export const App: React.FC = () => {
   }, []);
   const isProfileLoaded = profileQuery?.loaded === true;
   const profile = profileQuery?.profile;
+
+  useEffect(() => {
+    return initAuth();
+  }, [initAuth]);
 
   useEffect(() => {
     hydratePreferences()
@@ -148,9 +156,28 @@ export const App: React.FC = () => {
     </div>
   );
 
+  if (authReady && authRequired) {
+    if (!user) {
+      return (
+        <>
+          <LoginScreen />
+          {toastPortal}
+        </>
+      );
+    }
+    if (!isAdmin && status !== 'approved') {
+      return (
+        <>
+          <AuthStatusScreen status={status ?? 'pending'} />
+          {toastPortal}
+        </>
+      );
+    }
+  }
+
   return (
     <AppInner
-      isReady={isReady && isProfileLoaded}
+      isReady={isReady && isProfileLoaded && authReady}
       profile={profile}
       activeView={activeView}
       toastPortal={toastPortal}
