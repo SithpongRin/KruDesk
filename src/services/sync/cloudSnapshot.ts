@@ -3,8 +3,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
+  writeBatch,
   type Firestore,
 } from 'firebase/firestore';
 import JSZip from 'jszip';
@@ -35,6 +38,9 @@ import {
 
 /** Keep every Firestore backup chunk safely below the 1 MiB document limit (§6 / Step 4). */
 export const MAX_BACKUP_CHUNK_CHARS = 700 * 1024;
+
+/** Maximum number of Cloud snapshots retained per user (§1.7 / Step 6a). */
+export const MAX_CLOUD_SNAPSHOTS = 10;
 
 export type CloudSnapshotSource = 'pre-replace-cloud' | 'pre-replace-device' | 'daily' | 'manual';
 
@@ -368,9 +374,10 @@ export async function saveBackupPayloadToCloudSnapshot(
   firestore: Firestore,
   uid: string,
   payload: KruDeskBackupPayload,
-  source: CloudSnapshotSource = 'manual'
+  source: CloudSnapshotSource = 'manual',
+  options?: { now?: number }
 ): Promise<CloudSnapshotMeta> {
-  const now = Date.now();
+  const now = options?.now ?? Date.now();
   const backupId = `snap_${now}_${Math.random().toString(36).slice(2, 8)}`;
   const json = JSON.stringify(payload);
   const { bytes, compression } = await compressUtf8(json);
@@ -465,4 +472,120 @@ export async function readCloudSnapshotPayload(
 
   const json = await decompressUtf8(bytes, meta.compression === 'zip' ? 'zip' : 'gzip');
   return parseAndValidateBackup(json);
+}
+
+/**
+ * Lists all Cloud snapshot metadata documents for a user, newest first.
+ * Cost: 1 Firestore query (reads only metadata docs, never chunks).
+ */
+export async function listCloudSnapshots(
+  firestore: Firestore,
+  uid: string
+): Promise<CloudSnapshotMeta[]> {
+  const q = query(
+    collection(firestore, 'users', uid, 'backups'),
+    orderBy('createdAt', 'desc')
+  );
+  const snap = await getDocs(q);
+  const validSources: ReadonlySet<string> = new Set<CloudSnapshotSource>([
+    'daily',
+    'manual',
+    'pre-replace-cloud',
+    'pre-replace-device',
+  ]);
+
+  return snap.docs.map((docSnap) => {
+    const d = docSnap.data() as Record<string, unknown>;
+    const rawSource = String(d.source ?? 'manual');
+    const source: CloudSnapshotSource = validSources.has(rawSource)
+      ? (rawSource as CloudSnapshotSource)
+      : 'manual';
+    return {
+      backupId: typeof d.backupId === 'string' && d.backupId ? d.backupId : docSnap.id,
+      createdAt: typeof d.createdAt === 'number' ? d.createdAt : 0,
+      schemaVersion: typeof d.schemaVersion === 'number' ? d.schemaVersion : BACKUP_SCHEMA_VERSION,
+      appCommit: typeof d.appCommit === 'string' ? d.appCommit : 'unknown',
+      sizeBytes: typeof d.sizeBytes === 'number' ? d.sizeBytes : 0,
+      chunkCount: typeof d.chunkCount === 'number' ? d.chunkCount : 0,
+      classCount: typeof d.classCount === 'number' ? d.classCount : 0,
+      studentCount: typeof d.studentCount === 'number' ? d.studentCount : 0,
+      sha256: typeof d.sha256 === 'string' ? d.sha256 : '',
+      compression: d.compression === 'zip' ? 'zip' : 'gzip',
+      source,
+    };
+  });
+}
+
+/**
+ * Deletes a Cloud snapshot's metadata document AND all of its chunk documents.
+ * Uses known chunk IDs (`0..chunkCount-1`) when `chunkCount` is supplied (0 extra reads),
+ * falling back to listing the `chunks` subcollection otherwise.
+ * Metadata is deleted first (or in the first atomic batch) so a partial failure never leaves
+ * a broken snapshot listed.
+ */
+export async function deleteCloudSnapshot(
+  firestore: Firestore,
+  uid: string,
+  backupId: string,
+  chunkCount?: number
+): Promise<{ deletedDocsCount: number }> {
+  const metaRef = doc(firestore, 'users', uid, 'backups', backupId);
+  const refsToDelete = [metaRef];
+
+  if (typeof chunkCount === 'number' && Number.isInteger(chunkCount) && chunkCount >= 0) {
+    for (let i = 0; i < chunkCount; i++) {
+      refsToDelete.push(doc(firestore, 'users', uid, 'backups', backupId, 'chunks', String(i)));
+    }
+  } else {
+    const chunkSnap = await getDocs(
+      collection(firestore, 'users', uid, 'backups', backupId, 'chunks')
+    );
+    for (const chunkDoc of chunkSnap.docs) {
+      refsToDelete.push(chunkDoc.ref);
+    }
+  }
+
+  const MAX_BATCH_OPS = 450;
+  for (let i = 0; i < refsToDelete.length; i += MAX_BATCH_OPS) {
+    const batch = writeBatch(firestore);
+    const slice = refsToDelete.slice(i, i + MAX_BATCH_OPS);
+    for (const ref of slice) {
+      batch.delete(ref);
+    }
+    await batch.commit();
+  }
+
+  return { deletedDocsCount: refsToDelete.length };
+}
+
+/**
+ * Keeps only the newest `maxKeep` Cloud snapshots (default 10) for a user,
+ * deleting older metadata docs AND all of their chunk docs.
+ * Accepts an optional pre-fetched `existing` list to avoid an extra Firestore query.
+ */
+export async function pruneOldCloudSnapshots(
+  firestore: Firestore,
+  uid: string,
+  maxKeep: number = MAX_CLOUD_SNAPSHOTS,
+  existing?: CloudSnapshotMeta[]
+): Promise<{ deletedBackupIds: string[]; deletedDocsCount: number }> {
+  const snapshots = existing ? [...existing] : await listCloudSnapshots(firestore, uid);
+  if (snapshots.length <= maxKeep) {
+    return { deletedBackupIds: [], deletedDocsCount: 0 };
+  }
+
+  // Ensure newest-first order before slicing
+  snapshots.sort((a, b) => b.createdAt - a.createdAt);
+  const toDelete = snapshots.slice(Math.max(0, maxKeep));
+
+  const deletedBackupIds: string[] = [];
+  let deletedDocsCount = 0;
+
+  for (const snap of toDelete) {
+    const res = await deleteCloudSnapshot(firestore, uid, snap.backupId, snap.chunkCount);
+    deletedBackupIds.push(snap.backupId);
+    deletedDocsCount += res.deletedDocsCount;
+  }
+
+  return { deletedBackupIds, deletedDocsCount };
 }

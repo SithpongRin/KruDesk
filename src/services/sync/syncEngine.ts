@@ -24,6 +24,15 @@ import type {
   Student,
 } from '../../types/domain';
 import type { CardTemplate } from '../../types/template';
+import { toLocalDateKey } from '../../lib/khmerDate';
+import { buildBackupPayload, type KruDeskBackupPayload } from '../backup';
+import {
+  listCloudSnapshots,
+  MAX_CLOUD_SNAPSHOTS,
+  pruneOldCloudSnapshots,
+  saveBackupPayloadToCloudSnapshot,
+  type CloudSnapshotMeta,
+} from './cloudSnapshot';
 import { compressPhotoBlobForSync, dataUrlToPhotoBlob } from './photoCompression';
 import { shrinkImagesInSettingValue } from './settingImageCompression';
 import {
@@ -50,6 +59,7 @@ import {
   stripUndefinedDeep,
   SYNC_DEVICE_ID_KEY,
   SYNC_INITIAL_DONE_KEY,
+  SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY,
   SYNC_LAST_PULLED_AT_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
   SYNC_PENDING_PHOTOS_KEY,
@@ -90,6 +100,23 @@ export interface SyncEngineOptions {
   liveUpdates?: boolean;
   /** Fallback pull interval while visible and online (default 5 minutes). */
   fallbackPullIntervalMs?: number;
+  /**
+   * When true, automatically saves one compressed `'daily'` Cloud snapshot on the first
+   * successful sync of each local calendar day (only when online and `syncInitialDone === true`)
+   * and keeps the newest `maxCloudSnapshots` (default 10). Default false (app runtime opts in).
+   */
+  dailySnapshots?: boolean;
+  /** Maximum Cloud snapshots to keep per user when pruning after a daily snapshot (default 10). */
+  maxCloudSnapshots?: number;
+  /** Optional clock provider for deterministic daily-snapshot tests (defaults to `Date.now`). */
+  dailySnapshotNow?: () => number;
+  /** Optional test hook to override saving the daily snapshot payload. */
+  saveDailySnapshot?: (
+    firestore: Firestore,
+    uid: string,
+    payload: KruDeskBackupPayload,
+    now: number
+  ) => Promise<CloudSnapshotMeta>;
   onStatusChange?: (snapshot: SyncStatusSnapshot) => void;
   onError?: (khmerMessage: string) => void;
 }
@@ -974,6 +1001,17 @@ export class SyncEngine {
   private lastFocusPullAt = 0;
   private readonly liveUpdates: boolean;
   private readonly fallbackPullIntervalMs: number;
+  private readonly dailySnapshots: boolean;
+  private readonly maxCloudSnapshots: number;
+  private readonly dailySnapshotNow: () => number;
+  private readonly saveDailySnapshotFn?: (
+    firestore: Firestore,
+    uid: string,
+    payload: KruDeskBackupPayload,
+    now: number
+  ) => Promise<CloudSnapshotMeta>;
+  private stopped = false;
+  private dailySnapshotInFlight: Promise<CloudSnapshotMeta | null> | null = null;
   private markerUnsub: (() => void) | null = null;
   private fallbackTimer: ReturnType<typeof setInterval> | null = null;
   private remotePullTimer: ReturnType<typeof setTimeout> | null = null;
@@ -991,6 +1029,10 @@ export class SyncEngine {
     this.requireInitialDone = options.requireInitialDone ?? true;
     this.liveUpdates = options.liveUpdates ?? false;
     this.fallbackPullIntervalMs = options.fallbackPullIntervalMs ?? 5 * 60_000;
+    this.dailySnapshots = options.dailySnapshots ?? false;
+    this.maxCloudSnapshots = options.maxCloudSnapshots ?? MAX_CLOUD_SNAPSHOTS;
+    this.dailySnapshotNow = options.dailySnapshotNow ?? (() => Date.now());
+    this.saveDailySnapshotFn = options.saveDailySnapshot;
     this.onStatusChange = options.onStatusChange;
     this.onError = options.onError;
   }
@@ -1046,6 +1088,7 @@ export class SyncEngine {
   }
 
   async start(options?: { skipInitialSync?: boolean }): Promise<void> {
+    this.stopped = false;
     await this.localDb.runRemoteTransaction([this.localDb.settings], async () => {
       const saved = await this.localDb.settings.get(SYNC_DEVICE_ID_KEY);
       if (typeof saved?.value === 'string' && saved.value) {
@@ -1080,12 +1123,156 @@ export class SyncEngine {
   }
 
   stop(): void {
+    this.stopped = true;
     this.clearDebounceTimer();
     if (this.unsubOutboxHook) {
       this.unsubOutboxHook();
       this.unsubOutboxHook = null;
     }
     this.stopLiveUpdates();
+  }
+
+  /**
+   * Runs at most one daily Cloud snapshot per local calendar day (`YYYY-MM-DD`, UTC+7 safe)
+   * when online and `syncInitialDone === true`.
+   * - Checks existing Cloud snapshots in ONE list query so a second device on the same day
+   *   does not write a duplicate daily snapshot, and reuses the same list to prune snapshots
+   *   beyond `maxCloudSnapshots` (default 10, deleting both metadata and chunk docs).
+   * - Never throws or fails normal sync; logs errors and marks today so it retries tomorrow.
+   */
+  async runDailySnapshotIfDue(now: number = this.dailySnapshotNow()): Promise<CloudSnapshotMeta | null> {
+    if (this.stopped || this.isOffline() || !this.localDb.isOpen()) {
+      return null;
+    }
+
+    if (this.dailySnapshotInFlight) {
+      return this.dailySnapshotInFlight;
+    }
+
+    const todayKey = toLocalDateKey(new Date(now));
+
+    const recordTodayLocally = async () => {
+      if (this.stopped || !this.localDb.isOpen()) return;
+      await this.localDb.runRemoteTransaction([this.localDb.settings], async () => {
+        await this.localDb.settings.put({
+          key: SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY,
+          value: todayKey,
+        });
+      });
+    };
+
+    const task = (async (): Promise<CloudSnapshotMeta | null> => {
+      try {
+        const [initRow, lastDayRow] = await Promise.all([
+          this.localDb.settings.get(SYNC_INITIAL_DONE_KEY),
+          this.localDb.settings.get(SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY),
+        ]);
+        if (this.stopped || !this.localDb.isOpen() || this.isOffline()) {
+          return null;
+        }
+        if (initRow?.value !== true) {
+          return null;
+        }
+        if (lastDayRow?.value === todayKey) {
+          return null;
+        }
+
+        // 1. One query to see existing snapshots (prevents duplicate daily snapshots across devices
+        //    AND provides the list for pruning without a second query).
+        const existing = await listCloudSnapshots(this.firestore, this.uid);
+        if (this.stopped || !this.localDb.isOpen()) return null;
+
+        const alreadyTakenToday = existing.some(
+          (snap) => snap.source === 'daily' && toLocalDateKey(new Date(snap.createdAt)) === todayKey
+        );
+
+        if (alreadyTakenToday) {
+          if (existing.length > this.maxCloudSnapshots) {
+            try {
+              await pruneOldCloudSnapshots(
+                this.firestore,
+                this.uid,
+                this.maxCloudSnapshots,
+                existing
+              );
+            } catch (pruneErr) {
+              console.warn('[SyncEngine] Failed to prune old cloud snapshots:', pruneErr);
+            }
+          }
+          await recordTodayLocally();
+          return null;
+        }
+
+        // 2. Build local backup payload (excludes internal sync keys) & upload gzipped chunks
+        const payload = await buildBackupPayload(now, this.localDb);
+        if (this.stopped || !this.localDb.isOpen()) return null;
+
+        const savedMeta = this.saveDailySnapshotFn
+          ? await this.saveDailySnapshotFn(this.firestore, this.uid, payload, now)
+          : await saveBackupPayloadToCloudSnapshot(this.firestore, this.uid, payload, 'daily', {
+              now,
+            });
+
+        // 3. Keep only the newest maxCloudSnapshots (default 10), deleting old meta + chunks
+        try {
+          await pruneOldCloudSnapshots(this.firestore, this.uid, this.maxCloudSnapshots, [
+            savedMeta,
+            ...existing,
+          ]);
+        } catch (pruneErr) {
+          console.warn('[SyncEngine] Failed to prune old cloud snapshots:', pruneErr);
+        }
+
+        await recordTodayLocally();
+        return savedMeta;
+      } catch (err) {
+        console.warn(
+          '[SyncEngine] Daily cloud snapshot failed (normal sync unaffected; will try again tomorrow):',
+          err
+        );
+        if (!this.stopped && this.localDb.isOpen() && !this.isOffline()) {
+          try {
+            await recordTodayLocally();
+          } catch {
+            /* ignore local write error on failure */
+          }
+        }
+        return null;
+      }
+    })();
+
+    this.dailySnapshotInFlight = task;
+    try {
+      return await task;
+    } finally {
+      if (this.dailySnapshotInFlight === task) {
+        this.dailySnapshotInFlight = null;
+      }
+    }
+  }
+
+  /**
+   * Fire-and-forget trigger for the background daily snapshot after a successful sync.
+   * Never blocks or rejects normal sync operations.
+   */
+  triggerDailySnapshotIfDue(): void {
+    if (
+      !this.dailySnapshots ||
+      this.stopped ||
+      this.isOffline() ||
+      !this.localDb.isOpen() ||
+      this.dailySnapshotInFlight
+    ) {
+      return;
+    }
+    void this.runDailySnapshotIfDue(this.dailySnapshotNow()).catch(() => {});
+  }
+
+  /** Awaits any currently running background daily snapshot (helper for deterministic tests). */
+  async waitForPendingDailySnapshot(): Promise<void> {
+    if (this.dailySnapshotInFlight) {
+      await this.dailySnapshotInFlight;
+    }
   }
 
   /** True while the change-marker listener is attached (exposed for tests / diagnostics). */
@@ -1340,7 +1527,10 @@ export class SyncEngine {
    * Used after restore ('replace') or «លុបទិន្នន័យទាំងអស់» (`syncToCloud: true`).
    */
   pushFullReplace(options?: PushOutboxOptions): Promise<PushOutboxResult> {
-    return this.runSerialized(() => this._pushFullReplaceInternal(options));
+    return this.runSerialized(() => this._pushFullReplaceInternal(options)).then((res) => {
+      this.triggerDailySnapshotIfDue();
+      return res;
+    });
   }
 
   private async _pushFullReplaceInternal(options?: PushOutboxOptions): Promise<PushOutboxResult> {
@@ -1528,7 +1718,10 @@ export class SyncEngine {
    *   oversized docs are kept in outbox (never dropped) with a Khmer error and do not block other docs.
    */
   pushOutbox(options?: PushOutboxOptions): Promise<PushOutboxResult> {
-    return this.runSerialized(() => this._pushOutboxInternal(options));
+    return this.runSerialized(() => this._pushOutboxInternal(options)).then((res) => {
+      this.triggerDailySnapshotIfDue();
+      return res;
+    });
   }
 
   private async _pushOutboxInternal(options?: PushOutboxOptions): Promise<PushOutboxResult> {
@@ -1743,7 +1936,10 @@ export class SyncEngine {
    * local outbox entries and self-healing any local rows missing from cloud docs without tombstones.
    */
   pullChanges(options?: PullChangesOptions): Promise<PullChangesResult> {
-    return this.runSerialized(() => this._pullChangesInternal(options));
+    return this.runSerialized(() => this._pullChangesInternal(options)).then((res) => {
+      this.triggerDailySnapshotIfDue();
+      return res;
+    });
   }
 
   private async _pullChangesInternal(options?: PullChangesOptions): Promise<PullChangesResult> {
@@ -1872,6 +2068,7 @@ export class SyncEngine {
       }
       const pushRes = await this._pushOutboxInternal();
       const pullRes = await this._pullChangesInternal();
+      this.triggerDailySnapshotIfDue();
       return {
         pushedEntriesCount: pushRes.pushedEntriesCount,
         pulledDocsCount: pullRes.pulledDocsCount,

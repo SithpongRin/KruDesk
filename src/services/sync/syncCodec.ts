@@ -20,6 +20,7 @@ export const SYNC_LAST_PULLED_AT_KEY = 'syncLastPulledAt';
 export const SYNC_PENDING_PHOTOS_KEY = 'syncPendingPhotos';
 export const SYNC_PENDING_FULL_REPLACE_KEY = 'syncPendingFullReplace';
 export const SYNC_INITIAL_DONE_KEY = 'syncInitialDone';
+export const SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY = 'syncLastDailySnapshotDay';
 
 export const INTERNAL_SYNC_SETTING_KEYS = new Set<string>([
   SYNC_DEVICE_ID_KEY,
@@ -27,6 +28,7 @@ export const INTERNAL_SYNC_SETTING_KEYS = new Set<string>([
   SYNC_PENDING_PHOTOS_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
   SYNC_INITIAL_DONE_KEY,
+  SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY,
 ]);
 
 export function isInternalSyncSettingKey(key: string): boolean {

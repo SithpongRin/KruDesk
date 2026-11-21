@@ -12,6 +12,7 @@ import {
   isInternalSyncSettingKey,
   SYNC_DEVICE_ID_KEY,
   SYNC_INITIAL_DONE_KEY,
+  SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY,
   SYNC_LAST_PULLED_AT_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
 } from './sync/syncCodec';
@@ -379,10 +380,11 @@ export async function restoreBackupPayload(
       const studentIdMap = new Map<number, number>();
 
       if (mode === 'replace') {
-        const [deviceIdRow, lastPulledRow, initialDoneRow] = await Promise.all([
+        const [deviceIdRow, lastPulledRow, initialDoneRow, lastDailySnapshotRow] = await Promise.all([
           targetDb.settings.get(SYNC_DEVICE_ID_KEY),
           targetDb.settings.get(SYNC_LAST_PULLED_AT_KEY),
           targetDb.settings.get(SYNC_INITIAL_DONE_KEY),
+          targetDb.settings.get(SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY),
         ]);
 
         await Promise.all([
@@ -481,6 +483,9 @@ export async function restoreBackupPayload(
         }
         if (initialDoneRow) {
           await targetDb.settings.put(initialDoneRow);
+        }
+        if (lastDailySnapshotRow) {
+          await targetDb.settings.put(lastDailySnapshotRow);
         }
         if (targetDb.outboxEnabled) {
           await targetDb.settings.put({

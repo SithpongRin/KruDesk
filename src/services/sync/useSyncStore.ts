@@ -185,6 +185,7 @@ async function attemptFirstSignIn(
       if (!isSessionAlive()) return;
       useSyncStore.setState({ firstSignInPhase: 'done', firstSignInSlow: false });
       await engine.start({ skipInitialSync: true });
+      engine.triggerDailySnapshotIfDue();
       return;
     }
 
@@ -304,6 +305,8 @@ export async function startSyncForUser(uid: string): Promise<void> {
       requireInitialDone: true,
       // One listener on users/{uid}/sync/marker + 5-min fallback, started only after first sign-in
       liveUpdates: true,
+      // Automatic once-per-day compressed Cloud snapshot (keeps newest 10; §1.7)
+      dailySnapshots: true,
       onStatusChange: (snapshot) => {
         if (mySession !== sessionToken) return;
         useSyncStore.setState((prev) => ({

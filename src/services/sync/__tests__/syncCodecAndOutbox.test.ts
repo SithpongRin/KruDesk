@@ -9,9 +9,11 @@ import {
   decodeSafeKey,
   encodeSafeKey,
   getDocApplyPriority,
+  isInternalSyncSettingKey,
   isSyncedSettingKey,
   makeTombstone,
   MAX_SYNC_DOC_BYTES,
+  SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY,
   SYNC_PENDING_FULL_REPLACE_KEY,
   SYNC_PENDING_PHOTOS_KEY,
 } from '../syncCodec';
@@ -358,5 +360,25 @@ describe('SyncCodec & atomic Dexie DBCore Outbox middleware (§00 fixes 1–6)',
   it('rawBlobToDataUrl rejects cleanly on corrupted/non-Blob objects (fix A)', async () => {
     await expect(rawBlobToDataUrl({} as unknown as Blob)).rejects.toThrow();
     await expect(rawBlobToDataUrl(null as unknown as Blob)).rejects.toThrow();
+  });
+
+  it('keeps syncLastDailySnapshotDay strictly local (not synced, not in backups, preserved on replace restore)', async () => {
+    expect(isInternalSyncSettingKey(SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY)).toBe(true);
+    expect(isSyncedSettingKey(SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY)).toBe(false);
+
+    await testDb.settings.put({
+      key: SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY,
+      value: '2026-11-21',
+    });
+    expect(await testDb.outbox.count()).toBe(0);
+
+    const payload = await buildBackupPayload(1732176000000, testDb);
+    expect(
+      payload.data.settings.some((s) => s.key === SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY)
+    ).toBe(false);
+
+    await restoreBackupPayload(payload, 'replace', testDb);
+    const preserved = await testDb.settings.get(SYNC_LAST_DAILY_SNAPSHOT_DAY_KEY);
+    expect(preserved?.value).toBe('2026-11-21');
   });
 });
