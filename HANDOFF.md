@@ -67,6 +67,11 @@ tracked file.
   focus/visibility/`pageshow` pull throttled 5 s; 5-minute fallback pull while visible. Cost: 1 read per remote
   change + 1 write per push. New rule `match /sync/{docId}` (owner + approved). Tests:
   `tests/liveSync.emulator.test.ts` (5). Verified on the real app with two emulator "devices" (2.6 s both ways).
+- **Stamp / signature / border images (Claude, 2026-11-21):** the teacher saw no stamp or teacher signature on the
+  phone — a 900 px seal PNG is often > 900 KB, so `settings__directorStamp` / `teacherSignature` were skipped as
+  oversize. Now `settingImageCompression.ts` re-encodes only oversized setting images for the Cloud copy (WebP with
+  alpha, or quantised PNG on Safari; then scale down ×0.8 per step) until the doc is ≤ 760 KB. Every device,
+  including the uploader, ends up with that same copy. Stuck outbox entries go up on the next push.
 
 **Known items & decisions**
 - Teacher's decision for §1.6 (both device and cloud have data): **Replace, not merge** — both device and

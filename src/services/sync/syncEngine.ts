@@ -25,6 +25,7 @@ import type {
 } from '../../types/domain';
 import type { CardTemplate } from '../../types/template';
 import { compressPhotoBlobForSync, dataUrlToPhotoBlob } from './photoCompression';
+import { shrinkImagesInSettingValue } from './settingImageCompression';
 import {
   buildAttendanceDocEntry,
   buildAttendanceSessionDocEntry,
@@ -892,7 +893,7 @@ async function buildFullLocalDocMap(
   for (const s of settings) {
     if (!isSyncedSettingKey(s.key)) continue;
     const entry = buildSettingDocEntry(s);
-    putRow(entry.docId, entry.rowKey, entry.value);
+    putRow(entry.docId, entry.rowKey, await shrinkImagesInSettingValue(entry.value));
   }
 
   for (const cls of classes) {
@@ -1266,9 +1267,14 @@ export class SyncEngine {
       }
     }
 
+    // Stamp / signature / border images can exceed the Cloud doc limit: send a smaller copy
+    // (the original stays on this device). See settingImageCompression.ts.
+    const value = entry.docId.startsWith('settings__')
+      ? await shrinkImagesInSettingValue(entry.value)
+      : entry.value;
     return {
       entry,
-      firestoreValue: stripUndefinedDeep(entry.value),
+      firestoreValue: stripUndefinedDeep(value),
     };
   }
 
