@@ -38,7 +38,12 @@ import { StudentFormModal } from './StudentFormModal';
 import { ExcelImportModal } from './ExcelImportModal';
 import { downloadStudentImportTemplate } from '../../services/excelImport';
 import { exportStudentListExcel } from '../../services/excelExport';
-import { ensurePrintFontsReady, exportPrintNodesToPdf, nextPaint } from '../../services/pdfExport';
+import {
+  ensurePrintFontsReady,
+  exportPrintNodesToPdf,
+  nextPaint,
+  printWithPageSetup,
+} from '../../services/pdfExport';
 import { StudentListSheet } from '../../print/StudentListSheet';
 import { toArabicNumerals, toKhmerNumerals } from '../../utils/khmerNumerals';
 
@@ -284,7 +289,7 @@ export const StudentsView: React.FC<StudentsViewProps> = ({ profile }) => {
 
       if (format === 'print') {
         await ensurePrintFontsReady();
-        window.print();
+        printWithPageSetup('A4', 'landscape');
         return;
       }
 

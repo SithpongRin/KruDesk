@@ -85,6 +85,7 @@ import {
   ensurePrintFontsReady,
   exportPrintNodesToPdf,
   nextPaint,
+  printWithPageSetup,
   type PageOrientation,
   type PaperSize,
 } from '../../services/pdfExport';
@@ -1158,7 +1159,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
 
       if (format === 'print') {
         await ensurePrintFontsReady();
-        window.print();
+        printWithPageSetup(paperSize, 'landscape');
         return;
       }
 
@@ -1255,7 +1256,7 @@ export const ScoresView: React.FC<ScoresViewProps> = ({ profile }) => {
 
     if (format === 'print') {
       await ensurePrintFontsReady();
-      window.print();
+      printWithPageSetup('A4', orientation);
       return;
     }
 

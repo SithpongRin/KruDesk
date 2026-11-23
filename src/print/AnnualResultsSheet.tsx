@@ -11,6 +11,7 @@ import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
 import { RotatedHeaderText } from './RotatedHeaderText';
+import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
 
 interface AnnualResultsSheetProps {
   cls: SchoolClass;
@@ -33,24 +34,19 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
     useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
   const fmtHdr = (val: number | string) => toKhmerNumerals(val);
 
-  const pages: Array<{ items: AnnualResultRow[]; startIndex: number }> = [];
-  let cursor = 0;
-  const rows = summary.rows;
-  while (cursor < rows.length) {
-    const remaining = rows.length - cursor;
-    if (remaining <= 24) {
-      pages.push({ items: rows.slice(cursor), startIndex: cursor });
-      cursor = rows.length;
-    } else if (remaining <= 34) {
-      const take = remaining - 10;
-      pages.push({ items: rows.slice(cursor, cursor + take), startIndex: cursor });
-      cursor += take;
-    } else {
-      pages.push({ items: rows.slice(cursor, cursor + 34), startIndex: cursor });
-      cursor += 34;
-    }
-  }
-  if (pages.length === 0) pages.push({ items: [], startIndex: 0 });
+  const pages = paginateByRowHeight<AnnualResultRow>({
+    items: summary.rows,
+    maxRowsPerPage: 34,
+    nonLastPageBudgetMm: 240,
+    lastPageBudgetMm: 192,
+    firstPageExtraOverheadMm: 40,
+    getRowHeightMm: (r) => {
+      const nameLines = estimateWrappedLines(r.student.nameKm, 44, 6.0, 2);
+      const noteLines = estimateWrappedLines(r.note, 32, 5.5, 2);
+      const lines = Math.max(nameLines, noteLines);
+      return lines > 1 ? Math.max(6.0, lines * 3.8 + 1.2) : 6.0;
+    },
+  });
 
   return (
     <div className="bg-white text-black font-battambang">
@@ -90,47 +86,62 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
                 </>
               )}
 
-              <table className="w-full border-collapse text-[8.5pt]">
+              <table className="w-full table-fixed border-collapse text-[8.5pt]">
+                <colgroup>
+                  <col style={{ width: '8mm' }} />
+                  <col style={{ width: '46mm' }} />
+                  <col style={{ width: '8mm' }} />
+                  <col style={{ width: '12mm' }} />
+                  <col style={{ width: '12mm' }} />
+                  <col style={{ width: '12mm' }} />
+                  <col style={{ width: '11mm' }} />
+                  <col style={{ width: '9mm' }} />
+                  <col style={{ width: '10mm' }} />
+                  <col style={{ width: '8.5mm' }} />
+                  <col style={{ width: '9.5mm' }} />
+                  <col style={{ width: '9.5mm' }} />
+                  <col style={{ width: '34.5mm' }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-100">
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-7">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center">
                       ល.រ
                     </th>
                     <th rowSpan={2} className="border border-black px-1.5 py-1 text-left">
                       គោត្តនាម-នាម
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-7">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center">
                       ភេទ
                     </th>
-                    <th rowSpan={2} className="border border-black p-0 align-middle w-[11mm]">
-                      <RotatedHeaderText text="ប្រចាំឆមាសទី ១" heightMm={19} widthMm={10} fontSizePt={7.5} />
+                    <th rowSpan={2} className="border border-black p-0 align-middle">
+                      <RotatedHeaderText text="ប្រចាំឆមាសទី ១" heightMm={21} widthMm={11} fontSizePt={7.5} />
                     </th>
-                    <th rowSpan={2} className="border border-black p-0 align-middle w-[11mm]">
-                      <RotatedHeaderText text="ប្រចាំឆមាសទី ២" heightMm={19} widthMm={10} fontSizePt={7.5} />
+                    <th rowSpan={2} className="border border-black p-0 align-middle">
+                      <RotatedHeaderText text="ប្រចាំឆមាសទី ២" heightMm={21} widthMm={11} fontSizePt={7.5} />
                     </th>
-                    <th rowSpan={2} className="border border-black p-0 align-middle w-[11mm]">
-                      <RotatedHeaderText text="មធ្យម" heightMm={19} widthMm={10} fontSizePt={7.5} />
+                    <th rowSpan={2} className="border border-black p-0 align-middle">
+                      <RotatedHeaderText text="មធ្យម" heightMm={21} widthMm={11} fontSizePt={7.5} />
                     </th>
-                    <th rowSpan={2} className="border border-black p-0 align-middle w-[10mm]">
-                      <RotatedHeaderText text="ចំណាត់ថ្នាក់" heightMm={19} widthMm={9} fontSizePt={7.5} />
+                    <th rowSpan={2} className="border border-black p-0 align-middle">
+                      <RotatedHeaderText text="ចំណាត់ថ្នាក់" heightMm={21} widthMm={10} fontSizePt={7.5} />
                     </th>
-                    <th rowSpan={2} className="border border-black p-0 align-middle w-[8mm]">
-                      <RotatedHeaderText text="និទ្ទេស" heightMm={19} widthMm={7.5} fontSizePt={7.5} />
+                    <th rowSpan={2} className="border border-black p-0 align-middle">
+                      <RotatedHeaderText text="និទ្ទេស" heightMm={21} widthMm={8} fontSizePt={7.5} />
                     </th>
-                    <th rowSpan={2} className="border border-black p-0 align-middle w-[9mm]">
-                      <RotatedHeaderText text="លទ្ធផល" heightMm={19} widthMm={8} fontSizePt={7.5} />
+                    <th rowSpan={2} className="border border-black p-0 align-middle">
+                      <RotatedHeaderText text="លទ្ធផល" heightMm={21} widthMm={9} fontSizePt={7.5} />
                     </th>
                     <th colSpan={3} className="border border-black px-1 py-0.5 text-center">
                       ចំនួនអវត្តមាន
                     </th>
-                    <th rowSpan={2} className="border border-black p-0 align-middle w-[15mm]">
-                      <RotatedHeaderText text="ផ្សេងៗ" heightMm={19} widthMm={14} fontSizePt={7.5} />
+                    <th rowSpan={2} className="border border-black p-0 align-middle">
+                      <RotatedHeaderText text="ផ្សេងៗ" heightMm={21} widthMm={14} fontSizePt={7.5} />
                     </th>
                   </tr>
                   <tr className="bg-slate-100 text-[7.8pt]">
-                    <th className="border border-black px-1 py-0.5 text-center w-6">ច្ប</th>
-                    <th className="border border-black px-1 py-0.5 text-center w-7">អ.ច្ប</th>
-                    <th className="border border-black px-1 py-0.5 text-center w-7">សរុប</th>
+                    <th className="border border-black px-0.5 py-0.5 text-center">ច្ប</th>
+                    <th className="border border-black px-0.5 py-0.5 text-center">អ.ច្ប</th>
+                    <th className="border border-black px-0.5 py-0.5 text-center">សរុប</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -139,8 +150,8 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
                       <td className="border border-black px-1 py-0.5 text-center">
                         {fmt(page.startIndex + idx + 1)}
                       </td>
-                      <td className="border border-black px-1.5 py-0.5 font-medium truncate max-w-[40mm]">
-                        {r.student.nameKm}
+                      <td className="border border-black px-1.5 py-0.5 font-medium">
+                        <FitText text={r.student.nameKm} basePt={8.5} minPt={6.0} lineHeight={1.25} />
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center">
                         {r.student.gender === 'ប្រុស' ? 'ប' : 'ស'}
@@ -184,8 +195,8 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
                       <td className="border border-black px-1 py-0.5 text-center font-medium">
                         {fmt(r.attendance.total)}
                       </td>
-                      <td className="border border-black px-1 py-0.5 text-[7pt] truncate max-w-[16mm]">
-                        {r.note}
+                      <td className="border border-black px-1 py-0.5 text-[7.5pt]">
+                        <FitText text={r.note} basePt={7.5} minPt={5.5} lineHeight={1.25} />
                       </td>
                     </tr>
                   ))}

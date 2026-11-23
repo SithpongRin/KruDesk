@@ -10,6 +10,7 @@ import {
 import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { DocumentSignature } from './DocumentSignature';
+import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
 
 export interface AttendanceMonthRenderData {
   month: string; // YYYY-MM
@@ -50,16 +51,25 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
   const maleCount = activeStudents.filter((s) => s.gender === 'ប្រុស').length;
   const femaleCount = activeStudents.filter((s) => s.gender === 'ស្រី').length;
 
-  const studentPages: Array<{ items: Student[]; startIndex: number }> = [];
-  for (let i = 0; i < activeStudents.length; i += MAX_ROWS_PER_PAGE) {
-    studentPages.push({
-      items: activeStudents.slice(i, i + MAX_ROWS_PER_PAGE),
-      startIndex: i,
-    });
-  }
-  if (studentPages.length === 0) {
-    studentPages.push({ items: [], startIndex: 0 });
-  }
+  const hasLongStudentId = activeStudents.some((s) => (s.studentId || '').length > 8);
+  const idColWidthMm = hasLongStudentId ? 21.5 : 14.5;
+  const nameColWidthMm = hasLongStudentId ? 41 : 44;
+  const noteColWidthMm = hasLongStudentId ? 12.5 : 16.5;
+
+  const baseRowMm = activeStudents.length > 39 ? 3.2 : activeStudents.length > 30 ? 3.6 : 4.1;
+  const studentPages = paginateByRowHeight({
+    items: activeStudents,
+    maxRowsPerPage: MAX_ROWS_PER_PAGE,
+    nonLastPageBudgetMm: 176,
+    lastPageBudgetMm: 162,
+    getRowHeightMm: (s) => {
+      const nameLines = estimateWrappedLines(s.nameKm, nameColWidthMm - 1.5, 6.0, 2);
+      const idLines = estimateWrappedLines(fmt(s.studentId), idColWidthMm - 1, 6.0, 2);
+      const lines = Math.max(nameLines, idLines);
+      const singleH = activeStudents.length > 39 ? 3.35 : Math.max(baseRowMm, 3.6);
+      return lines > 1 ? lines * 3.35 : singleH;
+    },
+  });
 
   return (
     <div className="bg-white text-black font-battambang">
@@ -76,11 +86,6 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
         const isShadedDay = (d: (typeof dayInfos)[number]) =>
           d.isNonSchoolDay || (!d.isFuture && !d.isTaken);
 
-        const hasLongStudentId = activeStudents.some((s) => (s.studentId || '').length > 8);
-        const idColWidthMm = hasLongStudentId ? 21.5 : 14.5;
-        const nameColWidthMm = hasLongStudentId ? 41 : 44;
-        const noteColWidthMm = hasLongStudentId ? 12.5 : 16.5;
-
         return studentPages.map((pg, pageIdx) => {
           const isLastPageOfMonth = pageIdx === studentPages.length - 1;
           const isVeryLastPage =
@@ -89,13 +94,13 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
 
           // Adaptive sizing for A4 landscape (205mm usable height, 285mm usable width)
           // accounting for Khmer Battambang glyph height + daily total row + signature.
-          const rowHeightMm = pageRowCount > 39 ? 2.8 : pageRowCount > 30 ? 3.15 : 3.9;
-          const fontSizePt = pageRowCount > 39 ? 7.4 : pageRowCount > 30 ? 8.0 : 8.8;
-          const baseIdFontPt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 7.5 : 8.2;
-          const idFontPt = hasLongStudentId ? Math.min(baseIdFontPt, 6.8) : baseIdFontPt;
-          const dayFontPt = pageRowCount > 39 ? 6.8 : pageRowCount > 30 ? 7.2 : 7.8;
-          const signFontPt = pageRowCount > 39 ? 9.2 : pageRowCount > 30 ? 9.8 : 10.5;
-          const signGapMm = pageRowCount > 39 ? 8 : pageRowCount > 30 ? 10 : 14;
+          const rowHeightMm = pageRowCount > 39 ? 3.2 : pageRowCount > 30 ? 3.6 : 4.1;
+          const fontSizePt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 8.0 : 8.8;
+          const baseIdFontPt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 7.6 : 8.2;
+          const idFontPt = baseIdFontPt;
+          const dayFontPt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 7.4 : 7.8;
+          const signFontPt = pageRowCount > 39 ? 8.5 : pageRowCount > 30 ? 9.5 : 10.5;
+          const signGapMm = pageRowCount > 39 ? 5 : pageRowCount > 30 ? 8 : 14;
           const signMarginTopMm = pageRowCount > 39 ? 0.5 : pageRowCount > 30 ? 1.5 : 3;
 
           return (
@@ -170,7 +175,11 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                 {/* Attendance Table */}
                 <table
                   className="w-full border-collapse"
-                  style={{ fontSize: `${fontSizePt}pt`, tableLayout: 'fixed', lineHeight: 0.96 }}
+                  style={{
+                    fontSize: `${fontSizePt}pt`,
+                    tableLayout: 'fixed',
+                    lineHeight: pageRowCount > 39 ? 1.1 : 1.15,
+                  }}
                 >
                   <thead>
                     <tr className="bg-slate-100">
@@ -248,21 +257,21 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                         <tr key={s.id ?? s.studentId} style={{ height: `${rowHeightMm}mm` }}>
                           <td
                             className="border border-black text-center"
-                            style={{ padding: 0, lineHeight: 0.96, height: `${rowHeightMm}mm` }}
+                            style={{ padding: 0, lineHeight: 1.15, height: `${rowHeightMm}mm` }}
                           >
                             {fmt(rowOrder)}
                           </td>
                           <td
-                            className="border border-black px-0.5 text-center font-mono truncate"
-                            style={{ fontSize: `${idFontPt}pt`, padding: '0 2px', lineHeight: 0.96 }}
+                            className="border border-black px-0.5 text-center font-mono"
+                            style={{ fontSize: `${idFontPt}pt`, padding: '0 2px', lineHeight: 1.25 }}
                           >
-                            {fmt(s.studentId)}
+                            <FitText text={fmt(s.studentId)} basePt={idFontPt} minPt={6.0} lineHeight={1.25} />
                           </td>
                           <td
-                            className="border border-black px-1.5 truncate font-medium"
-                            style={{ padding: '0 4px', lineHeight: 1.05 }}
+                            className="border border-black px-1.5 font-medium"
+                            style={{ padding: '0 4px', lineHeight: 1.25 }}
                           >
-                            {s.nameKm}
+                            <FitText text={s.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={1.25} />
                           </td>
                           {dayInfos.map((d) => {
                             const code =
@@ -278,13 +287,14 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                             return (
                               <td
                                 key={d.day}
-                                className={`border border-black text-center leading-none ${
+                                className={`border border-black text-center ${
                                   code ? 'font-bold' : ''
                                 }`}
                                 style={{
                                   backgroundColor: isShadedDay(d) ? '#e2e8f0' : undefined,
                                   color: codeColor,
-                                  fontSize: `${Math.max(6.4, dayFontPt - 0.5)}pt`,
+                                  fontSize: '7pt',
+                                  lineHeight: 1.15,
                                   padding: 0,
                                 }}
                               >
@@ -292,16 +302,16 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                               </td>
                             );
                           })}
-                          <td className="border border-black text-center leading-none">
+                          <td className="border border-black text-center">
                             {summary.excused > 0 ? fmt(summary.excused) : ''}
                           </td>
                           <td
-                            className="border border-black text-center leading-none"
+                            className="border border-black text-center"
                             style={{ color: summary.unexcused > 0 ? '#b91c1c' : undefined }}
                           >
                             {summary.unexcused > 0 ? fmt(summary.unexcused) : ''}
                           </td>
-                          <td className="border border-black text-center font-bold leading-none">
+                          <td className="border border-black text-center font-bold">
                             {summary.total > 0 ? fmt(summary.total) : ''}
                           </td>
                           <td className="border border-black"></td>
@@ -314,18 +324,19 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                       <tr className="bg-slate-50 font-bold" style={{ height: `${rowHeightMm}mm` }}>
                         <td
                           colSpan={3}
-                          className="border border-black px-1.5 text-center leading-none"
-                          style={{ fontSize: `${Math.max(7.2, fontSizePt - 0.4)}pt` }}
+                          className="border border-black px-1.5 text-center"
+                          style={{ fontSize: `${Math.max(7.5, fontSizePt)}pt`, lineHeight: 1.2 }}
                         >
                           សរុបអវត្តមានប្រចាំថ្ងៃ
                         </td>
                         {dayInfos.map((d, di) => (
                           <td
                             key={d.day}
-                            className="border border-black text-center leading-none"
+                            className="border border-black text-center"
                             style={{
                               backgroundColor: isShadedDay(d) ? '#e2e8f0' : undefined,
                               fontSize: `${dayFontPt}pt`,
+                              lineHeight: 1.15,
                               padding: 0,
                             }}
                           >
@@ -334,7 +345,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                               : ''}
                           </td>
                         ))}
-                        <td className="border border-black text-center leading-none">
+                        <td className="border border-black text-center">
                           {fmt(
                             activeStudents.reduce(
                               (acc, st) =>
@@ -347,7 +358,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                             )
                           )}
                         </td>
-                        <td className="border border-black text-center leading-none">
+                        <td className="border border-black text-center">
                           {fmt(
                             activeStudents.reduce(
                               (acc, st) =>
@@ -360,7 +371,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                             )
                           )}
                         </td>
-                        <td className="border border-black text-center leading-none">
+                        <td className="border border-black text-center">
                           {fmt(
                             activeStudents.reduce(
                               (acc, st) =>

@@ -112,7 +112,8 @@ const SealSpace: React.FC<{
     ? Math.min(44, Math.max(34, gapMm + 2 * lineMm + 12))
     : Math.min(36, Math.max(30, gapMm + 2 * lineMm + 6));
   const stampMaxWidthMm = combined ? 85 : stampHeightMm * 1.15;
-  const stampTopMm = -(2 * lineMm) - 1;
+  // Keep the stamp's bottom edge within the signature block (gapMm + name line) so it never hangs past the page bottom.
+  const stampTopMm = Math.min(-(2 * lineMm) - 1, gapMm + lineMm - stampHeightMm);
   return (
     <div className="relative" style={{ height: `${gapMm}mm` }}>
       {stamp && (
@@ -196,8 +197,8 @@ export const DocumentSignature: React.FC<DocumentSignatureProps> = ({
 
   const dateLines = (
     <>
-      <div className="whitespace-nowrap">{lunarLine}</div>
-      <div className="whitespace-nowrap">{gregorianLine}</div>
+      <div>{lunarLine}</div>
+      <div>{gregorianLine}</div>
     </>
   );
 

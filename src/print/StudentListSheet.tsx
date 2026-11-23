@@ -2,6 +2,7 @@ import React from 'react';
 import type { Profile, SchoolClass, Student } from '../types/domain';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { DocumentSignature } from './DocumentSignature';
+import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
 
 interface StudentListSheetProps {
   cls: SchoolClass;
@@ -9,8 +10,6 @@ interface StudentListSheetProps {
   profile: Profile;
   useKhmerDigits?: boolean;
 }
-
-const ROWS_PER_PAGE = 22;
 
 export const StudentListSheet: React.FC<StudentListSheetProps> = ({
   cls,
@@ -24,28 +23,27 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
   const maleCount = sorted.filter((s) => s.gender === 'ប្រុស').length;
   const femaleCount = sorted.filter((s) => s.gender === 'ស្រី').length;
 
-  // Allow up to 24 rows on non-last pages (no signature block) and up to 20 rows on the last page (with 18mm signature block)
-  const pages: Student[][] = [];
-  let cursor = 0;
-  while (cursor < sorted.length) {
-    const remaining = sorted.length - cursor;
-    if (remaining <= 20) {
-      pages.push(sorted.slice(cursor));
-      cursor = sorted.length;
-    } else if (remaining <= 24) {
-      const take = remaining - 4;
-      pages.push(sorted.slice(cursor, cursor + take));
-      cursor += take;
-    } else {
-      pages.push(sorted.slice(cursor, cursor + 24));
-      cursor += 24;
-    }
-  }
-  if (pages.length === 0) pages.push([]);
+  const pages = paginateByRowHeight<Student>({
+    items: sorted,
+    maxRowsPerPage: 24,
+    nonLastPageBudgetMm: 164,
+    lastPageBudgetMm: 134,
+    getRowHeightMm: (s) => {
+      const addrLines = estimateWrappedLines(s.address, 54, 8.2, 4);
+      const nameLines = estimateWrappedLines(s.nameKm, 34, 6.5, 2);
+      const parentLines = Math.max(
+        estimateWrappedLines(s.fatherName, 29, 6.5, 2),
+        estimateWrappedLines(s.motherName, 29, 6.5, 2)
+      );
+      const lines = Math.max(addrLines, nameLines, parentLines);
+      return lines <= 1 ? 5.6 : lines * 4.2 + 1.2;
+    },
+  });
 
   return (
     <div className="bg-white text-black font-battambang">
-      {pages.map((pageStudents, pageIdx) => {
+      {pages.map((page, pageIdx) => {
+        const pageStudents = page.items;
         const isLastPage = pageIdx === pages.length - 1;
         return (
           <div
@@ -54,7 +52,7 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
             style={{
               width: '297mm',
               height: '210mm',
-              padding: '8mm 10mm',
+              padding: '7mm 10mm',
               boxSizing: 'border-box',
               backgroundColor: '#ffffff',
               color: '#000000',
@@ -115,70 +113,85 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
               </div>
 
               {/* Students Table */}
-              <table className="w-full border-collapse text-[8.8pt]">
+              <table className="w-full table-fixed border-collapse text-[8.8pt]">
+                <colgroup>
+                  <col style={{ width: '9mm' }} />
+                  <col style={{ width: '23mm' }} />
+                  <col style={{ width: '36mm' }} />
+                  <col style={{ width: '35mm' }} />
+                  <col style={{ width: '11mm' }} />
+                  <col style={{ width: '21mm' }} />
+                  <col style={{ width: '31mm' }} />
+                  <col style={{ width: '31mm' }} />
+                  <col style={{ width: '23mm' }} />
+                  <col style={{ width: '57mm' }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-100">
-                    <th className="border border-black px-1.5 py-1 text-center w-9 whitespace-nowrap">
+                    <th className="border border-black px-1 py-1 text-center whitespace-nowrap">
                       ល.រ
                     </th>
-                    <th className="border border-black px-2 py-1 text-center whitespace-nowrap">
+                    <th className="border border-black px-1 py-1 text-center whitespace-nowrap">
                       អត្តលេខ
                     </th>
-                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                    <th className="border border-black px-1.5 py-1 text-left">
                       គោត្តនាម និងនាម
                     </th>
-                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                    <th className="border border-black px-1.5 py-1 text-left">
                       ឈ្មោះឡាតាំង
                     </th>
-                    <th className="border border-black px-1.5 py-1 text-center w-12 whitespace-nowrap">
+                    <th className="border border-black px-1 py-1 text-center whitespace-nowrap">
                       ភេទ
                     </th>
-                    <th className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                    <th className="border border-black px-1 py-1 text-center">
                       ថ្ងៃខែឆ្នាំកំណើត
                     </th>
-                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                    <th className="border border-black px-1.5 py-1 text-left">
                       ឪពុកឈ្មោះ
                     </th>
-                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                    <th className="border border-black px-1.5 py-1 text-left">
                       ម្ដាយឈ្មោះ
                     </th>
-                    <th className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                    <th className="border border-black px-1 py-1 text-center whitespace-nowrap">
                       លេខទូរស័ព្ទ
                     </th>
-                    <th className="border border-black px-2 py-1 text-left">ទីលំនៅបច្ចុប្បន្ន</th>
+                    <th className="border border-black px-1.5 py-1 text-left">ទីលំនៅបច្ចុប្បន្ន</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageStudents.map((s) => (
                     <tr key={s.id ?? s.studentId}>
-                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                      <td className="border border-black px-1 py-0.5 text-center whitespace-nowrap">
                         {fmt(s.order)}
                       </td>
-                      <td className="border border-black px-2 py-1 text-center font-mono text-[8.2pt] whitespace-nowrap">
+                      <td className="border border-black px-1 py-0.5 text-center font-mono text-[8.2pt] whitespace-nowrap">
                         {fmt(s.studentId)}
                       </td>
-                      <td className="border border-black px-2 py-1 font-semibold whitespace-nowrap">
-                        {s.nameKm}
+                      <td className="border border-black px-1.5 py-0.5 font-semibold">
+                        <FitText text={s.nameKm} basePt={8.8} minPt={6.5} lineHeight={1.25} />
                       </td>
-                      <td className="border border-black px-2 py-1 text-[8.2pt] whitespace-nowrap">
-                        {s.nameEn || ''}
+                      <td
+                        className="border border-black px-1.5 py-0.5 text-[8.2pt]"
+                        style={{ fontFamily: "'Kantumruy Pro', Arial, sans-serif" }}
+                      >
+                        <FitText text={s.nameEn || ''} basePt={8.2} minPt={6.5} lineHeight={1.2} />
                       </td>
-                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                      <td className="border border-black px-1 py-0.5 text-center whitespace-nowrap">
                         {s.gender}
                       </td>
-                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                      <td className="border border-black px-1 py-0.5 text-center whitespace-nowrap">
                         {fmt(s.dateOfBirth)}
                       </td>
-                      <td className="border border-black px-2 py-1 whitespace-nowrap">
-                        {s.fatherName || ''}
+                      <td className="border border-black px-1.5 py-0.5">
+                        <FitText text={s.fatherName || ''} basePt={8.5} minPt={6.5} lineHeight={1.25} />
                       </td>
-                      <td className="border border-black px-2 py-1 whitespace-nowrap">
-                        {s.motherName || ''}
+                      <td className="border border-black px-1.5 py-0.5">
+                        <FitText text={s.motherName || ''} basePt={8.5} minPt={6.5} lineHeight={1.25} />
                       </td>
-                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                      <td className="border border-black px-1 py-0.5 text-center whitespace-nowrap">
                         {s.phone || ''}
                       </td>
-                      <td className="border border-black px-2 py-1 text-[8.2pt]">
+                      <td className="border border-black px-1.5 py-0.5 text-[8.2pt] leading-snug">
                         {s.address || ''}
                       </td>
                     </tr>
@@ -189,11 +202,11 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
 
             {/* Footer: Signature block ONLY on the LAST page, right below the table */}
             {isLastPage ? (
-              <div style={{ marginTop: '4mm' }}>
+              <div style={{ marginTop: '3mm' }}>
                 <DocumentSignature
                   profile={profile}
                   fontSizePt={10}
-                  gapMm={15}
+                  gapMm={13}
                   middle={
                     <div className="text-[8.5pt] text-slate-500">
                       ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}

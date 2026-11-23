@@ -52,7 +52,7 @@ import {
   type AttendanceMonthRenderData,
 } from '../../print/AttendanceSheet';
 import { exportAttendanceExcel } from '../../services/excelExport';
-import { ensurePrintFontsReady, exportPrintNodesToPdf, nextPaint } from '../../services/pdfExport';
+import { ensurePrintFontsReady, exportPrintNodesToPdf, nextPaint, printWithPageSetup } from '../../services/pdfExport';
 
 interface AttendanceViewProps {
   profile: Profile;
@@ -679,7 +679,7 @@ export const AttendanceView: React.FC<AttendanceViewProps> = ({ profile }) => {
 
       if (format === 'print') {
         await ensurePrintFontsReady();
-        window.print();
+        printWithPageSetup('A4', 'landscape');
         return;
       }
 

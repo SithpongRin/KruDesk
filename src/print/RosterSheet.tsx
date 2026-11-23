@@ -3,6 +3,7 @@ import type { Profile, SchoolClass, Student } from '../types/domain';
 import { getActiveStudentsOrdered } from '../lib/attendance';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { DocumentSignature } from './DocumentSignature';
+import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
 
 interface RosterSheetProps {
   cls: SchoolClass;
@@ -24,24 +25,24 @@ export const RosterSheet: React.FC<RosterSheetProps> = ({
   const maleCount = sorted.filter((s) => s.gender === 'ប្រុស').length;
   const femaleCount = sorted.filter((s) => s.gender === 'ស្រី').length;
 
-  // Allow up to 24 rows on non-last pages and up to 20 rows on the last page (with 18mm signature block)
-  const pages: Array<{ items: Student[]; startIndex: number }> = [];
-  let cursor = 0;
-  while (cursor < sorted.length) {
-    const remaining = sorted.length - cursor;
-    if (remaining <= 20) {
-      pages.push({ items: sorted.slice(cursor), startIndex: cursor });
-      cursor = sorted.length;
-    } else if (remaining <= 24) {
-      const take = remaining - 4;
-      pages.push({ items: sorted.slice(cursor, cursor + take), startIndex: cursor });
-      cursor += take;
-    } else {
-      pages.push({ items: sorted.slice(cursor, cursor + 24), startIndex: cursor });
-      cursor += 24;
-    }
-  }
-  if (pages.length === 0) pages.push({ items: [], startIndex: 0 });
+  const pages = paginateByRowHeight<Student>({
+    items: sorted,
+    maxRowsPerPage: 24,
+    nonLastPageBudgetMm: 164,
+    lastPageBudgetMm: 134,
+    getRowHeightMm: (s) => {
+      const addrLines = estimateWrappedLines(s.address, 50, 8.0, 4);
+      const nameLines = estimateWrappedLines(s.nameKm, 35, 6.5, 2);
+      const otherLines = Math.max(
+        estimateWrappedLines(s.fatherName, 30, 6.5, 2),
+        estimateWrappedLines(s.fatherOccupation, 23, 6.5, 2),
+        estimateWrappedLines(s.motherName, 30, 6.5, 2),
+        estimateWrappedLines(s.motherOccupation, 23, 6.5, 2)
+      );
+      const lines = Math.max(addrLines, nameLines, otherLines);
+      return lines <= 1 ? 5.6 : lines * 4.2 + 1.2;
+    },
+  });
 
   return (
     <div className="bg-white text-black font-battambang">
@@ -54,7 +55,7 @@ export const RosterSheet: React.FC<RosterSheetProps> = ({
             style={{
               width: '297mm',
               height: '210mm',
-              padding: '8mm 10mm',
+              padding: '7mm 10mm',
               boxSizing: 'border-box',
               backgroundColor: '#ffffff',
               color: '#000000',
@@ -115,37 +116,49 @@ export const RosterSheet: React.FC<RosterSheetProps> = ({
               </div>
 
               {/* Roster Table */}
-              <table className="w-full border-collapse text-[8.5pt]">
+              <table className="w-full table-fixed border-collapse text-[8.5pt]">
+                <colgroup>
+                  <col style={{ width: '9mm' }} />
+                  <col style={{ width: '23mm' }} />
+                  <col style={{ width: '37mm' }} />
+                  <col style={{ width: '11mm' }} />
+                  <col style={{ width: '22mm' }} />
+                  <col style={{ width: '32mm' }} />
+                  <col style={{ width: '25mm' }} />
+                  <col style={{ width: '32mm' }} />
+                  <col style={{ width: '25mm' }} />
+                  <col style={{ width: '61mm' }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-100">
-                    <th className="border border-black px-1.5 py-1 text-center w-8 whitespace-nowrap">
+                    <th className="border border-black px-1 py-1 text-center whitespace-nowrap">
                       ល.រ
                     </th>
-                    <th className="border border-black px-2 py-1 text-center whitespace-nowrap">
+                    <th className="border border-black px-1 py-1 text-center whitespace-nowrap">
                       អត្តលេខ
                     </th>
-                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                    <th className="border border-black px-1.5 py-1 text-left">
                       គោត្តនាម និងនាម
                     </th>
-                    <th className="border border-black px-1.5 py-1 text-center w-11 whitespace-nowrap">
+                    <th className="border border-black px-1 py-1 text-center whitespace-nowrap">
                       ភេទ
                     </th>
-                    <th className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                    <th className="border border-black px-1 py-1 text-center">
                       ថ្ងៃខែឆ្នាំកំណើត
                     </th>
-                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                    <th className="border border-black px-1.5 py-1 text-left">
                       ឈ្មោះឪពុក
                     </th>
-                    <th className="border border-black px-1.5 py-1 text-left whitespace-nowrap">
+                    <th className="border border-black px-1.5 py-1 text-left">
                       មុខរបរ (ឪពុក)
                     </th>
-                    <th className="border border-black px-2 py-1 text-left whitespace-nowrap">
+                    <th className="border border-black px-1.5 py-1 text-left">
                       ឈ្មោះម្ដាយ
                     </th>
-                    <th className="border border-black px-1.5 py-1 text-left whitespace-nowrap">
+                    <th className="border border-black px-1.5 py-1 text-left">
                       មុខរបរ (ម្ដាយ)
                     </th>
-                    <th className="border border-black px-2 py-1 text-left">
+                    <th className="border border-black px-1.5 py-1 text-left">
                       ទីកន្លែងរស់នៅបច្ចុប្បន្ន
                     </th>
                   </tr>
@@ -153,34 +166,34 @@ export const RosterSheet: React.FC<RosterSheetProps> = ({
                 <tbody>
                   {page.items.map((s, idx) => (
                     <tr key={s.id ?? s.studentId}>
-                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                      <td className="border border-black px-1 py-0.5 text-center whitespace-nowrap">
                         {fmt(page.startIndex + idx + 1)}
                       </td>
-                      <td className="border border-black px-2 py-1 text-center font-mono text-[8pt] whitespace-nowrap">
+                      <td className="border border-black px-1 py-0.5 text-center font-mono text-[8pt] whitespace-nowrap">
                         {fmt(s.studentId)}
                       </td>
-                      <td className="border border-black px-2 py-1 font-semibold whitespace-nowrap">
-                        {s.nameKm}
+                      <td className="border border-black px-1.5 py-0.5 font-semibold">
+                        <FitText text={s.nameKm} basePt={8.5} minPt={6.5} lineHeight={1.25} />
                       </td>
-                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                      <td className="border border-black px-1 py-0.5 text-center whitespace-nowrap">
                         {s.gender}
                       </td>
-                      <td className="border border-black px-1.5 py-1 text-center whitespace-nowrap">
+                      <td className="border border-black px-1 py-0.5 text-center whitespace-nowrap">
                         {s.dateOfBirth ? fmt(s.dateOfBirth) : ''}
                       </td>
-                      <td className="border border-black px-2 py-1 whitespace-nowrap">
-                        {s.fatherName || ''}
+                      <td className="border border-black px-1.5 py-0.5">
+                        <FitText text={s.fatherName || ''} basePt={8.5} minPt={6.5} lineHeight={1.25} />
                       </td>
-                      <td className="border border-black px-1.5 py-1 whitespace-nowrap">
-                        {s.fatherOccupation || ''}
+                      <td className="border border-black px-1.5 py-0.5">
+                        <FitText text={s.fatherOccupation || ''} basePt={8.5} minPt={6.5} lineHeight={1.25} />
                       </td>
-                      <td className="border border-black px-2 py-1 whitespace-nowrap">
-                        {s.motherName || ''}
+                      <td className="border border-black px-1.5 py-0.5">
+                        <FitText text={s.motherName || ''} basePt={8.5} minPt={6.5} lineHeight={1.25} />
                       </td>
-                      <td className="border border-black px-1.5 py-1 whitespace-nowrap">
-                        {s.motherOccupation || ''}
+                      <td className="border border-black px-1.5 py-0.5">
+                        <FitText text={s.motherOccupation || ''} basePt={8.5} minPt={6.5} lineHeight={1.25} />
                       </td>
-                      <td className="border border-black px-2 py-1 text-[8pt]">
+                      <td className="border border-black px-1.5 py-0.5 text-[8pt] leading-snug">
                         {s.address || ''}
                       </td>
                     </tr>
@@ -190,11 +203,11 @@ export const RosterSheet: React.FC<RosterSheetProps> = ({
             </div>
 
             {isLastPage ? (
-              <div style={{ marginTop: '4mm' }}>
+              <div style={{ marginTop: '3mm' }}>
                 <DocumentSignature
                   profile={profile}
                   fontSizePt={10}
-                  gapMm={15}
+                  gapMm={13}
                   middle={
                     <div className="text-[8.5pt] text-slate-500">
                       ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}

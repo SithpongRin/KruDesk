@@ -51,6 +51,7 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
         const { row, scores } = entry;
         const subjectRows = buildStudentReportSubjectRows(subjects, scores);
         const isLast = pageIdx === entries.length - 1;
+        const dense = subjectRows.length > 15;
 
         return (
           <div
@@ -59,7 +60,7 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
             style={{
               width: '210mm',
               height: '297mm',
-              padding: '10mm 13mm',
+              padding: dense ? '6mm 11mm' : '10mm 13mm',
               boxSizing: 'border-box',
               backgroundColor: '#ffffff',
               color: '#000000',
@@ -70,19 +71,19 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
             }}
           >
             <div>
-              <DocumentHeader profile={profile} />
+              <DocumentHeader profile={profile} compact={dense} />
 
-              <div className="text-center mb-2.5">
+              <div className={`text-center ${dense ? 'mb-1.5' : 'mb-2.5'}`}>
                 <h2
                   style={{ fontFamily: "'Moul', 'Khmer OS Muol Light', serif" }}
-                  className="text-[11.5pt] font-normal"
+                  className={`${dense ? 'text-[10.5pt]' : 'text-[11.5pt]'} font-normal`}
                 >
                   លទ្ធផលនៃការសិក្សាប្រចាំខែ {monthName}
                 </h2>
                 <AcademicYearLine academicYear={cls.academicYear} />
               </div>
 
-              <div className="flex flex-wrap items-center justify-between text-[9.5pt] mb-2 px-1">
+              <div className={`flex flex-wrap items-center justify-between ${dense ? 'text-[8.8pt] mb-1' : 'text-[9.5pt] mb-2'} px-1`}>
                 <div>
                   ឈ្មោះសិស្ស៖ <strong className="font-bold">{row.student.nameKm}</strong>
                 </div>
@@ -95,7 +96,7 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
               </div>
 
               {/* Column widths measured from the school's sample 01 */}
-              <table className="w-full table-fixed border-collapse text-[9pt]">
+              <table className={`w-full table-fixed border-collapse ${dense ? 'text-[8pt] leading-tight' : 'text-[9pt]'}`}>
                 <colgroup>
                   <col style={{ width: '6%' }} />
                   <col style={{ width: '42%' }} />
@@ -105,30 +106,30 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
                 </colgroup>
                 <thead>
                   <tr className="bg-slate-100">
-                    <th className="border border-black px-1 py-1 text-center">ល.រ</th>
-                    <th className="border border-black px-2.5 py-1 text-center">មុខវិជ្ជា</th>
-                    <th className="border border-black px-1 py-1 text-center">ពិន្ទុអតិបរមា</th>
-                    <th className="border border-black px-1 py-1 text-center">ពិន្ទុ</th>
-                    <th className="border border-black px-1 py-1 text-center">និទ្ទេស</th>
+                    <th className={`border border-black px-1 ${dense ? 'py-0.5' : 'py-1'} text-center`}>ល.រ</th>
+                    <th className={`border border-black px-2.5 ${dense ? 'py-0.5' : 'py-1'} text-center`}>មុខវិជ្ជា</th>
+                    <th className={`border border-black px-1 ${dense ? 'py-0.5' : 'py-1'} text-center`}>ពិន្ទុអតិបរមា</th>
+                    <th className={`border border-black px-1 ${dense ? 'py-0.5' : 'py-1'} text-center`}>ពិន្ទុ</th>
+                    <th className={`border border-black px-1 ${dense ? 'py-0.5' : 'py-1'} text-center`}>និទ្ទេស</th>
                   </tr>
                 </thead>
                 <tbody>
                   {subjectRows.map((sr) => (
-                    <tr key={sr.subjectId} style={{ height: '5.8mm' }}>
-                      <td className="border border-black px-2 py-0.5 text-center">
+                    <tr key={sr.subjectId} style={{ height: dense ? '4.2mm' : '5.8mm' }}>
+                      <td className={`border border-black px-2 ${dense ? 'py-0' : 'py-0.5'} text-center`}>
                         {fmt(sr.orderNum)}
                       </td>
-                      <td className="border border-black px-2.5 py-0.5">{sr.name}</td>
-                      <td className="border border-black px-2 py-0.5 text-center">
+                      <td className={`border border-black px-2.5 ${dense ? 'py-0' : 'py-0.5'}`}>{sr.name}</td>
+                      <td className={`border border-black px-2 ${dense ? 'py-0' : 'py-0.5'} text-center`}>
                         {fmt(sr.maxScore)}
                       </td>
-                      <td className="border border-black px-2 py-0.5 text-center">
+                      <td className={`border border-black px-2 ${dense ? 'py-0' : 'py-0.5'} text-center`}>
                         {sr.score !== null
                           ? fmt(Number.isInteger(sr.score) ? sr.score : sr.score.toFixed(1))
                           : ''}
                       </td>
                       <td
-                        className="border border-black px-2 py-0.5 text-center font-bold"
+                        className={`border border-black px-2 ${dense ? 'py-0' : 'py-0.5'} text-center font-bold`}
                         style={{
                           color: sr.grade ? GRADE_PRINT_COLORS[sr.grade] : '#111827',
                         }}
@@ -141,7 +142,7 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
               </table>
 
               {/* Summary Grid (4 rows x 4 cells, flush beneath subject table) */}
-              <table className="w-full table-fixed border-collapse text-[9pt] -mt-[1px] mb-2">
+              <table className={`w-full table-fixed border-collapse ${dense ? 'text-[8pt] leading-tight mb-1' : 'text-[9pt] mb-2'} -mt-[1px]`}>
                 {/* lines up with the subject table: ល.រ+មុខវិជ្ជា | ពិន្ទុអតិបរមា+ពិន្ទុ | និទ្ទេស */}
                 <colgroup>
                   <col style={{ width: '15%' }} />
@@ -208,21 +209,22 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
               <DocumentSignature
                 profile={profile}
                 signOptions={signOptions}
-                gapMm={subjectRows.length > 14 ? 15 : 20}
+                fontSizePt={dense ? 8.5 : 9}
+                gapMm={dense ? 11 : subjectRows.length > 14 ? 15 : 20}
               />
 
               <div
-                className="text-[9pt]"
-                style={{ marginTop: subjectRows.length > 14 ? '6mm' : '12mm' }}
+                className={dense ? 'text-[8.2pt]' : 'text-[9pt]'}
+                style={{ marginTop: dense ? '2.5mm' : subjectRows.length > 14 ? '6mm' : '12mm' }}
               >
-                <div className="text-center mb-2">
+                <div className={`text-center ${dense ? 'mb-1' : 'mb-2'}`}>
                   មតិរបស់មាតាបិតា-អាណាព្យាបាលសិស្ស
                 </div>
-                <div className="space-y-3.5 pt-1 mx-[14mm]">
-                  <div className="border-b border-dotted border-slate-700 h-3" />
-                  <div className="border-b border-dotted border-slate-700 h-3" />
-                  <div className="border-b border-dotted border-slate-700 h-3" />
-                  <div className="border-b border-dotted border-slate-700 h-3" />
+                <div className={`${dense ? 'space-y-2 pt-0.5' : 'space-y-3.5 pt-1'} mx-[14mm]`}>
+                  <div className={`border-b border-dotted border-slate-700 ${dense ? 'h-2.5' : 'h-3'}`} />
+                  <div className={`border-b border-dotted border-slate-700 ${dense ? 'h-2.5' : 'h-3'}`} />
+                  <div className={`border-b border-dotted border-slate-700 ${dense ? 'h-2.5' : 'h-3'}`} />
+                  <div className={`border-b border-dotted border-slate-700 ${dense ? 'h-2.5' : 'h-3'}`} />
                 </div>
               </div>
             </div>

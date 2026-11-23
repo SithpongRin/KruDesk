@@ -21,6 +21,31 @@ const A4_LANDSCAPE_PT: [number, number] = [841.89, 595.28];
 const A3_PORTRAIT_PT: [number, number] = [841.89, 1190.55];
 const A3_LANDSCAPE_PT: [number, number] = [1190.55, 841.89];
 
+const PRINT_PAGE_STYLE_ID = 'krudesk-dynamic-print-page-style';
+
+/**
+ * Injects a temporary `@page { size: <A4|A3> <portrait|landscape>; margin: 0; }` rule
+ * matching the active print sheet, invokes `window.print()`, and removes the style on `afterprint`.
+ */
+export function printWithPageSetup(
+  pageSize: PaperSize = 'A4',
+  orientation: PageOrientation = 'landscape'
+): void {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  document.getElementById(PRINT_PAGE_STYLE_ID)?.remove();
+  const style = document.createElement('style');
+  style.id = PRINT_PAGE_STYLE_ID;
+  style.textContent = `@media print { @page { size: ${pageSize} ${orientation}; margin: 0; } }`;
+  document.head.appendChild(style);
+
+  const cleanup = () => {
+    style.remove();
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup, { once: true });
+  window.print();
+}
+
 /**
  * Ensures all bundled Khmer fonts (Battambang, Moul, Kantumruy Pro) are loaded
  * before rasterizing any DOM print pages.

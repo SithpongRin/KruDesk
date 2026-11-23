@@ -11,6 +11,7 @@ import {
   type DocumentBorderImage,
 } from '../utils/documentBorder';
 import { FrameImage } from './FrameImage';
+import { FitText } from './FitText';
 
 interface HonorRollSheetProps {
   cls: SchoolClass;
@@ -140,14 +141,21 @@ const PyramidCard: React.FC<{
           className="absolute inset-0 w-full h-full pointer-events-none select-none"
           style={{ objectFit: 'fill' }}
         />
-        <span
-          className="relative z-10 text-[11pt] text-[#1d4ed8] block truncate leading-none"
+        <div
+          className="relative z-10 text-[#1d4ed8] text-center"
           style={{
-            maxWidth: `${bannerWidthMm * 0.54}mm`,
+            width: `${bannerWidthMm * 0.58}mm`,
           }}
         >
-          {item.student.nameKm}
-        </span>
+          <FitText
+            text={item.student.nameKm}
+            basePt={11}
+            minPt={8}
+            wrapMinPt={7.5}
+            lineHeight={1.25}
+            maxLines={2}
+          />
+        </div>
       </div>
     </div>
   );

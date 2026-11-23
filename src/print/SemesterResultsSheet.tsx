@@ -10,6 +10,7 @@ import {
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
+import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
 
 interface SemesterResultsSheetProps {
   cls: SchoolClass;
@@ -32,24 +33,19 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
     useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
   const fmtHdr = (val: number | string) => toKhmerNumerals(val);
 
-  const pages: Array<{ items: SemesterResultRow[]; startIndex: number }> = [];
-  let cursor = 0;
-  const rows = summary.rows;
-  while (cursor < rows.length) {
-    const remaining = rows.length - cursor;
-    if (remaining <= 24) {
-      pages.push({ items: rows.slice(cursor), startIndex: cursor });
-      cursor = rows.length;
-    } else if (remaining <= 34) {
-      const take = remaining - 10;
-      pages.push({ items: rows.slice(cursor, cursor + take), startIndex: cursor });
-      cursor += take;
-    } else {
-      pages.push({ items: rows.slice(cursor, cursor + 34), startIndex: cursor });
-      cursor += 34;
-    }
-  }
-  if (pages.length === 0) pages.push({ items: [], startIndex: 0 });
+  const pages = paginateByRowHeight<SemesterResultRow>({
+    items: summary.rows,
+    maxRowsPerPage: 34,
+    nonLastPageBudgetMm: 246,
+    lastPageBudgetMm: 192,
+    firstPageExtraOverheadMm: 40,
+    getRowHeightMm: (r) => {
+      const nameLines = estimateWrappedLines(r.student.nameKm, 40, 6.0, 2);
+      const noteLines = estimateWrappedLines(r.note, 23, 5.5, 2);
+      const lines = Math.max(nameLines, noteLines);
+      return lines > 1 ? Math.max(6.0, lines * 3.8 + 1.2) : 6.0;
+    },
+  });
 
   return (
     <div className="bg-white text-black font-battambang">
@@ -90,54 +86,70 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                 </>
               )}
 
-              <table className="w-full border-collapse text-[8.4pt]">
+              <table className="w-full table-fixed border-collapse text-[8.4pt]">
+                <colgroup>
+                  <col style={{ width: '7mm' }} />
+                  <col style={{ width: '42mm' }} />
+                  <col style={{ width: '7.5mm' }} />
+                  <col style={{ width: '13mm' }} />
+                  <col style={{ width: '13mm' }} />
+                  <col style={{ width: '12.5mm' }} />
+                  <col style={{ width: '12mm' }} />
+                  <col style={{ width: '12mm' }} />
+                  <col style={{ width: '10mm' }} />
+                  <col style={{ width: '10mm' }} />
+                  <col style={{ width: '8mm' }} />
+                  <col style={{ width: '9mm' }} />
+                  <col style={{ width: '9mm' }} />
+                  <col style={{ width: '25mm' }} />
+                </colgroup>
                 <thead>
                   <tr className="bg-slate-100">
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-6">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center">
                       ល.រ
                     </th>
                     <th rowSpan={2} className="border border-black px-1.5 py-1 text-left">
                       គោត្តនាម-នាម
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-7">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center">
                       ភេទ
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-12 leading-tight">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center leading-tight">
                       ខែប្រចាំ
                       <br />
                       ឆមាស
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-12 leading-tight">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center leading-tight">
                       ប្រឡង
                       <br />
                       ឆមាស
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-11">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center">
                       ពិន្ទុសរុប
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-11">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center">
                       មធ្យម
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-11">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center">
                       ចំណាត់ថ្នាក់
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-9">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center">
                       និទ្ទេស
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-center w-9">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-center">
                       លទ្ធផល
                     </th>
                     <th colSpan={3} className="border border-black px-1 py-0.5 text-center">
                       ចំនួនអវត្តមាន
                     </th>
-                    <th rowSpan={2} className="border border-black px-1 py-1 text-left w-13">
+                    <th rowSpan={2} className="border border-black px-1 py-1 text-left">
                       ផ្សេងៗ
                     </th>
                   </tr>
-                  <tr className="bg-slate-100 text-[7.3pt]">
-                    <th className="border border-black px-1 py-0.5 text-center w-6">ច្ប</th>
-                    <th className="border border-black px-1 py-0.5 text-center w-7">អ.ច្ប</th>
-                    <th className="border border-black px-1 py-0.5 text-center w-7">សរុប</th>
+                  <tr className="bg-slate-100 text-[7.5pt]">
+                    <th className="border border-black px-0.5 py-0.5 text-center">ច្ប</th>
+                    <th className="border border-black px-0.5 py-0.5 text-center">អ.ច្ប</th>
+                    <th className="border border-black px-0.5 py-0.5 text-center">សរុប</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -146,8 +158,8 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                       <td className="border border-black px-1 py-0.5 text-center">
                         {fmt(page.startIndex + idx + 1)}
                       </td>
-                      <td className="border border-black px-1.5 py-0.5 font-medium truncate max-w-[38mm]">
-                        {r.student.nameKm}
+                      <td className="border border-black px-1.5 py-0.5 font-medium">
+                        <FitText text={r.student.nameKm} basePt={8.4} minPt={6.0} lineHeight={1.25} />
                       </td>
                       <td className="border border-black px-1 py-0.5 text-center">
                         {r.student.gender === 'ប្រុស' ? 'ប' : 'ស'}
@@ -196,8 +208,8 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
                       <td className="border border-black px-1 py-0.5 text-center font-medium">
                         {fmt(r.attendance.total)}
                       </td>
-                      <td className="border border-black px-1 py-0.5 truncate max-w-[14mm]">
-                        {r.note}
+                      <td className="border border-black px-1 py-0.5 text-[7.5pt]">
+                        <FitText text={r.note} basePt={7.5} minPt={5.5} lineHeight={1.25} />
                       </td>
                     </tr>
                   ))}
