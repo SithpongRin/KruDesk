@@ -35,8 +35,9 @@ export const SemesterResultsSheet: React.FC<SemesterResultsSheetProps> = ({
 
   const pages = paginateByRowHeight<SemesterResultRow>({
     items: summary.rows,
-    maxRowsPerPage: 34,
-    nonLastPageBudgetMm: 246,
+    // Page 1 fills to the bottom: measured 224 mm for rows under the title (2026-11-24).
+    maxRowsPerPage: 37,
+    nonLastPageBudgetMm: 264,
     // Keeps the summary and the 20 mm signing gap (was 16 mm) on the last page.
     lastPageBudgetMm: 188,
     firstPageExtraOverheadMm: 40,

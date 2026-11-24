@@ -91,12 +91,15 @@ export interface PaginateByHeightOptions<T> {
   nonLastPageBudgetMm: number;
   lastPageBudgetMm: number;
   firstPageExtraOverheadMm?: number;
+  /** Fewest rows allowed on the last page when splitting (default 5; at most half the rows). */
+  minTailRows?: number;
 }
 
 /**
  * Packs items into pages using estimated row heights:
  * 1. First tries to fit everything on ONE page (within `maxRowsPerPage` and `lastPageBudgetMm`).
- * 2. Only if it still does not fit, splits into BALANCED pages (never leaving a 1-5 row tail).
+ * 2. Only if it still does not fit, fills each page to the bottom (as on the ministry's sample
+ *    sheets) and keeps at least `minTailRows` rows on the last page (never a lone 1–4 row tail).
  */
 export function paginateByRowHeight<T>({
   items,
@@ -105,6 +108,7 @@ export function paginateByRowHeight<T>({
   nonLastPageBudgetMm,
   lastPageBudgetMm,
   firstPageExtraOverheadMm = 0,
+  minTailRows = 5,
 }: PaginateByHeightOptions<T>): Array<{ items: T[]; startIndex: number }> {
   if (items.length === 0) {
     return [{ items: [], startIndex: 0 }];
@@ -119,7 +123,10 @@ export function paginateByRowHeight<T>({
     return [{ items, startIndex: 0 }];
   }
 
-  // Step 2: Find the minimum page count k >= 2 that allows a balanced split where every page fits.
+  // Step 2: Find the minimum page count k >= 2 where every page fits. Like the ministry's own
+  // sheets, each page before the last is filled to the bottom; the last page keeps at least
+  // `minTailRows` rows (pulled back from the page before) so it never holds a lone 1–4 row tail.
+  const minTail = Math.max(1, Math.min(minTailRows, Math.floor(items.length / 2)));
   const minPagesByCount = Math.ceil(items.length / maxRowsPerPage);
   let k = Math.max(2, minPagesByCount);
   const maxK = Math.max(k, items.length);
@@ -132,44 +139,43 @@ export function paginateByRowHeight<T>({
 
   while (k <= maxK) {
     const budgets = Array.from({ length: k }, (_, p) => pageBudget(p, k));
-    const sumBudgets = budgets.reduce((a, b) => a + b, 0);
+    const candidate: Array<{ items: T[]; startIndex: number }> = [];
+    let cursor = 0;
+    let fits = true;
 
-    if (sumBudgets >= totalHeight || k === maxK) {
-      const candidate: Array<{ items: T[]; startIndex: number }> = [];
-      let cursor = 0;
-      let fits = true;
-
-      for (let p = 0; p < k; p++) {
-        const remainingPages = k - p;
-        const remainingItems = items.length - cursor;
-        if (p === k - 1) {
-          let h = 0;
-          for (let i = cursor; i < items.length; i++) h += heights[i];
-          if (remainingItems > maxRowsPerPage || (h > budgets[p] && remainingItems > 1)) {
-            fits = false;
-          }
-          candidate.push({ items: items.slice(cursor), startIndex: cursor });
-          cursor = items.length;
-        } else {
-          // Proportional target height & balanced item count for page p
-          const targetH = Math.min(budgets[p], totalHeight * (budgets[p] / sumBudgets));
-          const maxTakeHere = Math.min(maxRowsPerPage, remainingItems - (remainingPages - 1));
-          let used = 0;
-          let take = 0;
-          while (take < maxTakeHere) {
-            const nextH = heights[cursor + take];
-            if (take > 0 && used + nextH > budgets[p]) break;
-            if (take > 0 && used + nextH > targetH + nextH * 0.35) break;
-            used += nextH;
-            take++;
-          }
-          if (take === 0) take = 1;
-          candidate.push({ items: items.slice(cursor, cursor + take), startIndex: cursor });
-          cursor += take;
-        }
+    for (let p = 0; p < k - 1; p++) {
+      const pagesAfter = k - 1 - p;
+      // Leave one row for every later page and `minTail` rows for the last one.
+      const maxTakeHere = Math.min(
+        maxRowsPerPage,
+        items.length - cursor - (pagesAfter - 1) - minTail
+      );
+      let used = 0;
+      let take = 0;
+      while (take < maxTakeHere) {
+        const nextH = heights[cursor + take];
+        if (take > 0 && used + nextH > budgets[p]) break;
+        used += nextH;
+        take++;
       }
+      if (take === 0) {
+        fits = false;
+        break;
+      }
+      candidate.push({ items: items.slice(cursor, cursor + take), startIndex: cursor });
+      cursor += take;
+    }
 
-      if (fits && cursor === items.length) {
+    if (fits) {
+      const remainingItems = items.length - cursor;
+      let h = 0;
+      for (let i = cursor; i < items.length; i++) h += heights[i];
+      if (
+        remainingItems > 0 &&
+        remainingItems <= maxRowsPerPage &&
+        (h <= budgets[k - 1] || remainingItems === 1)
+      ) {
+        candidate.push({ items: items.slice(cursor), startIndex: cursor });
         return candidate;
       }
     }

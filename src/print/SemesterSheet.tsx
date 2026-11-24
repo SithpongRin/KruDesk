@@ -425,13 +425,15 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
     <div className="bg-white text-black font-battambang">
       {chunks.map((chunk, chunkIdx) => {
         const isLastChunk = chunkIdx === chunks.length - 1;
-        const pageRowCount = chunk.items.length;
-        const rowHeightMm = pageRowCount > DENSE_ROWS ? 3.1 : pageRowCount > COMPACT_ROWS ? 3.45 : 3.9;
-        const fontSizePt = pageRowCount > DENSE_ROWS ? 7.0 : pageRowCount > COMPACT_ROWS ? 7.6 : 8.2;
-        const headerHeightMm = pageRowCount > DENSE_ROWS ? 11.5 : pageRowCount > COMPACT_ROWS ? 18 : 22;
-        const headerFontPt = pageRowCount > DENSE_ROWS ? 7.0 : pageRowCount > COMPACT_ROWS ? 7.2 : 7.5;
-        const sign = signLayoutForRows(pageRowCount);
-        const a4PadVMm = pageRowCount > DENSE_ROWS ? 1.8 : 2.5;
+        // Layout tier (fonts, row height, signing gap) follows the class size, not the rows on this
+        // page: every page of a split sheet looks the same and matches the pagination estimates.
+        const tierRows = summaries.length;
+        const rowHeightMm = tierRows > DENSE_ROWS ? 3.1 : tierRows > COMPACT_ROWS ? 3.45 : 3.9;
+        const fontSizePt = tierRows > DENSE_ROWS ? 7.0 : tierRows > COMPACT_ROWS ? 7.6 : 8.2;
+        const headerHeightMm = tierRows > DENSE_ROWS ? 11.5 : tierRows > COMPACT_ROWS ? 18 : 22;
+        const headerFontPt = tierRows > DENSE_ROWS ? 7.0 : tierRows > COMPACT_ROWS ? 7.2 : 7.5;
+        const sign = signLayoutForRows(tierRows);
+        const a4PadVMm = tierRows > DENSE_ROWS ? 1.8 : 2.5;
 
         return (
           <React.Fragment key={`a4-${chunkIdx}`}>
@@ -452,15 +454,15 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
               }}
             >
               <div>
-                {renderHeader(`តារាងស្រង់ពិន្ទុប្រចាំឆមាសទី ${fmt(1)}`, pageRowCount > DENSE_ROWS)}
+                {renderHeader(`តារាងស្រង់ពិន្ទុប្រចាំឆមាសទី ${fmt(1)}`, tierRows > DENSE_ROWS)}
 
                 <table
                   // 31+ rows: no default cell padding, so the rows still leave room to sign.
-                  className={`w-full border-collapse ${pageRowCount > COMPACT_ROWS ? '[&_td]:py-0' : ''}`}
+                  className={`w-full border-collapse ${tierRows > COMPACT_ROWS ? '[&_td]:py-0' : ''}`}
                   style={{
                     fontSize: `${fontSizePt}pt`,
                     tableLayout: 'fixed',
-                    lineHeight: pageRowCount > DENSE_ROWS ? 1.1 : 1.15,
+                    lineHeight: tierRows > DENSE_ROWS ? 1.1 : 1.15,
                   }}
                 >
                   <thead>
@@ -515,7 +517,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                       </th>
                     </tr>
 
-                    <tr className="bg-slate-50" style={{ height: pageRowCount > DENSE_ROWS ? '3.0mm' : '3.8mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}>
+                    <tr className="bg-slate-50" style={{ height: tierRows > DENSE_ROWS ? '3.0mm' : '3.8mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}>
                       {sortedSubjects.flatMap((subj) => [
                         <th key={`p1-p-${subj.id}`} className="border border-black text-center font-bold">
                           ពិន្ទុ
@@ -534,7 +536,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                         <tr key={row.student.id ?? rowNum} style={{ height: `${rowHeightMm}mm` }}>
                           <td className="border border-black text-center">{fmt(rowNum)}</td>
                           <td className="border border-black px-1 font-medium">
-                            <FitText text={row.student.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={pageRowCount > DENSE_ROWS ? 1.12 : 1.25} />
+                            <FitText text={row.student.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={tierRows > DENSE_ROWS ? 1.12 : 1.25} />
                           </td>
                           <td className="border border-black text-center">
                             {row.student.gender === 'ប្រុស' ? 'ប' : 'ស'}
@@ -599,15 +601,15 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
               }}
             >
               <div>
-                {renderHeader(`តារាងស្រង់ពិន្ទុប្រចាំឆមាសទី ${fmt(2)} និងប្រចាំឆ្នាំ`, pageRowCount > DENSE_ROWS)}
+                {renderHeader(`តារាងស្រង់ពិន្ទុប្រចាំឆមាសទី ${fmt(2)} និងប្រចាំឆ្នាំ`, tierRows > DENSE_ROWS)}
 
                 <table
                   // 31+ rows: no default cell padding, so the rows still leave room to sign.
-                  className={`w-full border-collapse ${pageRowCount > COMPACT_ROWS ? '[&_td]:py-0' : ''}`}
+                  className={`w-full border-collapse ${tierRows > COMPACT_ROWS ? '[&_td]:py-0' : ''}`}
                   style={{
                     fontSize: `${fontSizePt}pt`,
                     tableLayout: 'fixed',
-                    lineHeight: pageRowCount > DENSE_ROWS ? 1.1 : 1.15,
+                    lineHeight: tierRows > DENSE_ROWS ? 1.1 : 1.15,
                   }}
                 >
                   <thead>
@@ -678,7 +680,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                       </th>
                     </tr>
 
-                    <tr className="bg-slate-50" style={{ height: pageRowCount > DENSE_ROWS ? '3.0mm' : '3.8mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}>
+                    <tr className="bg-slate-50" style={{ height: tierRows > DENSE_ROWS ? '3.0mm' : '3.8mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}>
                       {sortedSubjects.flatMap((subj) => [
                         <th key={`p2-p-${subj.id}`} className="border border-black text-center font-bold">
                           ពិន្ទុ
@@ -697,7 +699,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                         <tr key={row.student.id ?? rowNum} style={{ height: `${rowHeightMm}mm` }}>
                           <td className="border border-black text-center">{fmt(rowNum)}</td>
                           <td className="border border-black px-1 font-medium">
-                            <FitText text={row.student.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={pageRowCount > DENSE_ROWS ? 1.12 : 1.25} />
+                            <FitText text={row.student.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={tierRows > DENSE_ROWS ? 1.12 : 1.25} />
                           </td>
                           <td className="border border-black text-center">
                             {row.student.gender === 'ប្រុស' ? 'ប' : 'ស'}

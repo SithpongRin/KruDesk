@@ -157,7 +157,8 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
         const studentPages = paginateByRowHeight({
           items: activeStudents,
           maxRowsPerPage: MAX_ROWS_PER_PAGE,
-          nonLastPageBudgetMm: isPortrait ? 240 : 172,
+          // Landscape middle page: measured 166.8 mm for rows above the page-number line.
+          nonLastPageBudgetMm: isPortrait ? 240 : 162,
           // Same room as a middle page, minus the signature block instead of the page-number line.
           lastPageBudgetMm:
             rowsAndSignMm(isPortrait, activeStudents.length) -
@@ -206,63 +207,65 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
         return studentPages.map((pg, pageIdx) => {
           const isLastPageOfSheet = pageIdx === studentPages.length - 1;
           const isVeryLastPage = sIdx === sheets.length - 1 && isLastPageOfSheet;
-          const pageRowCount = pg.items.length;
+          // Layout tier (fonts, row height, signing gap) follows the class size, not the rows on this
+          // page: every page of a split sheet looks the same and matches the pagination estimates.
+          const tierRows = activeStudents.length;
 
           // Adaptive typography & spacing tuned for A4 landscape (205mm usable height)
           // and A4 portrait (289mm usable height), accounting for Khmer Battambang glyph height
           // so the signature sits snugly right under the table without drifting or clipping.
           const rowHeightMm = isPortrait
-            ? pageRowCount > denseRows
+            ? tierRows > denseRows
               ? 3.9
-              : pageRowCount > compactRows
+              : tierRows > compactRows
                 ? 4.4
                 : 4.8
-            : pageRowCount > denseRows
+            : tierRows > denseRows
               ? 3.15
-              : pageRowCount > compactRows
+              : tierRows > compactRows
                 ? 3.4
                 : 3.9;
           const fontSizePt = isPortrait
-            ? pageRowCount > denseRows
+            ? tierRows > denseRows
               ? 7.0
               : subjectCount > 13
                 ? 7.5
                 : 8.4
-            : pageRowCount > denseRows
+            : tierRows > denseRows
               ? 7.0
-              : pageRowCount > compactRows
+              : tierRows > compactRows
                 ? 7.5
                 : 8.8;
           const headerHeightMm = isPortrait
             ? 23
-            : pageRowCount > denseRows
+            : tierRows > denseRows
               ? 11.0
-              : pageRowCount > compactRows
+              : tierRows > compactRows
                 ? 14.5
                 : 16.5;
-          const groupHeaderMm = isPortrait ? 4.4 : pageRowCount > denseRows ? 2.8 : 3.2;
+          const groupHeaderMm = isPortrait ? 4.4 : tierRows > denseRows ? 2.8 : 3.2;
           const headerFontPt = isPortrait
             ? subjectCount > 13
               ? 7.0
               : 7.6
-            : pageRowCount > denseRows
+            : tierRows > denseRows
               ? 7.0
-              : pageRowCount > compactRows
+              : tierRows > compactRows
                 ? 7.4
                 : 8.2;
           const baseIdFontPt = isPortrait
             ? subjectCount > 13
               ? 7.5
               : 7.8
-            : pageRowCount > denseRows
+            : tierRows > denseRows
               ? 7.0
-              : pageRowCount > compactRows
+              : tierRows > compactRows
                 ? 7.5
                 : 8.0;
           const idFontPt = baseIdFontPt;
-          const sign = signLayoutForRows(isPortrait, pageRowCount);
+          const sign = signLayoutForRows(isPortrait, tierRows);
           // Tighter line boxes from 36 rows (landscape) so the rows leave room for the signatures.
-          const tightCells = isPortrait ? pageRowCount > denseRows : pageRowCount > 35;
+          const tightCells = isPortrait ? tierRows > denseRows : tierRows > 35;
 
           return (
             <div
@@ -283,7 +286,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
             >
               <div>
                 {/* Header */}
-                <div className={`flex items-center justify-between ${pageRowCount > denseRows ? 'mb-0.5' : 'mb-1'} gap-2`}>
+                <div className={`flex items-center justify-between ${tierRows > denseRows ? 'mb-0.5' : 'mb-1'} gap-2`}>
                   <div
                     className={`${
                       isPortrait ? 'text-[8.5pt] gap-x-2.5' : 'text-[9.5pt] gap-x-3'
@@ -312,26 +315,26 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                   >
                     <thead>
                       <tr>
-                        <th className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
+                        <th className={`border border-black px-1.5 ${tierRows > denseRows ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
                           ប្រុស
                         </th>
-                        <th className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
+                        <th className={`border border-black px-1.5 ${tierRows > denseRows ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
                           ស្រី
                         </th>
-                        <th className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
+                        <th className={`border border-black px-1.5 ${tierRows > denseRows ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
                           សរុប
                         </th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} text-center font-bold`}>
+                        <td className={`border border-black px-1.5 ${tierRows > denseRows ? 'py-0' : 'py-0.5'} text-center font-bold`}>
                           {fmt(maleCount)}
                         </td>
-                        <td className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} text-center font-bold`}>
+                        <td className={`border border-black px-1.5 ${tierRows > denseRows ? 'py-0' : 'py-0.5'} text-center font-bold`}>
                           {fmt(femaleCount)}
                         </td>
-                        <td className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} text-center font-bold`}>
+                        <td className={`border border-black px-1.5 ${tierRows > denseRows ? 'py-0' : 'py-0.5'} text-center font-bold`}>
                           {fmt(activeStudents.length)}
                         </td>
                       </tr>
@@ -342,11 +345,11 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                 {/* Score Table */}
                 <table
                   // Landscape 26+ rows: no default cell padding, so the rows still leave room to sign.
-                  className={`w-full border-collapse ${!isPortrait && pageRowCount > compactRows ? '[&_td]:py-0' : ''}`}
+                  className={`w-full border-collapse ${!isPortrait && tierRows > compactRows ? '[&_td]:py-0' : ''}`}
                   style={{
                     fontSize: `${fontSizePt}pt`,
                     tableLayout: 'fixed',
-                    lineHeight: pageRowCount > denseRows ? 1.1 : 1.15,
+                    lineHeight: tierRows > denseRows ? 1.1 : 1.15,
                   }}
                 >
                   <thead>
@@ -477,7 +480,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                     {/* Paper-form subject column numbers: grouped spans share one merged number */}
                     <tr
                       className="bg-slate-50"
-                      style={{ height: pageRowCount > denseRows ? '2.8mm' : '3.4mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}
+                      style={{ height: tierRows > denseRows ? '2.8mm' : '3.4mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}
                     >
                       <th colSpan={4} className="border border-black text-center px-1.5 font-medium">
                         លេខរៀងមុខវិជ្ជា

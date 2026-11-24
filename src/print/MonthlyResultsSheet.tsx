@@ -41,8 +41,9 @@ export const MonthlyResultsSheet: React.FC<MonthlyResultsSheetProps> = ({
 
   const pages = paginateByRowHeight<MonthlyResultRow>({
     items: summary.rows,
-    maxRowsPerPage: 34,
-    nonLastPageBudgetMm: 248,
+    // Page 1 fills to the bottom: measured 220 mm for rows under the title (2026-11-24).
+    maxRowsPerPage: 37,
+    nonLastPageBudgetMm: 260,
     // Keeps the summary and the 20 mm signing gap (was 16 mm) on the last page.
     lastPageBudgetMm: 190,
     firstPageExtraOverheadMm: 40,

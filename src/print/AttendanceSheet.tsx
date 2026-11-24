@@ -127,19 +127,21 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
           const isLastPageOfMonth = pageIdx === studentPages.length - 1;
           const isVeryLastPage =
             mIdx === monthsData.length - 1 && isLastPageOfMonth;
-          const pageRowCount = pg.items.length;
+          // Layout tier (fonts, row height, signing gap) follows the class size, not the rows on this
+          // page: every page of a split sheet looks the same and matches the pagination estimates.
+          const tierRows = activeStudents.length;
 
           // Adaptive sizing for A4 landscape (205mm usable height, 285mm usable width)
           // accounting for Khmer Battambang glyph height + daily total row + signature.
-          const rowHeightMm = pageRowCount > DENSE_ROWS ? 3.2 : pageRowCount > COMPACT_ROWS ? 3.6 : 4.1;
-          const fontSizePt = pageRowCount > DENSE_ROWS ? 7.0 : pageRowCount > COMPACT_ROWS ? 8.0 : 8.8;
-          const baseIdFontPt = pageRowCount > DENSE_ROWS ? 7.0 : pageRowCount > COMPACT_ROWS ? 7.6 : 8.2;
+          const rowHeightMm = tierRows > DENSE_ROWS ? 3.2 : tierRows > COMPACT_ROWS ? 3.6 : 4.1;
+          const fontSizePt = tierRows > DENSE_ROWS ? 7.0 : tierRows > COMPACT_ROWS ? 8.0 : 8.8;
+          const baseIdFontPt = tierRows > DENSE_ROWS ? 7.0 : tierRows > COMPACT_ROWS ? 7.6 : 8.2;
           const idFontPt = baseIdFontPt;
-          const dayFontPt = pageRowCount > DENSE_ROWS ? 7.0 : pageRowCount > COMPACT_ROWS ? 7.4 : 7.8;
-          const sign = signLayoutForRows(pageRowCount);
+          const dayFontPt = tierRows > DENSE_ROWS ? 7.0 : tierRows > COMPACT_ROWS ? 7.4 : 7.8;
+          const sign = signLayoutForRows(tierRows);
           // From 36 rows: tighter line boxes so the rows still leave room for the signatures.
-          const cellLineHeight = pageRowCount > 35 ? 1.12 : 1.25;
-          const sumCellPad = pageRowCount > COMPACT_ROWS ? ' p-0' : '';
+          const cellLineHeight = tierRows > 35 ? 1.12 : 1.25;
+          const sumCellPad = tierRows > COMPACT_ROWS ? ' p-0' : '';
 
           return (
             <div
@@ -216,7 +218,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                   style={{
                     fontSize: `${fontSizePt}pt`,
                     tableLayout: 'fixed',
-                    lineHeight: pageRowCount > DENSE_ROWS ? 1.1 : 1.15,
+                    lineHeight: tierRows > DENSE_ROWS ? 1.1 : 1.15,
                   }}
                 >
                   <thead>
