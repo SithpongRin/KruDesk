@@ -9,7 +9,7 @@ import {
 import type { PaperSize } from '../services/pdfExport';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { RotatedHeaderText } from './RotatedHeaderText';
-import { DocumentSignature } from './DocumentSignature';
+import { DocumentSignature, estimateSignatureBlockHeightMm } from './DocumentSignature';
 import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
 
 interface SemesterSheetProps {
@@ -22,6 +22,40 @@ interface SemesterSheetProps {
 }
 
 const MAX_ROWS_PER_PAGE = 45;
+
+/**
+ * A4 layout tiers by rows on the page. Above 35 rows the compact header and 3.1 mm rows are needed
+ * for the table plus the signing gap to fit; 26–35 rows use the middle tier (measured 2026-11-24).
+ */
+const DENSE_ROWS = 35;
+const COMPACT_ROWS = 25;
+
+/**
+ * Signature block on an A4 page, by rows on the page. The gap is the room left for the
+ * handwritten signatures of the teacher and the director (2026-11-24: at least 14 mm on a full
+ * 36–45-row page, 16 mm from 26–35 rows, 20 mm otherwise).
+ */
+function signLayoutForRows(rows: number) {
+  if (rows > DENSE_ROWS) return { gapMm: 14, fontPt: 7.8, marginTopMm: 0, ptMm: 0.8 };
+  if (rows > COMPACT_ROWS) return { gapMm: 16, fontPt: 9.5, marginTopMm: 0.5, ptMm: 1.2 };
+  return { gapMm: 20, fontPt: 10.5, marginTopMm: 2, ptMm: undefined };
+}
+
+/** Height left for the rows and the signature on an A4 page (page minus padding, title, header). */
+function a4RowsAndSignMm(rows: number): number {
+  return rows > DENSE_ROWS ? 175 : rows > COMPACT_ROWS ? 164 : 159;
+}
+
+/** The single A3 page has room for a full signing gap. */
+const A3_SIGN = { gapMm: 18, fontPt: 10, marginTopMm: 2, ptMm: undefined };
+
+/** Height of a signature block (with its top margin) — what the last page must keep free. */
+function signBlockMm(sign: ReturnType<typeof signLayoutForRows>): number {
+  return (
+    sign.marginTopMm +
+    estimateSignatureBlockHeightMm({ gapMm: sign.gapMm, fontSizePt: sign.fontPt, ptMm: sign.ptMm })
+  );
+}
 
 export const SemesterSheet: React.FC<SemesterSheetProps> = ({
   cls,
@@ -56,20 +90,31 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
     ? summaries.length > 36
       ? 4.4
       : 5.2
-    : summaries.length > 39
+    : summaries.length > DENSE_ROWS
       ? 2.95
-      : summaries.length > 30
+      : summaries.length > COMPACT_ROWS
         ? 3.35
         : 3.9;
   const chunks = paginateByRowHeight({
     items: summaries,
     maxRowsPerPage: MAX_ROWS_PER_PAGE,
     nonLastPageBudgetMm: isA3Paper ? 245 : 172,
-    lastPageBudgetMm: isA3Paper ? 232 : 160,
+    // Same room as a middle page, minus the signature block instead of the page-number line.
+    lastPageBudgetMm: isA3Paper
+      ? 268 - signBlockMm(A3_SIGN)
+      : a4RowsAndSignMm(summaries.length) - signBlockMm(signLayoutForRows(summaries.length)),
     getRowHeightMm: (row) => {
       const nameLines = estimateWrappedLines(row.student.nameKm, 39.5, 6.0, 2);
-      const singleH = isA3Paper ? baseRowEstMm : summaries.length > 39 ? 3.35 : Math.max(baseRowEstMm, 3.6);
-      return nameLines > 1 ? Math.max(singleH, nameLines * 3.35) : singleH;
+      const dense = !isA3Paper && summaries.length > DENSE_ROWS;
+      // Rendered: dense 3.1 mm, middle 3.45–3.6 mm, otherwise 4.1–4.4 mm (cells keep their padding).
+      const singleH = isA3Paper
+        ? baseRowEstMm
+        : dense
+          ? 3.15
+          : summaries.length > COMPACT_ROWS
+            ? 3.6
+            : 4.4;
+      return nameLines > 1 ? Math.max(singleH, nameLines * (dense ? 2.5 : 3.35)) : singleH;
     },
   });
 
@@ -122,17 +167,13 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
     </div>
   );
 
-  const renderSignature = (
-    signGapMm: number,
-    pageLabel: string,
-    signFontPt = 10,
-    marginTopMm = 4
-  ) => (
-    <div style={{ marginTop: `${marginTopMm}mm` }}>
+  const renderSignature = (sign: ReturnType<typeof signLayoutForRows>, pageLabel: string) => (
+    <div style={{ marginTop: `${sign.marginTopMm}mm` }}>
       <DocumentSignature
         profile={profile}
-        fontSizePt={signFontPt}
-        gapMm={signGapMm}
+        fontSizePt={sign.fontPt}
+        gapMm={sign.gapMm}
+        ptMm={sign.ptMm}
         middle={<div className="text-[8.5pt] text-slate-500">{pageLabel}</div>}
       />
     </div>
@@ -359,7 +400,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
               </div>
 
               {isVeryLast
-                ? renderSignature(11, `ទំព័រ ${fmt(chunkIdx + 1)} / ${fmt(chunks.length)}`, 10, 3)
+                ? renderSignature(A3_SIGN, `ទំព័រ ${fmt(chunkIdx + 1)} / ${fmt(chunks.length)}`)
                 : (
                   <div className="mt-auto text-center text-[8.5pt] text-slate-500 pt-1">
                     ទំព័រ {fmt(chunkIdx + 1)} / {fmt(chunks.length)}
@@ -385,14 +426,12 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
       {chunks.map((chunk, chunkIdx) => {
         const isLastChunk = chunkIdx === chunks.length - 1;
         const pageRowCount = chunk.items.length;
-        const rowHeightMm = pageRowCount > 39 ? 3.1 : pageRowCount > 30 ? 3.45 : 3.9;
-        const fontSizePt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 7.6 : 8.2;
-        const headerHeightMm = pageRowCount > 39 ? 11.5 : pageRowCount > 30 ? 18 : 22;
-        const headerFontPt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 7.2 : 7.5;
-        const signFontPt = pageRowCount > 39 ? 7.8 : pageRowCount > 30 ? 9.5 : 10.5;
-        const signGapMm = pageRowCount > 39 ? 3 : pageRowCount > 30 ? 8 : 13;
-        const signMarginTopMm = pageRowCount > 39 ? 0 : pageRowCount > 30 ? 2 : 4;
-        const a4PadVMm = pageRowCount > 39 ? 1.8 : 2.5;
+        const rowHeightMm = pageRowCount > DENSE_ROWS ? 3.1 : pageRowCount > COMPACT_ROWS ? 3.45 : 3.9;
+        const fontSizePt = pageRowCount > DENSE_ROWS ? 7.0 : pageRowCount > COMPACT_ROWS ? 7.6 : 8.2;
+        const headerHeightMm = pageRowCount > DENSE_ROWS ? 11.5 : pageRowCount > COMPACT_ROWS ? 18 : 22;
+        const headerFontPt = pageRowCount > DENSE_ROWS ? 7.0 : pageRowCount > COMPACT_ROWS ? 7.2 : 7.5;
+        const sign = signLayoutForRows(pageRowCount);
+        const a4PadVMm = pageRowCount > DENSE_ROWS ? 1.8 : 2.5;
 
         return (
           <React.Fragment key={`a4-${chunkIdx}`}>
@@ -413,14 +452,15 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
               }}
             >
               <div>
-                {renderHeader(`តារាងស្រង់ពិន្ទុប្រចាំឆមាសទី ${fmt(1)}`, pageRowCount > 39)}
+                {renderHeader(`តារាងស្រង់ពិន្ទុប្រចាំឆមាសទី ${fmt(1)}`, pageRowCount > DENSE_ROWS)}
 
                 <table
-                  className="w-full border-collapse"
+                  // 31+ rows: no default cell padding, so the rows still leave room to sign.
+                  className={`w-full border-collapse ${pageRowCount > COMPACT_ROWS ? '[&_td]:py-0' : ''}`}
                   style={{
                     fontSize: `${fontSizePt}pt`,
                     tableLayout: 'fixed',
-                    lineHeight: pageRowCount > 39 ? 1.1 : 1.15,
+                    lineHeight: pageRowCount > DENSE_ROWS ? 1.1 : 1.15,
                   }}
                 >
                   <thead>
@@ -475,7 +515,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                       </th>
                     </tr>
 
-                    <tr className="bg-slate-50" style={{ height: pageRowCount > 39 ? '3.0mm' : '3.8mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}>
+                    <tr className="bg-slate-50" style={{ height: pageRowCount > DENSE_ROWS ? '3.0mm' : '3.8mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}>
                       {sortedSubjects.flatMap((subj) => [
                         <th key={`p1-p-${subj.id}`} className="border border-black text-center font-bold">
                           ពិន្ទុ
@@ -494,7 +534,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                         <tr key={row.student.id ?? rowNum} style={{ height: `${rowHeightMm}mm` }}>
                           <td className="border border-black text-center">{fmt(rowNum)}</td>
                           <td className="border border-black px-1 font-medium">
-                            <FitText text={row.student.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={pageRowCount > 39 ? 1.12 : 1.25} />
+                            <FitText text={row.student.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={pageRowCount > DENSE_ROWS ? 1.12 : 1.25} />
                           </td>
                           <td className="border border-black text-center">
                             {row.student.gender === 'ប្រុស' ? 'ប' : 'ស'}
@@ -559,14 +599,15 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
               }}
             >
               <div>
-                {renderHeader(`តារាងស្រង់ពិន្ទុប្រចាំឆមាសទី ${fmt(2)} និងប្រចាំឆ្នាំ`, pageRowCount > 39)}
+                {renderHeader(`តារាងស្រង់ពិន្ទុប្រចាំឆមាសទី ${fmt(2)} និងប្រចាំឆ្នាំ`, pageRowCount > DENSE_ROWS)}
 
                 <table
-                  className="w-full border-collapse"
+                  // 31+ rows: no default cell padding, so the rows still leave room to sign.
+                  className={`w-full border-collapse ${pageRowCount > COMPACT_ROWS ? '[&_td]:py-0' : ''}`}
                   style={{
                     fontSize: `${fontSizePt}pt`,
                     tableLayout: 'fixed',
-                    lineHeight: pageRowCount > 39 ? 1.1 : 1.15,
+                    lineHeight: pageRowCount > DENSE_ROWS ? 1.1 : 1.15,
                   }}
                 >
                   <thead>
@@ -637,7 +678,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                       </th>
                     </tr>
 
-                    <tr className="bg-slate-50" style={{ height: pageRowCount > 39 ? '3.0mm' : '3.8mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}>
+                    <tr className="bg-slate-50" style={{ height: pageRowCount > DENSE_ROWS ? '3.0mm' : '3.8mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}>
                       {sortedSubjects.flatMap((subj) => [
                         <th key={`p2-p-${subj.id}`} className="border border-black text-center font-bold">
                           ពិន្ទុ
@@ -656,7 +697,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                         <tr key={row.student.id ?? rowNum} style={{ height: `${rowHeightMm}mm` }}>
                           <td className="border border-black text-center">{fmt(rowNum)}</td>
                           <td className="border border-black px-1 font-medium">
-                            <FitText text={row.student.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={pageRowCount > 39 ? 1.12 : 1.25} />
+                            <FitText text={row.student.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={pageRowCount > DENSE_ROWS ? 1.12 : 1.25} />
                           </td>
                           <td className="border border-black text-center">
                             {row.student.gender === 'ប្រុស' ? 'ប' : 'ស'}
@@ -712,12 +753,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
               </div>
 
               {isLastChunk
-                ? renderSignature(
-                    signGapMm,
-                    `ទំព័រ ${fmt(chunkIdx * 2 + 2)} / ${fmt(chunks.length * 2)}`,
-                    signFontPt,
-                    signMarginTopMm
-                  )
+                ? renderSignature(sign, `ទំព័រ ${fmt(chunkIdx * 2 + 2)} / ${fmt(chunks.length * 2)}`)
                 : (
                   <div className="mt-auto text-center text-[8.5pt] text-slate-500 pt-1">
                     ទំព័រ {fmt(chunkIdx * 2 + 2)} / {fmt(chunks.length * 2)}

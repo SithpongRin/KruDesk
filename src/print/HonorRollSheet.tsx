@@ -323,7 +323,7 @@ export const HonorRollSheet: React.FC<HonorRollSheetProps> = ({
               profile={profile}
               signOptions={signOptions}
               color="#1e3a8a"
-              gapMm={17}
+              gapMm={20}
               fontSizePt={9.5}
             />
           </div>

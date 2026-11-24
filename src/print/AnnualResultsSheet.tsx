@@ -38,7 +38,8 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
     items: summary.rows,
     maxRowsPerPage: 34,
     nonLastPageBudgetMm: 240,
-    lastPageBudgetMm: 192,
+    // Keeps the summary and the 20 mm signing gap (was 16 mm) on the last page.
+    lastPageBudgetMm: 188,
     firstPageExtraOverheadMm: 40,
     getRowHeightMm: (r) => {
       const nameLines = estimateWrappedLines(r.student.nameKm, 44, 6.0, 2);
@@ -229,7 +230,7 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
                       profile={profile}
                       signOptions={signOptions}
                       fontSizePt={9.5}
-                      gapMm={16}
+                      gapMm={20}
                     />
                   </div>
                 </div>

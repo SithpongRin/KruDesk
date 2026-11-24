@@ -14,7 +14,7 @@ import { getActiveStudentsOrdered } from '../lib/attendance';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import type { PageOrientation } from '../services/pdfExport';
 import { RotatedHeaderText } from './RotatedHeaderText';
-import { DocumentSignature } from './DocumentSignature';
+import { DocumentSignature, estimateSignatureBlockHeightMm } from './DocumentSignature';
 import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
 
 export interface MonthlyScoreSheetPageData {
@@ -37,6 +37,43 @@ interface MonthlyScoreSheetProps {
 }
 
 const MAX_ROWS_PER_PAGE = 45;
+
+/**
+ * Landscape layout tiers by rows on the page: above 39 rows the compact header and 3.15 mm rows;
+ * 26–39 rows the middle tier (7.5pt), at most 25 the large tier (measured 2026-11-24).
+ * Portrait keeps 39 / 30.
+ */
+const LANDSCAPE_DENSE_ROWS = 39;
+const LANDSCAPE_COMPACT_ROWS = 25;
+
+/**
+ * Signature block under the table, by rows on the page. The gap is the room left for the
+ * handwritten signatures of the teacher and the director (2026-11-24): 14 mm on a full 40–45-row
+ * landscape page, 14 mm at 36–39 rows (middle tier with tighter cells), 16 mm at 26–35 rows,
+ * 20 mm otherwise.
+ */
+function signLayoutForRows(isPortrait: boolean, rows: number) {
+  if (isPortrait) return { gapMm: 20, fontPt: 10.5, marginTopMm: 1.5, ptMm: undefined };
+  if (rows > LANDSCAPE_DENSE_ROWS) return { gapMm: 14, fontPt: 7.8, marginTopMm: 0, ptMm: 0.8 };
+  if (rows > 35) return { gapMm: 14, fontPt: 9.5, marginTopMm: 0, ptMm: 0.8 };
+  if (rows > LANDSCAPE_COMPACT_ROWS) return { gapMm: 16, fontPt: 9.5, marginTopMm: 0, ptMm: 1.2 };
+  return { gapMm: 20, fontPt: 10.0, marginTopMm: 1, ptMm: undefined };
+}
+
+/** Height left for the rows and the signature (page minus padding, title, table header), measured. */
+function rowsAndSignMm(isPortrait: boolean, rows: number): number {
+  if (isPortrait) return 260;
+  return rows > LANDSCAPE_DENSE_ROWS ? 178 : rows > LANDSCAPE_COMPACT_ROWS ? 170.5 : 167;
+}
+
+/** Height of the signature block (with its top margin) — what the last page must keep free. */
+function signBlockMm(isPortrait: boolean, rows: number): number {
+  const sign = signLayoutForRows(isPortrait, rows);
+  return (
+    sign.marginTopMm +
+    estimateSignatureBlockHeightMm({ gapMm: sign.gapMm, fontSizePt: sign.fontPt, ptMm: sign.ptMm })
+  );
+}
 
 export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
   cls,
@@ -91,7 +128,9 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
         const isPortrait = orientation === 'portrait';
         const pageWidthMm = isPortrait ? 210 : 297;
         const pageHeightMm = isPortrait ? 297 : 210;
-        const padVMm = isPortrait ? 4 : activeStudents.length > 39 ? 1.6 : 2.5;
+        const denseRows = isPortrait ? 39 : LANDSCAPE_DENSE_ROWS;
+        const compactRows = isPortrait ? 30 : LANDSCAPE_COMPACT_ROWS;
+        const padVMm = isPortrait ? 4 : activeStudents.length > denseRows ? 1.6 : 2.5;
         const padHMm = isPortrait ? 5 : 6;
         const innerWidthMm = pageWidthMm - padHMm * 2;
 
@@ -105,21 +144,24 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
             : { no: 6.5, id: 17, name: 42, sex: 6, total: 11, avg: 11, rank: 10, note: 18.5 };
 
         const denseSingleRowMm = isPortrait
-          ? activeStudents.length > 39
+          ? activeStudents.length > denseRows
             ? 4.1
-            : activeStudents.length > 30
+            : activeStudents.length > compactRows
               ? 4.4
               : 4.8
-          : activeStudents.length > 39
+          : activeStudents.length > denseRows
             ? 2.95
-            : activeStudents.length > 30
+            : activeStudents.length > compactRows
               ? 3.3
               : 3.9;
         const studentPages = paginateByRowHeight({
           items: activeStudents,
           maxRowsPerPage: MAX_ROWS_PER_PAGE,
           nonLastPageBudgetMm: isPortrait ? 240 : 172,
-          lastPageBudgetMm: isPortrait ? 225 : 160,
+          // Same room as a middle page, minus the signature block instead of the page-number line.
+          lastPageBudgetMm:
+            rowsAndSignMm(isPortrait, activeStudents.length) -
+            signBlockMm(isPortrait, activeStudents.length),
           getRowHeightMm: (st) => {
             const note = (st.id !== undefined && sheet.notesByStudent?.get(st.id)) || '';
             const nameLines = estimateWrappedLines(st.nameKm, cols.name - 1.5, 6.0, 2);
@@ -128,11 +170,24 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
             const lines = Math.max(nameLines, idLines, noteLines);
             const singleH = isPortrait
               ? Math.max(denseSingleRowMm, 3.8)
-              : activeStudents.length > 39
-                ? 3.35
-                : Math.max(denseSingleRowMm, 3.6);
+              : activeStudents.length > denseRows
+                ? 3.2 // rendered 3.15 mm (cells have no padding)
+                : activeStudents.length > 35
+                  ? 3.42 // rendered 3.4 mm (tighter cells)
+                  : activeStudents.length > compactRows
+                  ? 3.6 // rendered 3.6 mm
+                  : 4.4; // rendered 4.4 mm
             if (lines <= 1) return singleH;
-            const lineH = noteLines >= lines && noteLines > nameLines ? 3.1 : 3.35;
+            const dense = !isPortrait && activeStudents.length > 35;
+            // From 36 rows (tighter cells): a 2-line name or note renders about 4.6–5 mm.
+            // Portrait: a 3-line note renders 10.5 mm (3.5 mm per line).
+            const lineH = dense
+              ? 2.5
+              : isPortrait
+                ? 3.5
+                : noteLines >= lines && noteLines > nameLines
+                  ? 3.1
+                  : 3.35;
             return Math.max(singleH, lines * lineH);
           },
         });
@@ -157,76 +212,57 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
           // and A4 portrait (289mm usable height), accounting for Khmer Battambang glyph height
           // so the signature sits snugly right under the table without drifting or clipping.
           const rowHeightMm = isPortrait
-            ? pageRowCount > 39
+            ? pageRowCount > denseRows
               ? 3.9
-              : pageRowCount > 30
+              : pageRowCount > compactRows
                 ? 4.4
                 : 4.8
-            : pageRowCount > 39
+            : pageRowCount > denseRows
               ? 3.15
-              : pageRowCount > 30
+              : pageRowCount > compactRows
                 ? 3.4
                 : 3.9;
           const fontSizePt = isPortrait
-            ? pageRowCount > 39
+            ? pageRowCount > denseRows
               ? 7.0
               : subjectCount > 13
                 ? 7.5
                 : 8.4
-            : pageRowCount > 39
+            : pageRowCount > denseRows
               ? 7.0
-              : pageRowCount > 30
+              : pageRowCount > compactRows
                 ? 7.5
                 : 8.8;
           const headerHeightMm = isPortrait
             ? 23
-            : pageRowCount > 39
+            : pageRowCount > denseRows
               ? 11.0
-              : pageRowCount > 30
+              : pageRowCount > compactRows
                 ? 14.5
                 : 16.5;
-          const groupHeaderMm = isPortrait ? 4.4 : pageRowCount > 39 ? 2.8 : 3.2;
+          const groupHeaderMm = isPortrait ? 4.4 : pageRowCount > denseRows ? 2.8 : 3.2;
           const headerFontPt = isPortrait
             ? subjectCount > 13
               ? 7.0
               : 7.6
-            : pageRowCount > 39
+            : pageRowCount > denseRows
               ? 7.0
-              : pageRowCount > 30
+              : pageRowCount > compactRows
                 ? 7.4
                 : 8.2;
           const baseIdFontPt = isPortrait
             ? subjectCount > 13
               ? 7.5
               : 7.8
-            : pageRowCount > 39
+            : pageRowCount > denseRows
               ? 7.0
-              : pageRowCount > 30
+              : pageRowCount > compactRows
                 ? 7.5
                 : 8.0;
           const idFontPt = baseIdFontPt;
-          const signFontPt = isPortrait
-            ? 10.5
-            : pageRowCount > 39
-              ? 7.8
-              : pageRowCount > 30
-                ? 9.5
-                : 10.0;
-          const signGapMm = isPortrait
-            ? 12
-            : pageRowCount > 39
-              ? 3
-              : pageRowCount > 30
-                ? 6
-                : 8;
-          // DocumentSignature already has pt-2 (~2mm), so keep extra margin small
-          const signMarginTopMm = isPortrait
-            ? 1.5
-            : pageRowCount > 39
-              ? 0
-              : pageRowCount > 30
-                ? 0.5
-                : 2;
+          const sign = signLayoutForRows(isPortrait, pageRowCount);
+          // Tighter line boxes from 36 rows (landscape) so the rows leave room for the signatures.
+          const tightCells = isPortrait ? pageRowCount > denseRows : pageRowCount > 35;
 
           return (
             <div
@@ -247,7 +283,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
             >
               <div>
                 {/* Header */}
-                <div className={`flex items-center justify-between ${pageRowCount > 39 ? 'mb-0.5' : 'mb-1'} gap-2`}>
+                <div className={`flex items-center justify-between ${pageRowCount > denseRows ? 'mb-0.5' : 'mb-1'} gap-2`}>
                   <div
                     className={`${
                       isPortrait ? 'text-[8.5pt] gap-x-2.5' : 'text-[9.5pt] gap-x-3'
@@ -276,26 +312,26 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                   >
                     <thead>
                       <tr>
-                        <th className={`border border-black px-1.5 ${pageRowCount > 39 ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
+                        <th className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
                           ប្រុស
                         </th>
-                        <th className={`border border-black px-1.5 ${pageRowCount > 39 ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
+                        <th className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
                           ស្រី
                         </th>
-                        <th className={`border border-black px-1.5 ${pageRowCount > 39 ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
+                        <th className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} bg-slate-100 font-bold`}>
                           សរុប
                         </th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
-                        <td className={`border border-black px-1.5 ${pageRowCount > 39 ? 'py-0' : 'py-0.5'} text-center font-bold`}>
+                        <td className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} text-center font-bold`}>
                           {fmt(maleCount)}
                         </td>
-                        <td className={`border border-black px-1.5 ${pageRowCount > 39 ? 'py-0' : 'py-0.5'} text-center font-bold`}>
+                        <td className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} text-center font-bold`}>
                           {fmt(femaleCount)}
                         </td>
-                        <td className={`border border-black px-1.5 ${pageRowCount > 39 ? 'py-0' : 'py-0.5'} text-center font-bold`}>
+                        <td className={`border border-black px-1.5 ${pageRowCount > denseRows ? 'py-0' : 'py-0.5'} text-center font-bold`}>
                           {fmt(activeStudents.length)}
                         </td>
                       </tr>
@@ -305,11 +341,12 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
 
                 {/* Score Table */}
                 <table
-                  className="w-full border-collapse"
+                  // Landscape 26+ rows: no default cell padding, so the rows still leave room to sign.
+                  className={`w-full border-collapse ${!isPortrait && pageRowCount > compactRows ? '[&_td]:py-0' : ''}`}
                   style={{
                     fontSize: `${fontSizePt}pt`,
                     tableLayout: 'fixed',
-                    lineHeight: pageRowCount > 39 ? 1.1 : 1.15,
+                    lineHeight: pageRowCount > denseRows ? 1.1 : 1.15,
                   }}
                 >
                   <thead>
@@ -440,7 +477,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                     {/* Paper-form subject column numbers: grouped spans share one merged number */}
                     <tr
                       className="bg-slate-50"
-                      style={{ height: pageRowCount > 39 ? '2.8mm' : '3.4mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}
+                      style={{ height: pageRowCount > denseRows ? '2.8mm' : '3.4mm', fontSize: `${Math.max(7.0, fontSizePt - 0.5)}pt` }}
                     >
                       <th colSpan={4} className="border border-black text-center px-1.5 font-medium">
                         លេខរៀងមុខវិជ្ជា
@@ -482,10 +519,10 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                             className="border border-black text-center font-mono px-0.5 py-0"
                             style={{ fontSize: `${idFontPt}pt` }}
                           >
-                            <FitText text={fmt(student.studentId)} basePt={idFontPt} minPt={6.0} lineHeight={pageRowCount > 39 ? 1.12 : 1.25} />
+                            <FitText text={fmt(student.studentId)} basePt={idFontPt} minPt={6.0} lineHeight={tightCells ? 1.12 : 1.25} />
                           </td>
                           <td className="border border-black px-1.5 py-0 font-medium">
-                            <FitText text={student.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={pageRowCount > 39 ? 1.12 : 1.25} />
+                            <FitText text={student.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={tightCells ? 1.12 : 1.25} />
                           </td>
                           <td className="border border-black text-center p-0">
                             {student.gender === 'ប្រុស' ? 'ប' : 'ស'}
@@ -536,7 +573,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                             className="border border-black px-1"
                             style={{ fontSize: `${idFontPt}pt` }}
                           >
-                            <FitText text={note} basePt={idFontPt} minPt={5.5} lineHeight={pageRowCount > 39 ? 1.12 : 1.25} />
+                            <FitText text={note} basePt={idFontPt} minPt={5.5} lineHeight={tightCells ? 1.12 : 1.25} />
                           </td>
                         </tr>
                       );
@@ -546,11 +583,12 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
               </div>
 
               {isLastPageOfSheet ? (
-                <div style={{ marginTop: `${signMarginTopMm}mm` }}>
+                <div style={{ marginTop: `${sign.marginTopMm}mm` }}>
                   <DocumentSignature
                     profile={profile}
-                    fontSizePt={signFontPt}
-                    gapMm={signGapMm}
+                    fontSizePt={sign.fontPt}
+                    gapMm={sign.gapMm}
+                    ptMm={sign.ptMm}
                     middle={
                       studentPages.length > 1 && (
                         <div className="text-[8.5pt] text-slate-500">

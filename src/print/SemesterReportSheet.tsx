@@ -271,7 +271,7 @@ export const SemesterReportSheet: React.FC<SemesterReportSheetProps> = ({
                 profile={profile}
                 signOptions={signOptions}
                 fontSizePt={dense ? 8.5 : 9}
-                gapMm={dense ? 9 : subjectRows.length > 13 ? 14 : 18}
+                gapMm={dense ? 14 : subjectRows.length > 13 ? 18 : 20}
               />
 
               <div

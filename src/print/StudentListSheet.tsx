@@ -27,7 +27,8 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
     items: sorted,
     maxRowsPerPage: 24,
     nonLastPageBudgetMm: 164,
-    lastPageBudgetMm: 134,
+    // Room for the signature block with its 20 mm signing gap (was 13 mm).
+    lastPageBudgetMm: 127,
     getRowHeightMm: (s) => {
       const addrLines = estimateWrappedLines(s.address, 54, 8.2, 4);
       const nameLines = estimateWrappedLines(s.nameKm, 34, 6.5, 2);
@@ -206,7 +207,7 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
                 <DocumentSignature
                   profile={profile}
                   fontSizePt={10}
-                  gapMm={13}
+                  gapMm={20}
                   middle={
                     <div className="text-[8.5pt] text-slate-500">
                       ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}

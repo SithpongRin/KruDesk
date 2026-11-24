@@ -210,7 +210,7 @@ export const StudentReportSheet: React.FC<StudentReportSheetProps> = ({
                 profile={profile}
                 signOptions={signOptions}
                 fontSizePt={dense ? 8.5 : 9}
-                gapMm={dense ? 11 : subjectRows.length > 14 ? 15 : 20}
+                gapMm={dense ? 14 : subjectRows.length > 14 ? 18 : 22}
               />
 
               <div

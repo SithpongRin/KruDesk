@@ -9,7 +9,7 @@ import {
 } from '../lib/attendance';
 import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
-import { DocumentSignature } from './DocumentSignature';
+import { DocumentSignature, estimateSignatureBlockHeightMm } from './DocumentSignature';
 import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
 
 export interface AttendanceMonthRenderData {
@@ -30,6 +30,34 @@ interface AttendanceSheetProps {
 }
 
 const MAX_ROWS_PER_PAGE = 45;
+
+/**
+ * Layout tiers by rows on the page: above 39 rows the dense 3.2 mm rows; 26–39 rows the middle
+ * tier (8pt), at most 25 the large tier (measured 2026-11-24).
+ */
+const DENSE_ROWS = 39;
+const COMPACT_ROWS = 25;
+
+/**
+ * Signature block under the table, by rows on the page. The gap is the room left for the
+ * handwritten signatures of the teacher and the director (2026-11-24): 14 mm on a full 40–45-row
+ * page, 14 mm at 36–39 rows (middle tier with tighter cells), 16 mm at 26–35 rows, 20 mm otherwise.
+ */
+function signLayoutForRows(rows: number) {
+  if (rows > DENSE_ROWS) return { gapMm: 14, fontPt: 7.8, marginTopMm: 0, ptMm: 0.8 };
+  if (rows > 35) return { gapMm: 14, fontPt: 9.5, marginTopMm: 0, ptMm: 1.2 };
+  if (rows > COMPACT_ROWS) return { gapMm: 16, fontPt: 9.5, marginTopMm: 0.5, ptMm: 1.2 };
+  return { gapMm: 20, fontPt: 10.5, marginTopMm: 2, ptMm: undefined };
+}
+
+/** Height of the signature block (with its top margin) — what the last page must keep free. */
+function signBlockMm(rows: number): number {
+  const sign = signLayoutForRows(rows);
+  return (
+    sign.marginTopMm +
+    estimateSignatureBlockHeightMm({ gapMm: sign.gapMm, fontSizePt: sign.fontPt, ptMm: sign.ptMm })
+  );
+}
 
 export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
   cls,
@@ -56,18 +84,27 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
   const nameColWidthMm = hasLongStudentId ? 41 : 44;
   const noteColWidthMm = hasLongStudentId ? 12.5 : 16.5;
 
-  const baseRowMm = activeStudents.length > 39 ? 3.2 : activeStudents.length > 30 ? 3.6 : 4.1;
   const studentPages = paginateByRowHeight({
     items: activeStudents,
     maxRowsPerPage: MAX_ROWS_PER_PAGE,
     nonLastPageBudgetMm: 176,
-    lastPageBudgetMm: 162,
+    // Rows + signature area measured at 180 mm (after the daily-total row); keep the signature block free.
+    lastPageBudgetMm: 178 - signBlockMm(activeStudents.length),
     getRowHeightMm: (s) => {
       const nameLines = estimateWrappedLines(s.nameKm, nameColWidthMm - 1.5, 6.0, 2);
       const idLines = estimateWrappedLines(fmt(s.studentId), idColWidthMm - 1, 6.0, 2);
       const lines = Math.max(nameLines, idLines);
-      const singleH = activeStudents.length > 39 ? 3.35 : Math.max(baseRowMm, 3.6);
-      return lines > 1 ? lines * 3.35 : singleH;
+      const dense = activeStudents.length > DENSE_ROWS;
+      // Dense rows render 3.2 mm (line-height 1.12, no cell padding); a 2-line name about 4 mm.
+      // Rendered: middle tier 3.8 mm, otherwise about 4.3 mm.
+      const singleH = dense
+        ? 3.25
+        : activeStudents.length > 35
+          ? 3.65 // tighter cells from 36 rows
+          : activeStudents.length > COMPACT_ROWS
+            ? 3.8
+            : 4.3;
+      return lines > 1 ? Math.max(singleH, lines * (dense ? 2.5 : 3.35)) : singleH;
     },
   });
 
@@ -94,14 +131,15 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
 
           // Adaptive sizing for A4 landscape (205mm usable height, 285mm usable width)
           // accounting for Khmer Battambang glyph height + daily total row + signature.
-          const rowHeightMm = pageRowCount > 39 ? 3.2 : pageRowCount > 30 ? 3.6 : 4.1;
-          const fontSizePt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 8.0 : 8.8;
-          const baseIdFontPt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 7.6 : 8.2;
+          const rowHeightMm = pageRowCount > DENSE_ROWS ? 3.2 : pageRowCount > COMPACT_ROWS ? 3.6 : 4.1;
+          const fontSizePt = pageRowCount > DENSE_ROWS ? 7.0 : pageRowCount > COMPACT_ROWS ? 8.0 : 8.8;
+          const baseIdFontPt = pageRowCount > DENSE_ROWS ? 7.0 : pageRowCount > COMPACT_ROWS ? 7.6 : 8.2;
           const idFontPt = baseIdFontPt;
-          const dayFontPt = pageRowCount > 39 ? 7.0 : pageRowCount > 30 ? 7.4 : 7.8;
-          const signFontPt = pageRowCount > 39 ? 8.5 : pageRowCount > 30 ? 9.5 : 10.5;
-          const signGapMm = pageRowCount > 39 ? 5 : pageRowCount > 30 ? 8 : 14;
-          const signMarginTopMm = pageRowCount > 39 ? 0.5 : pageRowCount > 30 ? 1.5 : 3;
+          const dayFontPt = pageRowCount > DENSE_ROWS ? 7.0 : pageRowCount > COMPACT_ROWS ? 7.4 : 7.8;
+          const sign = signLayoutForRows(pageRowCount);
+          // From 36 rows: tighter line boxes so the rows still leave room for the signatures.
+          const cellLineHeight = pageRowCount > 35 ? 1.12 : 1.25;
+          const sumCellPad = pageRowCount > COMPACT_ROWS ? ' p-0' : '';
 
           return (
             <div
@@ -178,7 +216,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                   style={{
                     fontSize: `${fontSizePt}pt`,
                     tableLayout: 'fixed',
-                    lineHeight: pageRowCount > 39 ? 1.1 : 1.15,
+                    lineHeight: pageRowCount > DENSE_ROWS ? 1.1 : 1.15,
                   }}
                 >
                   <thead>
@@ -263,15 +301,15 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                           </td>
                           <td
                             className="border border-black px-0.5 text-center font-mono"
-                            style={{ fontSize: `${idFontPt}pt`, padding: '0 2px', lineHeight: 1.25 }}
+                            style={{ fontSize: `${idFontPt}pt`, padding: '0 2px', lineHeight: cellLineHeight }}
                           >
-                            <FitText text={fmt(s.studentId)} basePt={idFontPt} minPt={6.0} lineHeight={1.25} />
+                            <FitText text={fmt(s.studentId)} basePt={idFontPt} minPt={6.0} lineHeight={cellLineHeight} />
                           </td>
                           <td
                             className="border border-black px-1.5 font-medium"
-                            style={{ padding: '0 4px', lineHeight: 1.25 }}
+                            style={{ padding: '0 4px', lineHeight: cellLineHeight }}
                           >
-                            <FitText text={s.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={1.25} />
+                            <FitText text={s.nameKm} basePt={fontSizePt} minPt={6.0} lineHeight={cellLineHeight} />
                           </td>
                           {dayInfos.map((d) => {
                             const code =
@@ -302,19 +340,19 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                               </td>
                             );
                           })}
-                          <td className="border border-black text-center">
+                          <td className={`border border-black text-center${sumCellPad}`}>
                             {summary.excused > 0 ? fmt(summary.excused) : ''}
                           </td>
                           <td
-                            className="border border-black text-center"
+                            className={`border border-black text-center${sumCellPad}`}
                             style={{ color: summary.unexcused > 0 ? '#b91c1c' : undefined }}
                           >
                             {summary.unexcused > 0 ? fmt(summary.unexcused) : ''}
                           </td>
-                          <td className="border border-black text-center font-bold">
+                          <td className={`border border-black text-center font-bold${sumCellPad}`}>
                             {summary.total > 0 ? fmt(summary.total) : ''}
                           </td>
-                          <td className="border border-black"></td>
+                          <td className={`border border-black${sumCellPad}`}></td>
                         </tr>
                       );
                     })}
@@ -393,11 +431,12 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
 
               {/* Signature block ONLY on the last page of the month */}
               {isLastPageOfMonth ? (
-                <div style={{ marginTop: `${signMarginTopMm}mm` }}>
+                <div style={{ marginTop: `${sign.marginTopMm}mm` }}>
                   <DocumentSignature
                     profile={profile}
-                    fontSizePt={signFontPt}
-                    gapMm={signGapMm}
+                    fontSizePt={sign.fontPt}
+                    gapMm={sign.gapMm}
+                    ptMm={sign.ptMm}
                     middle={
                       studentPages.length > 1 && (
                         <div className="text-[8.5pt] text-slate-500">

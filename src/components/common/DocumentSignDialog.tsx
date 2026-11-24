@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { getSetting, setSetting } from '../../db/database';
 import { formatKhmerMonthYear, toLocalDateKey } from '../../lib/khmerDate';
 import type { DocumentSignOptions } from '../../print/DocumentSignature';
-import { isSealImage, type SealImage } from '../../utils/directorSeal';
+import {
+  DEFAULT_STAMP_SCALE,
+  clampStampOffsetMm,
+  clampStampScale,
+  isSealImage,
+  type SealImage,
+} from '../../utils/directorSeal';
 import { AppleModal } from './AppleModal';
 import { AppleButton } from './AppleButton';
 
@@ -39,6 +45,9 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
   const [teacherSign, setTeacherSign] = useState(false);
   const sealAvailable = Boolean(seal.stamp || seal.signature);
   const [directorSeal, setDirectorSeal] = useState(false);
+  const [stampScale, setStampScale] = useState(DEFAULT_STAMP_SCALE);
+  const [stampOffsetXMm, setStampOffsetXMm] = useState(0);
+  const [stampOffsetYMm, setStampOffsetYMm] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -52,20 +61,38 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
       getSetting<unknown>('directorStamp'),
       getSetting<unknown>('directorSignature'),
       getSetting<unknown>('teacherSignature'),
+      getSetting<number>('directorStampScale'),
+      getSetting<number>('directorStampOffsetXMm'),
+      getSetting<number>('directorStampOffsetYMm'),
     ])
-      .then(([savedPlace, savedLunar, savedHandwritten, stamp, signature, teacher]) => {
-        if (cancelled) return;
-        setSeal({
-          ...(isSealImage(stamp) ? { stamp } : {}),
-          ...(isSealImage(signature) ? { signature } : {}),
-          ...(isSealImage(teacher) ? { teacher } : {}),
-        });
-        setDirectorSeal(false);
-        setTeacherSign(false);
-        if (savedPlace) setPlace(savedPlace);
-        if (savedLunar) setLunarDate(savedLunar);
-        if (typeof savedHandwritten === 'boolean') setHandwrittenDate(savedHandwritten);
-      })
+      .then(
+        ([
+          savedPlace,
+          savedLunar,
+          savedHandwritten,
+          stamp,
+          signature,
+          teacher,
+          savedScale,
+          savedOx,
+          savedOy,
+        ]) => {
+          if (cancelled) return;
+          setSeal({
+            ...(isSealImage(stamp) ? { stamp } : {}),
+            ...(isSealImage(signature) ? { signature } : {}),
+            ...(isSealImage(teacher) ? { teacher } : {}),
+          });
+          setDirectorSeal(false);
+          setTeacherSign(false);
+          setStampScale(clampStampScale(savedScale ?? DEFAULT_STAMP_SCALE));
+          setStampOffsetXMm(clampStampOffsetMm(savedOx ?? 0));
+          setStampOffsetYMm(clampStampOffsetMm(savedOy ?? 0));
+          if (savedPlace) setPlace(savedPlace);
+          if (savedLunar) setLunarDate(savedLunar);
+          if (typeof savedHandwritten === 'boolean') setHandwrittenDate(savedHandwritten);
+        }
+      )
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -86,7 +113,14 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
         lunarDate: lunarDate.trim(),
         place: place.trim(),
         gregorianDate: handwrittenDate ? '' : gregorianDate || toLocalDateKey(),
-        ...(directorSeal && seal.stamp ? { directorStamp: seal.stamp } : {}),
+        ...(directorSeal && seal.stamp
+          ? {
+              directorStamp: seal.stamp,
+              stampScale,
+              stampOffsetXMm,
+              stampOffsetYMm,
+            }
+          : {}),
         ...(directorSeal && seal.signature ? { directorSignature: seal.signature } : {}),
         ...(teacherSign && seal.teacher ? { teacherSignature: seal.teacher } : {}),
       });

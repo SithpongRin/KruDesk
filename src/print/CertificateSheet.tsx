@@ -154,7 +154,7 @@ const CertificatePage: React.FC<{
           <DocumentSignature
             profile={profile}
             signOptions={signOptions}
-            gapMm={13}
+            gapMm={20}
             fontSizePt={11}
           />
         </div>

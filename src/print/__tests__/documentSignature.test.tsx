@@ -45,16 +45,20 @@ describe('DocumentSignature (teacher layout 2026-11-20)', () => {
     );
     const [left, , right] = Array.from(container.firstElementChild!.children) as HTMLElement[];
 
-    // Left: the hidden date lines only keep the titles level; visible text is the two titles.
+    // Left: the hidden date lines only keep the titles level; visible text is the two titles,
+    // plus an always-rendered director signing space (`data-director-seal-anchor`) underneath.
     const hidden = left.querySelector('[aria-hidden="true"]') as HTMLElement;
     expect(hidden.className).toContain('invisible');
+    const anchor = left.querySelector('[data-director-seal-anchor]') as HTMLElement;
+    expect(anchor).toBeTruthy();
+    expect(anchor.style.height).toBe('20mm');
     const leftVisible = Array.from(left.children)
-      .filter((el) => el !== hidden)
+      .filter((el) => el !== hidden && el !== anchor)
       .map((el) => el.textContent);
     expect(leftVisible).toEqual([APPROVER_LINE, DIRECTOR_TITLE]);
     expect(container.textContent).not.toContain(profile.directorName);
 
-    // Right: lunar line, place + date, title, signing space, teacher's name.
+    // Right: lunar line, place + date, title, signing space (default 20mm), teacher's name.
     expect(right.textContent).toContain('ឆ្នាំ មមែ អដ្ឋស័ក ព.ស. ២៥៧០');
     expect(right.textContent).toContain('ដំណាក់ព្រីង ថ្ងៃទី...........ខែ.........ឆ្នាំ');
     expect(right.textContent).toContain(TEACHER_TITLE);
@@ -113,5 +117,48 @@ describe('DocumentSignature (teacher layout 2026-11-20)', () => {
     // small signing gap (report cards): still ≥ 34 mm for stamp+signature, ≥ 30 mm for a stamp
     expect(heightOf({ directorStamp: seal }, 10)).toBeGreaterThanOrEqual(34);
     expect(heightOf({ directorStamp: seal, directorSignature: seal }, 10)).toBeGreaterThanOrEqual(30);
+  });
+
+  it('scales and nudges the director stamp when stampScale / offsets are set, and respects ptMm', () => {
+    const seal = { dataUrl: 'data:image/png;base64,AAAA', width: 100, height: 100 };
+    const base = { month: '2026-11', lunarDate: '', place: '', gregorianDate: '' };
+    const baseRender = render(
+      <DocumentSignature profile={profile} signOptions={{ ...base, directorStamp: seal }} gapMm={20} ptMm={0.5} />
+    );
+    const root = baseRender.container.firstElementChild as HTMLElement;
+    expect(root.style.paddingTop).toBe('0.5mm');
+    const baseImg = baseRender.container.querySelector('[data-director-seal]') as HTMLImageElement;
+    const baseH = parseFloat(baseImg.style.height);
+
+    const enlarged = render(
+      <DocumentSignature
+        profile={profile}
+        signOptions={{
+          ...base,
+          directorStamp: seal,
+          stampScale: 1.5,
+          stampOffsetXMm: 4,
+          stampOffsetYMm: -3,
+        }}
+        gapMm={20}
+      />
+    );
+    const bigImg = enlarged.container.querySelector('[data-director-seal]') as HTMLImageElement;
+    expect(parseFloat(bigImg.style.height)).toBeCloseTo(baseH * 1.5, 2);
+    expect(bigImg.style.left).toContain('calc(50% +');
+    const bigAnchor = enlarged.container.querySelector('[data-director-seal-anchor]') as HTMLElement;
+    expect(bigAnchor.dataset.stampOffsetX).toBe('4');
+    expect(bigAnchor.dataset.stampOffsetY).toBe('-3');
+
+    // Clamp extreme scale values safely within [0.4, 2.2]
+    const clampedHigh = render(
+      <DocumentSignature
+        profile={profile}
+        signOptions={{ ...base, directorStamp: seal, stampScale: 9 }}
+        gapMm={20}
+      />
+    );
+    const maxImg = clampedHigh.container.querySelector('[data-director-seal]') as HTMLImageElement;
+    expect(parseFloat(maxImg.style.height)).toBeCloseTo(baseH * 2.2, 2);
   });
 });

@@ -2,7 +2,13 @@ import React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Profile } from '../types/domain';
 import { db } from '../db/database';
-import type { SealImage } from '../utils/directorSeal';
+import {
+  STAMP_OPACITY,
+  clampStampOffsetMm,
+  clampStampScale,
+  computeDirectorStampBox,
+  type SealImage,
+} from '../utils/directorSeal';
 import { getKhmerMonthName, toLocalDateKey } from '../lib/khmerDate';
 import { toKhmerNumerals } from '../utils/khmerNumerals';
 
@@ -20,6 +26,11 @@ export interface DocumentSignOptions {
   directorSignature?: SealImage;
   /** Teacher's signature image (Settings), set only when «ដាក់ហត្ថលេខាគ្រូ» is ticked. */
   teacherSignature?: SealImage;
+  /** User-selected scale factor for the director's stamp (default 1, clamped 0.4–2.2). */
+  stampScale?: number;
+  /** Optional horizontal/vertical nudge (in mm) relative to the default stamp placement. */
+  stampOffsetXMm?: number;
+  stampOffsetYMm?: number;
 }
 
 /** Titles under every document (teacher's sample, 2026-11-20). */
@@ -81,12 +92,25 @@ interface DocumentSignatureProps {
   /** false → only the director signs (certificate): dates, «នាយកសាលា» and name on the right. */
   showTeacher?: boolean;
   color?: string;
-  /** Space left for the handwritten signature, above the name. */
+  /** Space left for the handwritten signature, above the name (default 20mm). */
   gapMm?: number;
   /** Text size of the block (default 9pt). */
   fontSizePt?: number;
+  /** Top padding of the signature block in mm (default: Tailwind pt-2 ≈ 2.1mm when omitted). */
+  ptMm?: number;
   /** Shown between the two blocks (e.g. a page number). */
   middle?: React.ReactNode;
+}
+
+/** Estimates total vertical height (mm) of a rendered DocumentSignature block for pagination budgets. */
+export function estimateSignatureBlockHeightMm(params: {
+  gapMm: number;
+  fontSizePt: number;
+  ptMm?: number;
+}): number {
+  const lineMm = params.fontSizePt * 0.3528 * 1.375;
+  const topMm = params.ptMm ?? 2.12;
+  return topMm + 4 * lineMm + 0.5 + params.gapMm;
 }
 
 /**
@@ -98,41 +122,68 @@ const SealSpace: React.FC<{
   fontSizePt: number;
   stamp?: SealImage;
   signature?: SealImage;
-}> = ({ gapMm, fontSizePt, stamp, signature }) => {
-  // Height of one text line of the block (leading-snug), to reach up over the two titles.
-  const lineMm = fontSizePt * 0.3528 * 1.375;
+  stampScale?: number;
+  stampOffsetXMm?: number;
+  stampOffsetYMm?: number;
+  isDirector?: boolean;
+  hasBottomName?: boolean;
+}> = ({
+  gapMm,
+  fontSizePt,
+  stamp,
+  signature,
+  stampScale,
+  stampOffsetXMm,
+  stampOffsetYMm,
+  isDirector = false,
+  hasBottomName = false,
+}) => {
   const signatureHeightMm = Math.max(8, gapMm * 0.9);
-  // As on the school's documents, the round stamp is large and covers «បានឃើញ និង ឯកភាព» and
-  // «នាយកសាលា». Some schools have stamp + signature (+ name) in one image: uploaded as
-  // «ត្រាសាលា» with no separate signature, it is drawn taller so the signature lands in the gap.
   const combined = Boolean(stamp && !signature);
-  // Never smaller than on the school's own score sheets (stamp+signature ≈ 34 mm tall, round
-  // stamp ≈ 30 mm), even where the signing gap is small (report cards).
-  const stampHeightMm = combined
-    ? Math.min(44, Math.max(34, gapMm + 2 * lineMm + 12))
-    : Math.min(36, Math.max(30, gapMm + 2 * lineMm + 6));
-  const stampMaxWidthMm = combined ? 85 : stampHeightMm * 1.15;
-  // Keep the stamp's bottom edge within the signature block (gapMm + name line) so it never hangs past the page bottom.
-  const stampTopMm = Math.min(-(2 * lineMm) - 1, gapMm + lineMm - stampHeightMm);
+  const aspectRatio = stamp && stamp.width > 0 && stamp.height > 0 ? stamp.width / stamp.height : 1;
+  const box = computeDirectorStampBox({
+    gapMm,
+    fontSizePt,
+    combined,
+    hasBottomName,
+    aspectRatio,
+    scale: stampScale,
+    offsetXMm: stampOffsetXMm,
+    offsetYMm: stampOffsetYMm,
+  });
+
   return (
-    <div className="relative" style={{ height: `${gapMm}mm` }}>
+    <div
+      className="relative"
+      style={{ height: `${gapMm}mm` }}
+      {...(isDirector
+        ? {
+            'data-director-seal-anchor': '',
+            'data-gap-mm': String(gapMm),
+            'data-font-pt': String(fontSizePt),
+            'data-has-bottom-name': hasBottomName ? '1' : '0',
+            'data-has-director-sig': signature ? '1' : '0',
+            'data-has-stamp': stamp ? '1' : '0',
+            'data-stamp-scale': String(clampStampScale(stampScale)),
+            'data-stamp-offset-x': String(clampStampOffsetMm(stampOffsetXMm)),
+            'data-stamp-offset-y': String(clampStampOffsetMm(stampOffsetYMm)),
+          }
+        : {})}
+    >
       {stamp && (
         <img
           src={stamp.dataUrl}
           alt=""
+          data-director-seal=""
           className="absolute max-w-none pointer-events-none"
           style={{
-            height: `${stampHeightMm}mm`,
-            width: 'auto',
-            maxWidth: `${stampMaxWidthMm}mm`,
+            height: `${box.heightMm}mm`,
+            width: `${box.widthMm}mm`,
             objectFit: 'contain',
-            // centred on the block (teacher, 2026-11-20)
-            left: '50%',
-            // In a stamp+signature image the round stamp sits on the left and the signature runs
-            // to the right, so centre the stamp part (about 40% across) rather than the picture.
+            left: box.offsetXMm !== 0 ? `calc(50% + ${box.offsetXMm}mm)` : '50%',
             transform: combined ? 'translateX(-40%)' : 'translateX(-50%)',
-            top: `${stampTopMm}mm`,
-            opacity: 0.92,
+            top: `${box.topMm}mm`,
+            opacity: STAMP_OPACITY,
           }}
         />
       )}
@@ -162,7 +213,8 @@ const SealSpace: React.FC<{
  *
  *                                                (teacher's name)
  *
- * The approver block has no dates and no name; its first title is level with the teacher's title.
+ * The approver block has no dates and no name; its first title is level with the teacher's title,
+ * and `<SealSpace>` is always rendered under «នាយកសាលា» so the director has full signing clearance.
  */
 export const DocumentSignature: React.FC<DocumentSignatureProps> = ({
   profile,
@@ -170,8 +222,9 @@ export const DocumentSignature: React.FC<DocumentSignatureProps> = ({
   teacherTitle = TEACHER_TITLE,
   showTeacher = true,
   color = '#000000',
-  gapMm = 14,
+  gapMm = 20,
   fontSizePt = 9,
+  ptMm,
   middle,
 }) => {
   // Documents printed without the sign dialog reuse what the teacher typed there last time.
@@ -186,6 +239,9 @@ export const DocumentSignature: React.FC<DocumentSignatureProps> = ({
   const stamp = signOptions?.directorStamp;
   const directorSignature = signOptions?.directorSignature;
   const teacherSignature = signOptions?.teacherSignature;
+  const stampScale = signOptions?.stampScale;
+  const stampOffsetXMm = signOptions?.stampOffsetXMm;
+  const stampOffsetYMm = signOptions?.stampOffsetYMm;
 
   const lunarLine = formatDocumentLunarLine(
     signOptions?.lunarDate ?? (savedLunar?.value as string | undefined) ?? ''
@@ -202,11 +258,14 @@ export const DocumentSignature: React.FC<DocumentSignatureProps> = ({
     </>
   );
 
+  const topPadClass = ptMm === undefined ? 'pt-2' : '';
+  const topPadStyle = ptMm === undefined ? {} : { paddingTop: `${ptMm}mm` };
+
   if (!showTeacher) {
     return (
       <div
-        className="flex justify-end pr-12 leading-snug pt-2"
-        style={{ color, fontSize: `${fontSizePt}pt` }}
+        className={`flex justify-end pr-12 leading-snug ${topPadClass}`}
+        style={{ color, fontSize: `${fontSizePt}pt`, ...topPadStyle }}
       >
         <div className="text-center">
           {dateLines}
@@ -218,6 +277,11 @@ export const DocumentSignature: React.FC<DocumentSignatureProps> = ({
             fontSizePt={fontSizePt}
             stamp={stamp}
             signature={directorSignature}
+            stampScale={stampScale}
+            stampOffsetXMm={stampOffsetXMm}
+            stampOffsetYMm={stampOffsetYMm}
+            isDirector
+            hasBottomName
           />
           <div style={{ fontFamily: MOUL }}>{profile.directorName}</div>
         </div>
@@ -227,8 +291,13 @@ export const DocumentSignature: React.FC<DocumentSignatureProps> = ({
 
   return (
     <div
-      className="grid items-start leading-snug pt-2"
-      style={{ color, fontSize: `${fontSizePt}pt`, gridTemplateColumns: '1fr auto 1fr' }}
+      className={`grid items-start leading-snug ${topPadClass}`}
+      style={{
+        color,
+        fontSize: `${fontSizePt}pt`,
+        gridTemplateColumns: '1fr auto 1fr',
+        ...topPadStyle,
+      }}
     >
       <div className="text-center">
         {/* Invisible date lines keep «បានឃើញ និង ឯកភាព» level with the teacher's title. */}
@@ -239,14 +308,17 @@ export const DocumentSignature: React.FC<DocumentSignatureProps> = ({
           {APPROVER_LINE}
         </div>
         <div style={{ fontFamily: MOUL }}>{DIRECTOR_TITLE}</div>
-        {(stamp || directorSignature) && (
-          <SealSpace
-            gapMm={gapMm}
-            fontSizePt={fontSizePt}
-            stamp={stamp}
-            signature={directorSignature}
-          />
-        )}
+        <SealSpace
+          gapMm={gapMm}
+          fontSizePt={fontSizePt}
+          stamp={stamp}
+          signature={directorSignature}
+          stampScale={stampScale}
+          stampOffsetXMm={stampOffsetXMm}
+          stampOffsetYMm={stampOffsetYMm}
+          isDirector
+          hasBottomName={false}
+        />
       </div>
 
       <div className="self-end text-center px-2">{middle}</div>

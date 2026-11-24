@@ -8,7 +8,13 @@ import { AppleButton } from '../../components/common/AppleButton';
 import { ImageCropModal } from '../../components/common/ImageCropModal';
 import { DocumentSignature } from '../../print/DocumentSignature';
 import type { Profile } from '../../types/domain';
-import { isSealImage, type DirectorSealKey, type SealImage } from '../../utils/directorSeal';
+import {
+  DEFAULT_STAMP_SCALE,
+  clampStampScale,
+  isSealImage,
+  type DirectorSealKey,
+  type SealImage,
+} from '../../utils/directorSeal';
 
 const SLOTS: Array<{ key: DirectorSealKey; title: string; hint: string }> = [
   {
@@ -39,6 +45,7 @@ const SealSlot: React.FC<{ slot: (typeof SLOTS)[number] }> = ({ slot }) => {
   const profileRow = useLiveQuery(() => db.settings.get('profile'), []);
   const stampRow = useLiveQuery(() => db.settings.get('directorStamp'), []);
   const directorSignRow = useLiveQuery(() => db.settings.get('directorSignature'), []);
+  const stampScaleRow = useLiveQuery(() => db.settings.get('directorStampScale'), []);
   const profile = (profileRow?.value as Profile | undefined) ?? {
     teacherName: '',
     schoolName: '',
@@ -47,12 +54,15 @@ const SealSlot: React.FC<{ slot: (typeof SLOTS)[number] }> = ({ slot }) => {
   };
   const savedStamp = isSealImage(stampRow?.value) ? stampRow.value : undefined;
   const savedDirectorSign = isSealImage(directorSignRow?.value) ? directorSignRow.value : undefined;
+  const savedStampScale = clampStampScale(
+    typeof stampScaleRow?.value === 'number' ? stampScaleRow.value : DEFAULT_STAMP_SCALE
+  );
   const renderPreview = (candidate: SealImage, widthPx: number) => {
     const seal =
       slot.key === 'directorStamp'
-        ? { directorStamp: candidate, directorSignature: savedDirectorSign }
+        ? { directorStamp: candidate, directorSignature: savedDirectorSign, stampScale: savedStampScale }
         : slot.key === 'directorSignature'
-          ? { directorStamp: savedStamp, directorSignature: candidate }
+          ? { directorStamp: savedStamp, directorSignature: candidate, stampScale: savedStampScale }
           : { teacherSignature: candidate };
     return (
       // Real size (mm) scaled to the dialog: the same block and spacing as on the documents.
@@ -63,7 +73,7 @@ const SealSlot: React.FC<{ slot: (typeof SLOTS)[number] }> = ({ slot }) => {
         <DocumentSignature
           profile={profile}
           signOptions={{ month: '', lunarDate: '', place: '', gregorianDate: '', ...seal }}
-          gapMm={13}
+          gapMm={20}
           fontSizePt={11}
         />
       </div>

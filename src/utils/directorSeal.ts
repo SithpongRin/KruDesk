@@ -13,6 +13,86 @@ export interface SealImage {
   height: number;
 }
 
+export const MIN_STAMP_SCALE = 0.4;
+export const MAX_STAMP_SCALE = 2.2;
+export const DEFAULT_STAMP_SCALE = 1;
+export const STAMP_OPACITY = 0.92;
+
+export function clampStampScale(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_STAMP_SCALE;
+  return Math.min(MAX_STAMP_SCALE, Math.max(MIN_STAMP_SCALE, value));
+}
+
+export function clampStampOffsetMm(value: unknown, limitMm = 60): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.min(limitMm, Math.max(-limitMm, value));
+}
+
+export interface StampPlacementInput {
+  gapMm: number;
+  fontSizePt: number;
+  combined: boolean;
+  /** True when a name line sits below SealSpace (director-only certificate block). */
+  hasBottomName?: boolean;
+  /** Natural width / height of the stamp image. */
+  aspectRatio?: number;
+  scale?: number;
+  offsetXMm?: number;
+  offsetYMm?: number;
+}
+
+export interface StampPlacementBox {
+  widthMm: number;
+  heightMm: number;
+  /** Top relative to SealSpace top (mm). */
+  topMm: number;
+  /** Horizontal offset from 50% of SealSpace width (mm). */
+  offsetXMm: number;
+  /** Fraction of widthMm placed to the left of the anchor point (0.4 combined, 0.5 round). */
+  anchorXFraction: number;
+  scale: number;
+  offsetYMm: number;
+}
+
+/**
+ * Single source of truth for the director's stamp size & position inside `SealSpace`,
+ * shared by DOM print rendering, interactive PDF preview overlay, and pdf-lib embedding.
+ */
+export function computeDirectorStampBox(input: StampPlacementInput): StampPlacementBox {
+  const lineMm = input.fontSizePt * 0.3528 * 1.375;
+  const baseHeightMm = input.combined
+    ? Math.min(44, Math.max(34, input.gapMm + 2 * lineMm + 12))
+    : Math.min(36, Math.max(30, input.gapMm + 2 * lineMm + 6));
+  const baseMaxWidthMm = input.combined ? 85 : baseHeightMm * 1.15;
+  const aspect =
+    typeof input.aspectRatio === 'number' && Number.isFinite(input.aspectRatio) && input.aspectRatio > 0
+      ? input.aspectRatio
+      : 1;
+  const unscaledWidthMm = Math.min(baseMaxWidthMm, baseHeightMm * aspect);
+  const unscaledHeightMm = unscaledWidthMm / aspect;
+  const bottomAllowanceMm = input.hasBottomName ? lineMm : 0;
+  const baseTopMm = Math.min(
+    -(2 * lineMm) - 1,
+    input.gapMm + bottomAllowanceMm - unscaledHeightMm
+  );
+  const scale = clampStampScale(input.scale);
+  const offsetXMm = clampStampOffsetMm(input.offsetXMm);
+  const offsetYMm = clampStampOffsetMm(input.offsetYMm);
+  const widthMm = unscaledWidthMm * scale;
+  const heightMm = unscaledHeightMm * scale;
+  const baseCenterYMm = baseTopMm + unscaledHeightMm / 2;
+  const topMm = baseCenterYMm - heightMm / 2 + offsetYMm;
+  return {
+    widthMm,
+    heightMm,
+    topMm,
+    offsetXMm,
+    anchorXFraction: input.combined ? 0.4 : 0.5,
+    scale,
+    offsetYMm,
+  };
+}
+
 export function isSealImage(value: unknown): value is SealImage {
   if (!value || typeof value !== 'object') return false;
   const v = value as Partial<SealImage>;
