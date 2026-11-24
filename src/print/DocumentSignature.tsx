@@ -7,6 +7,7 @@ import {
   clampStampOffsetMm,
   clampStampScale,
   computeDirectorStampBox,
+  computeSignatureBox,
   type SealImage,
 } from '../utils/directorSeal';
 import { getKhmerMonthName, toLocalDateKey } from '../lib/khmerDate';
@@ -31,6 +32,11 @@ export interface DocumentSignOptions {
   /** Optional horizontal/vertical nudge (in mm) relative to the default stamp placement. */
   stampOffsetXMm?: number;
   stampOffsetYMm?: number;
+  /** User-selected scale factor for the teacher's signature (default 1, clamped 0.4–2.2). */
+  teacherSignatureScale?: number;
+  /** Optional horizontal/vertical nudge (in mm) of the teacher's signature. */
+  teacherSignatureOffsetXMm?: number;
+  teacherSignatureOffsetYMm?: number;
 }
 
 /** Titles under every document (teacher's sample, 2026-11-20). */
@@ -127,6 +133,11 @@ const SealSpace: React.FC<{
   stampOffsetYMm?: number;
   isDirector?: boolean;
   hasBottomName?: boolean;
+  /** Teacher's signing space: the signature is resizable / movable in the PDF preview. */
+  isTeacher?: boolean;
+  signatureScale?: number;
+  signatureOffsetXMm?: number;
+  signatureOffsetYMm?: number;
 }> = ({
   gapMm,
   fontSizePt,
@@ -137,6 +148,10 @@ const SealSpace: React.FC<{
   stampOffsetYMm,
   isDirector = false,
   hasBottomName = false,
+  isTeacher = false,
+  signatureScale,
+  signatureOffsetXMm,
+  signatureOffsetYMm,
 }) => {
   const signatureHeightMm = Math.max(8, gapMm * 0.9);
   const combined = Boolean(stamp && !signature);
@@ -150,6 +165,15 @@ const SealSpace: React.FC<{
     scale: stampScale,
     offsetXMm: stampOffsetXMm,
     offsetYMm: stampOffsetYMm,
+  });
+  const sigAspect =
+    signature && signature.width > 0 && signature.height > 0 ? signature.width / signature.height : 2;
+  const sigBox = computeSignatureBox({
+    gapMm,
+    aspectRatio: sigAspect,
+    scale: signatureScale,
+    offsetXMm: signatureOffsetXMm,
+    offsetYMm: signatureOffsetYMm,
   });
 
   return (
@@ -167,6 +191,17 @@ const SealSpace: React.FC<{
             'data-stamp-scale': String(clampStampScale(stampScale)),
             'data-stamp-offset-x': String(clampStampOffsetMm(stampOffsetXMm)),
             'data-stamp-offset-y': String(clampStampOffsetMm(stampOffsetYMm)),
+          }
+        : {})}
+      {...(isTeacher
+        ? {
+            'data-teacher-sign-anchor': '',
+            'data-gap-mm': String(gapMm),
+            'data-font-pt': String(fontSizePt),
+            'data-has-teacher-sig': signature ? '1' : '0',
+            'data-teacher-scale': String(clampStampScale(signatureScale)),
+            'data-teacher-offset-x': String(clampStampOffsetMm(signatureOffsetXMm)),
+            'data-teacher-offset-y': String(clampStampOffsetMm(signatureOffsetYMm)),
           }
         : {})}
     >
@@ -187,7 +222,24 @@ const SealSpace: React.FC<{
           }}
         />
       )}
-      {signature && (
+      {signature && isTeacher && (
+        <img
+          src={signature.dataUrl}
+          alt=""
+          data-teacher-signature=""
+          className="absolute max-w-none pointer-events-none"
+          style={{
+            height: `${sigBox.heightMm}mm`,
+            width: `${sigBox.widthMm}mm`,
+            objectFit: 'contain',
+            left: sigBox.offsetXMm !== 0 ? `calc(50% + ${sigBox.offsetXMm}mm)` : '50%',
+            transform: 'translateX(-50%)',
+            top: `${sigBox.topMm}mm`,
+            opacity: 1,
+          }}
+        />
+      )}
+      {signature && !isTeacher && (
         <img
           src={signature.dataUrl}
           alt=""
@@ -242,6 +294,9 @@ export const DocumentSignature: React.FC<DocumentSignatureProps> = ({
   const stampScale = signOptions?.stampScale;
   const stampOffsetXMm = signOptions?.stampOffsetXMm;
   const stampOffsetYMm = signOptions?.stampOffsetYMm;
+  const teacherSignatureScale = signOptions?.teacherSignatureScale;
+  const teacherSignatureOffsetXMm = signOptions?.teacherSignatureOffsetXMm;
+  const teacherSignatureOffsetYMm = signOptions?.teacherSignatureOffsetYMm;
 
   const lunarLine = formatDocumentLunarLine(
     signOptions?.lunarDate ?? (savedLunar?.value as string | undefined) ?? ''
@@ -328,7 +383,15 @@ export const DocumentSignature: React.FC<DocumentSignatureProps> = ({
         <div className="mt-0.5" style={{ fontFamily: MOUL }}>
           {teacherTitle}
         </div>
-        <SealSpace gapMm={gapMm} fontSizePt={fontSizePt} signature={teacherSignature} />
+        <SealSpace
+          gapMm={gapMm}
+          fontSizePt={fontSizePt}
+          signature={teacherSignature}
+          isTeacher
+          signatureScale={teacherSignatureScale}
+          signatureOffsetXMm={teacherSignatureOffsetXMm}
+          signatureOffsetYMm={teacherSignatureOffsetYMm}
+        />
         <div style={{ fontFamily: MOUL }}>{profile.teacherName}</div>
       </div>
     </div>

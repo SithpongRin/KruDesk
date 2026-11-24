@@ -48,6 +48,9 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
   const [stampScale, setStampScale] = useState(DEFAULT_STAMP_SCALE);
   const [stampOffsetXMm, setStampOffsetXMm] = useState(0);
   const [stampOffsetYMm, setStampOffsetYMm] = useState(0);
+  const [teacherScale, setTeacherScale] = useState(DEFAULT_STAMP_SCALE);
+  const [teacherOffsetXMm, setTeacherOffsetXMm] = useState(0);
+  const [teacherOffsetYMm, setTeacherOffsetYMm] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -64,6 +67,9 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
       getSetting<number>('directorStampScale'),
       getSetting<number>('directorStampOffsetXMm'),
       getSetting<number>('directorStampOffsetYMm'),
+      getSetting<number>('teacherSignatureScale'),
+      getSetting<number>('teacherSignatureOffsetXMm'),
+      getSetting<number>('teacherSignatureOffsetYMm'),
     ])
       .then(
         ([
@@ -76,6 +82,9 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
           savedScale,
           savedOx,
           savedOy,
+          savedTeacherScale,
+          savedTeacherOx,
+          savedTeacherOy,
         ]) => {
           if (cancelled) return;
           setSeal({
@@ -88,6 +97,9 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
           setStampScale(clampStampScale(savedScale ?? DEFAULT_STAMP_SCALE));
           setStampOffsetXMm(clampStampOffsetMm(savedOx ?? 0));
           setStampOffsetYMm(clampStampOffsetMm(savedOy ?? 0));
+          setTeacherScale(clampStampScale(savedTeacherScale ?? DEFAULT_STAMP_SCALE));
+          setTeacherOffsetXMm(clampStampOffsetMm(savedTeacherOx ?? 0));
+          setTeacherOffsetYMm(clampStampOffsetMm(savedTeacherOy ?? 0));
           if (savedPlace) setPlace(savedPlace);
           if (savedLunar) setLunarDate(savedLunar);
           if (typeof savedHandwritten === 'boolean') setHandwrittenDate(savedHandwritten);
@@ -122,7 +134,14 @@ export const DocumentSignDialog: React.FC<DocumentSignDialogProps> = ({
             }
           : {}),
         ...(directorSeal && seal.signature ? { directorSignature: seal.signature } : {}),
-        ...(teacherSign && seal.teacher ? { teacherSignature: seal.teacher } : {}),
+        ...(teacherSign && seal.teacher
+          ? {
+              teacherSignature: seal.teacher,
+              teacherSignatureScale: teacherScale,
+              teacherSignatureOffsetXMm: teacherOffsetXMm,
+              teacherSignatureOffsetYMm: teacherOffsetYMm,
+            }
+          : {}),
       });
     } finally {
       setSubmitting(false);

@@ -46,6 +46,7 @@ const SealSlot: React.FC<{ slot: (typeof SLOTS)[number] }> = ({ slot }) => {
   const stampRow = useLiveQuery(() => db.settings.get('directorStamp'), []);
   const directorSignRow = useLiveQuery(() => db.settings.get('directorSignature'), []);
   const stampScaleRow = useLiveQuery(() => db.settings.get('directorStampScale'), []);
+  const teacherScaleRow = useLiveQuery(() => db.settings.get('teacherSignatureScale'), []);
   const profile = (profileRow?.value as Profile | undefined) ?? {
     teacherName: '',
     schoolName: '',
@@ -57,13 +58,16 @@ const SealSlot: React.FC<{ slot: (typeof SLOTS)[number] }> = ({ slot }) => {
   const savedStampScale = clampStampScale(
     typeof stampScaleRow?.value === 'number' ? stampScaleRow.value : DEFAULT_STAMP_SCALE
   );
+  const savedTeacherScale = clampStampScale(
+    typeof teacherScaleRow?.value === 'number' ? teacherScaleRow.value : DEFAULT_STAMP_SCALE
+  );
   const renderPreview = (candidate: SealImage, widthPx: number) => {
     const seal =
       slot.key === 'directorStamp'
         ? { directorStamp: candidate, directorSignature: savedDirectorSign, stampScale: savedStampScale }
         : slot.key === 'directorSignature'
           ? { directorStamp: savedStamp, directorSignature: candidate, stampScale: savedStampScale }
-          : { teacherSignature: candidate };
+          : { teacherSignature: candidate, teacherSignatureScale: savedTeacherScale };
     return (
       // Real size (mm) scaled to the dialog: the same block and spacing as on the documents.
       <div

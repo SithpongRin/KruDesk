@@ -1,5 +1,10 @@
 import { getSetting, setSetting } from '../db/database';
-import type { PageSealAnchor, PdfStampResult } from '../store/usePdfPreviewStore';
+import type {
+  PageSealAnchor,
+  PageTeacherSignAnchor,
+  PdfStampResult,
+  PdfTeacherSignResult,
+} from '../store/usePdfPreviewStore';
 import { usePrintLayoutStore } from '../store/usePrintLayoutStore';
 import {
   DEFAULT_STAMP_SCALE,
@@ -7,6 +12,7 @@ import {
   clampStampOffsetMm,
   clampStampScale,
   computeDirectorStampBox,
+  computeSignatureBox,
   isSealImage,
   type SealImage,
 } from '../utils/directorSeal';
@@ -105,6 +111,44 @@ export function computePageStampRectFrac(
   };
 }
 
+/**
+ * Computes the teacher signature's rectangle as fractions [0..1] of the full page, from the
+ * same `computeSignatureBox` the DOM uses, scaled by `anchor.fitScale` on Fit-to-1-Page pages.
+ */
+export function computePageTeacherSignRectFrac(
+  anchor: PageTeacherSignAnchor,
+  signature: Pick<SealImage, 'width' | 'height'>,
+  params: { scale?: number; offsetXMm?: number; offsetYMm?: number }
+): PageStampRectFrac {
+  const aspectRatio =
+    signature.width > 0 && signature.height > 0 ? signature.width / signature.height : 2;
+  const fitScale =
+    typeof anchor.fitScale === 'number' && Number.isFinite(anchor.fitScale) && anchor.fitScale > 0
+      ? anchor.fitScale
+      : 1;
+  const box = computeSignatureBox({
+    gapMm: anchor.gapMm,
+    aspectRatio,
+    scale: params.scale,
+    offsetXMm: params.offsetXMm,
+    offsetYMm: params.offsetYMm,
+  });
+  const widthMm = box.widthMm * fitScale;
+  const heightMm = box.heightMm * fitScale;
+  const topMm = box.topMm * fitScale;
+  const offsetXMm = box.offsetXMm * fitScale;
+
+  const anchorCenterXMm = (anchor.xFrac + anchor.wFrac * 0.5) * anchor.pageWidthMm + offsetXMm;
+  const leftMm = anchorCenterXMm - box.anchorXFraction * widthMm;
+  const sigTopMm = anchor.yFrac * anchor.pageHeightMm + topMm;
+  return {
+    leftFrac: leftMm / anchor.pageWidthMm,
+    topFrac: sigTopMm / anchor.pageHeightMm,
+    widthFrac: widthMm / anchor.pageWidthMm,
+    heightFrac: heightMm / anchor.pageHeightMm,
+  };
+}
+
 /** Converts a top-left page-fraction rect into pdf-lib bottom-left origin points. */
 export function pageStampFracToPdfBox(
   rect: PageStampRectFrac,
@@ -125,6 +169,17 @@ interface CapturedSealMetadata {
   domScale?: number;
   domOffsetXMm?: number;
   domOffsetYMm?: number;
+  teacherAnchors: Array<PageTeacherSignAnchor | null>;
+  domTeacherSignature?: SealImage;
+  domHasTeacherSig: boolean;
+  domTeacherScale?: number;
+  domTeacherOffsetXMm?: number;
+  domTeacherOffsetYMm?: number;
+}
+
+function readFitScale(pageEl: HTMLElement): number {
+  const raw = Number(pageEl.dataset.fitScale);
+  return Number.isFinite(raw) && raw > 0 ? raw : 1;
 }
 
 function captureSealMetadataFromDom(
@@ -173,9 +228,7 @@ function captureSealMetadataFromDom(
       return null;
     }
 
-    const rawFitScale = Number(pageEl.dataset.fitScale);
-    const fitScale =
-      Number.isFinite(rawFitScale) && rawFitScale > 0 ? rawFitScale : 1;
+    const fitScale = readFitScale(pageEl);
 
     return {
       xFrac: (ar.left - pr.left) / pr.width,
@@ -192,7 +245,74 @@ function captureSealMetadataFromDom(
     };
   });
 
-  return { anchors, domStamp, domHasStamp, domScale, domOffsetXMm, domOffsetYMm };
+  let domTeacherSignature: SealImage | undefined;
+  let domHasTeacherSig = false;
+  let domTeacherScale: number | undefined;
+  let domTeacherOffsetXMm: number | undefined;
+  let domTeacherOffsetYMm: number | undefined;
+
+  const teacherAnchors = pageElements.map((pageEl): PageTeacherSignAnchor | null => {
+    const anchorEl = pageEl.querySelector<HTMLElement>('[data-teacher-sign-anchor]');
+    if (!anchorEl) return null;
+
+    if (anchorEl.dataset.hasTeacherSig === '1') {
+      domHasTeacherSig = true;
+    }
+    const parsedScale = Number(anchorEl.dataset.teacherScale);
+    if (Number.isFinite(parsedScale) && domTeacherScale === undefined) {
+      domTeacherScale = parsedScale;
+    }
+    const parsedOx = Number(anchorEl.dataset.teacherOffsetX);
+    if (Number.isFinite(parsedOx) && domTeacherOffsetXMm === undefined) {
+      domTeacherOffsetXMm = parsedOx;
+    }
+    const parsedOy = Number(anchorEl.dataset.teacherOffsetY);
+    if (Number.isFinite(parsedOy) && domTeacherOffsetYMm === undefined) {
+      domTeacherOffsetYMm = parsedOy;
+    }
+
+    const sigImg = anchorEl.querySelector<HTMLImageElement>('[data-teacher-signature]');
+    if (sigImg && !domTeacherSignature && sigImg.src.startsWith('data:image/')) {
+      domTeacherSignature = {
+        dataUrl: sigImg.src,
+        width: sigImg.naturalWidth || parseFloat(sigImg.style.width) || 400,
+        height: sigImg.naturalHeight || parseFloat(sigImg.style.height) || 200,
+      };
+    }
+
+    const pr = pageEl.getBoundingClientRect();
+    const ar = anchorEl.getBoundingClientRect();
+    if (pr.width <= 0 || pr.height <= 0) {
+      return null;
+    }
+
+    return {
+      xFrac: (ar.left - pr.left) / pr.width,
+      yFrac: (ar.top - pr.top) / pr.height,
+      wFrac: ar.width / pr.width,
+      hFrac: ar.height / pr.height,
+      pageWidthMm,
+      pageHeightMm,
+      gapMm: Number(anchorEl.dataset.gapMm) || 20,
+      fontSizePt: Number(anchorEl.dataset.fontPt) || 9,
+      fitScale: readFitScale(pageEl),
+    };
+  });
+
+  return {
+    anchors,
+    domStamp,
+    domHasStamp,
+    domScale,
+    domOffsetXMm,
+    domOffsetYMm,
+    teacherAnchors,
+    domTeacherSignature,
+    domHasTeacherSig,
+    domTeacherScale,
+    domTeacherOffsetXMm,
+    domTeacherOffsetYMm,
+  };
 }
 
 /**
@@ -304,17 +424,24 @@ export interface PdfExportOptions {
 export async function renderPrintNodesToPng(
   pageElements: HTMLElement[],
   pixelRatio = 3,
-  omitDirectorSeal = false
+  omitDirectorSeal = false,
+  omitTeacherSignature = false
 ): Promise<string[]> {
   if (pageElements.length === 0) {
     throw new Error('គ្មានទំព័រសម្រាប់បង្កើត PDF ទេ');
   }
   await ensurePrintFontsReady();
   const { toPng } = await import('html-to-image');
-  const filter = omitDirectorSeal
-    ? (node: HTMLElement | Node) =>
-        !(node instanceof HTMLElement && node.hasAttribute('data-director-seal'))
-    : undefined;
+  // The interactive preview draws these on top of the page instead (and pdf-lib embeds them).
+  const filter =
+    omitDirectorSeal || omitTeacherSignature
+      ? (node: HTMLElement | Node) =>
+          !(
+            node instanceof HTMLElement &&
+            ((omitDirectorSeal && node.hasAttribute('data-director-seal')) ||
+              (omitTeacherSignature && node.hasAttribute('data-teacher-signature')))
+          )
+      : undefined;
   const pages: string[] = [];
   for (const el of pageElements) {
     pages.push(
@@ -329,13 +456,29 @@ export async function renderPrintNodesToPng(
   return pages;
 }
 
-/** Builds the PDF from already-rendered page PNGs, optionally embedding the interactive director stamp. */
+async function embedSealImage(
+  pdfDoc: import('pdf-lib').PDFDocument,
+  image: SealImage
+): Promise<import('pdf-lib').PDFImage> {
+  return /^data:image\/jpe?g/i.test(image.dataUrl)
+    ? pdfDoc.embedJpg(dataUrlToUint8Array(image.dataUrl))
+    : pdfDoc.embedPng(dataUrlToUint8Array(image.dataUrl));
+}
+
+/**
+ * Builds the PDF from already-rendered page PNGs, optionally embedding the interactive director
+ * stamp and the teacher's signature.
+ */
 export async function buildPdfFromPngs(
   pages: string[],
   options: Pick<PdfExportOptions, 'orientation' | 'pageSize'>,
   stampOverlay?: {
     anchors: Array<PageSealAnchor | null>;
     stamp: PdfStampResult;
+  },
+  teacherOverlay?: {
+    anchors: Array<PageTeacherSignAnchor | null>;
+    signature: PdfTeacherSignResult;
   }
 ): Promise<Uint8Array> {
   const { PDFDocument } = await import('pdf-lib');
@@ -347,10 +490,14 @@ export async function buildPdfFromPngs(
       ? stampOverlay.stamp
       : null;
   const embeddedStamp =
-    activeStamp && activeStamp.stamp
-      ? /^data:image\/jpe?g/i.test(activeStamp.stamp.dataUrl)
-        ? await pdfDoc.embedJpg(dataUrlToUint8Array(activeStamp.stamp.dataUrl))
-        : await pdfDoc.embedPng(dataUrlToUint8Array(activeStamp.stamp.dataUrl))
+    activeStamp && activeStamp.stamp ? await embedSealImage(pdfDoc, activeStamp.stamp) : null;
+  const activeTeacher =
+    teacherOverlay && teacherOverlay.signature.enabled && teacherOverlay.signature.signature
+      ? teacherOverlay.signature
+      : null;
+  const embeddedTeacher =
+    activeTeacher && activeTeacher.signature
+      ? await embedSealImage(pdfDoc, activeTeacher.signature)
       : null;
 
   for (let idx = 0; idx < pages.length; idx++) {
@@ -372,6 +519,24 @@ export async function buildPdfFromPngs(
         width: box.width,
         height: box.height,
         opacity: STAMP_OPACITY,
+      });
+    }
+
+    const teacherAnchor = teacherOverlay?.anchors[idx] ?? null;
+    if (embeddedTeacher && activeTeacher?.signature && teacherAnchor) {
+      const frac = computePageTeacherSignRectFrac(teacherAnchor, activeTeacher.signature, {
+        scale: activeTeacher.scale,
+        offsetXMm: activeTeacher.offsetXMm,
+        offsetYMm: activeTeacher.offsetYMm,
+      });
+      const box = pageStampFracToPdfBox(frac, pageW, pageH);
+      // Crisp pen ink at full opacity (only the stamp uses STAMP_OPACITY).
+      page.drawImage(embeddedTeacher, {
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+        opacity: 1,
       });
     }
   }
@@ -409,26 +574,55 @@ export async function exportPrintNodesToPdf(
     const hasInteractiveAnchors = (cap: CapturedSealMetadata | null) =>
       Boolean(cap && cap.anchors.some((a) => a !== null));
 
+    const hasTeacherAnchors = (cap: CapturedSealMetadata | null) =>
+      Boolean(cap && cap.teacherAnchors.some((a) => a !== null));
+
     let activePages = await renderPrintNodesToPng(
       pageElements,
       basePixelRatio,
-      usePreview && hasInteractiveAnchors(activeCaptured)
+      usePreview && hasInteractiveAnchors(activeCaptured),
+      usePreview && hasTeacherAnchors(activeCaptured)
     );
 
     let stampOutcome: PdfStampResult | undefined;
+    let teacherOutcome: PdfTeacherSignResult | undefined;
 
     if (usePreview) {
-      const [savedStampRaw, savedScale, savedOffsetX, savedOffsetY] = await Promise.all([
+      const [
+        savedStampRaw,
+        savedScale,
+        savedOffsetX,
+        savedOffsetY,
+        savedTeacherRaw,
+        savedTeacherScale,
+        savedTeacherOffsetX,
+        savedTeacherOffsetY,
+      ] = await Promise.all([
         getSetting<unknown>('directorStamp').catch(() => undefined),
         getSetting<number>('directorStampScale').catch(() => undefined),
         getSetting<number>('directorStampOffsetXMm').catch(() => undefined),
         getSetting<number>('directorStampOffsetYMm').catch(() => undefined),
+        getSetting<unknown>('teacherSignature').catch(() => undefined),
+        getSetting<number>('teacherSignatureScale').catch(() => undefined),
+        getSetting<number>('teacherSignatureOffsetXMm').catch(() => undefined),
+        getSetting<number>('teacherSignatureOffsetYMm').catch(() => undefined),
       ]);
       const savedStamp = isSealImage(savedStampRaw) ? savedStampRaw : undefined;
       const initialStamp = savedStamp ?? activeCaptured?.domStamp;
       const initialScale = clampStampScale(savedScale ?? activeCaptured?.domScale ?? DEFAULT_STAMP_SCALE);
       const initialOffsetXMm = clampStampOffsetMm(savedOffsetX ?? activeCaptured?.domOffsetXMm ?? 0);
       const initialOffsetYMm = clampStampOffsetMm(savedOffsetY ?? activeCaptured?.domOffsetYMm ?? 0);
+      const savedTeacher = isSealImage(savedTeacherRaw) ? savedTeacherRaw : undefined;
+      const initialTeacher = savedTeacher ?? activeCaptured?.domTeacherSignature;
+      const initialTeacherScale = clampStampScale(
+        savedTeacherScale ?? activeCaptured?.domTeacherScale ?? DEFAULT_STAMP_SCALE
+      );
+      const initialTeacherOffsetXMm = clampStampOffsetMm(
+        savedTeacherOffsetX ?? activeCaptured?.domTeacherOffsetXMm ?? 0
+      );
+      const initialTeacherOffsetYMm = clampStampOffsetMm(
+        savedTeacherOffsetY ?? activeCaptured?.domTeacherOffsetYMm ?? 0
+      );
 
       const { usePdfPreviewStore } = await import('../store/usePdfPreviewStore');
 
@@ -476,7 +670,8 @@ export async function exportPrintNodesToPdf(
             const nextPages = await renderPrintNodesToPng(
               nextNodes,
               effectiveRatio,
-              hasInteractiveAnchors(nextCaptured)
+              hasInteractiveAnchors(nextCaptured),
+              hasTeacherAnchors(nextCaptured)
             );
 
             activeCaptured = nextCaptured;
@@ -484,6 +679,7 @@ export async function exportPrintNodesToPdf(
             usePdfPreviewStore.getState().updateRequest({
               pages: nextPages,
               sealAnchors: nextCaptured.anchors,
+              teacherAnchors: nextCaptured.teacherAnchors,
               fitOnePage: nextFit,
               minFitScale,
               minPrintedFontPt,
@@ -502,6 +698,12 @@ export async function exportPrintNodesToPdf(
         initialStampScale: initialScale,
         initialStampOffsetXMm: initialOffsetXMm,
         initialStampOffsetYMm: initialOffsetYMm,
+        teacherAnchors: activeCaptured?.teacherAnchors,
+        initialTeacherSignature: initialTeacher,
+        initialTeacherSignatureEnabled: Boolean(activeCaptured?.domHasTeacherSig && initialTeacher),
+        initialTeacherSignatureScale: initialTeacherScale,
+        initialTeacherSignatureOffsetXMm: initialTeacherOffsetXMm,
+        initialTeacherSignatureOffsetYMm: initialTeacherOffsetYMm,
         canFitOnePage,
         fitOnePage: false,
         minFitScale: 1,
@@ -509,6 +711,7 @@ export async function exportPrintNodesToPdf(
       });
       if (!outcome.download) return null;
       stampOutcome = outcome.stamp;
+      teacherOutcome = outcome.teacherSignature;
 
       if (stampOutcome?.enabled) {
         await Promise.all([
@@ -521,6 +724,17 @@ export async function exportPrintNodesToPdf(
           ),
         ]);
       }
+      if (teacherOutcome?.enabled) {
+        await Promise.all([
+          setSetting('teacherSignatureScale', clampStampScale(teacherOutcome.scale)).catch(() => {}),
+          setSetting('teacherSignatureOffsetXMm', clampStampOffsetMm(teacherOutcome.offsetXMm)).catch(
+            () => {}
+          ),
+          setSetting('teacherSignatureOffsetYMm', clampStampOffsetMm(teacherOutcome.offsetYMm)).catch(
+            () => {}
+          ),
+        ]);
+      }
     }
 
     const pdfBytes = await buildPdfFromPngs(
@@ -528,6 +742,9 @@ export async function exportPrintNodesToPdf(
       options,
       activeCaptured && stampOutcome
         ? { anchors: activeCaptured.anchors, stamp: stampOutcome }
+        : undefined,
+      activeCaptured && teacherOutcome
+        ? { anchors: activeCaptured.teacherAnchors, signature: teacherOutcome }
         : undefined
     );
     const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' });

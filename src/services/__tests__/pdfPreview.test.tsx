@@ -14,19 +14,79 @@ const toPngMock = vi.fn(async (_el: HTMLElement, _opts?: { filter?: (n: Node) =>
 vi.mock('html-to-image', () => ({
   toPng: (el: HTMLElement, opts?: { filter?: (n: Node) => boolean }) => toPngMock(el, opts),
 }));
+// JSDOM has no layout, so the real fit measures scale 1; a test can force a scale here.
+const fitOverride = vi.hoisted(() => ({ scale: null as number | null }));
+vi.mock('../../print/fitOnePage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../print/fitOnePage')>();
+  return {
+    ...actual,
+    fitPageToOnePage: (el: HTMLElement) => {
+      if (fitOverride.scale === null) return actual.fitPageToOnePage(el);
+      el.dataset.fitScale = String(fitOverride.scale);
+      return { scale: fitOverride.scale };
+    },
+  };
+});
 const downloads: string[] = [];
 vi.mock('../excelExport', () => ({
   triggerBlobDownload: (_blob: Blob, name: string) => downloads.push(name),
 }));
 
+import { PDFPage } from 'pdf-lib';
 import {
+  buildPdfFromPngs,
   computePageStampRectFrac,
+  computePageTeacherSignRectFrac,
   exportPrintNodesToPdf,
   getPageDimensionsPt,
   pageStampFracToPdfBox,
 } from '../pdfExport';
-import { usePdfPreviewStore, type PageSealAnchor } from '../../store/usePdfPreviewStore';
+import {
+  usePdfPreviewStore,
+  type PageSealAnchor,
+  type PageTeacherSignAnchor,
+} from '../../store/usePdfPreviewStore';
 import { PdfPreviewModal } from '../../components/common/PdfPreviewModal';
+import { computeSignatureBox } from '../../utils/directorSeal';
+
+type Rect = { left: number; top: number; width: number; height: number };
+function mockRect(el: HTMLElement, r: Rect) {
+  vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({
+    x: r.left,
+    y: r.top,
+    left: r.left,
+    top: r.top,
+    right: r.left + r.width,
+    bottom: r.top + r.height,
+    width: r.width,
+    height: r.height,
+    toJSON: () => ({}),
+  });
+}
+
+/** A page with the director's space (stamp) on the left and the teacher's space on the right. */
+function makeTeacherPage(opts: { withSig: boolean }): HTMLElement {
+  const page = makeAnchoredPage();
+  const anchor = document.createElement('div');
+  anchor.setAttribute('data-teacher-sign-anchor', '');
+  anchor.dataset.gapMm = '20';
+  anchor.dataset.fontPt = '9';
+  anchor.dataset.hasTeacherSig = opts.withSig ? '1' : '0';
+  anchor.dataset.teacherScale = '1';
+  anchor.dataset.teacherOffsetX = '0';
+  anchor.dataset.teacherOffsetY = '0';
+  mockRect(anchor, { left: 180, top: 170, width: 90, height: 20 });
+  if (opts.withSig) {
+    const sigImg = document.createElement('img');
+    sigImg.setAttribute('data-teacher-signature', '');
+    sigImg.src = PNG;
+    anchor.appendChild(sigImg);
+  }
+  page.appendChild(anchor);
+  return page;
+}
+
+const SIG = { dataUrl: PNG, width: 200, height: 100 };
 
 const pages = () => [document.createElement('div'), document.createElement('div')];
 
@@ -220,6 +280,251 @@ describe('PDF preview («មើលមុន»), resizable stamp & Fit-to-1-Page 
     expect(bytes).not.toBeNull();
     expect(downloads).toEqual(['stamped.pdf']);
     expect(await getSetting<number>('directorStampScale')).toBeCloseTo(1.4, 3);
+  });
+
+  it('computes the teacher signature rect with 0.00 mm parity to the DOM box, including fitScale', () => {
+    const anchor: PageTeacherSignAnchor = {
+      xFrac: 0.6,
+      yFrac: 0.8,
+      wFrac: 0.3,
+      hFrac: 20 / 210,
+      pageWidthMm: 297,
+      pageHeightMm: 210,
+      gapMm: 20,
+      fontSizePt: 9,
+    };
+    const params = { scale: 1.3, offsetXMm: 5, offsetYMm: -2 };
+    for (const fit of [1, 0.65]) {
+      const rect = computePageTeacherSignRectFrac({ ...anchor, fitScale: fit }, SIG, params);
+      const box = computeSignatureBox({ gapMm: 20, aspectRatio: 2, ...params });
+      const centreXMm = (anchor.xFrac + anchor.wFrac / 2) * 297 + box.offsetXMm * fit;
+      expect(rect.widthFrac * 297).toBeCloseTo(box.widthMm * fit, 6);
+      expect(rect.heightFrac * 210).toBeCloseTo(box.heightMm * fit, 6);
+      expect(rect.leftFrac * 297).toBeCloseTo(centreXMm - (box.widthMm * fit) / 2, 6);
+      expect(rect.topFrac * 210).toBeCloseTo(anchor.yFrac * 210 + box.topMm * fit, 6);
+    }
+  });
+
+  it('embeds the teacher signature in pdf-lib at the preview rect, full opacity, next to the stamp', async () => {
+    const drawSpy = vi.spyOn(PDFPage.prototype, 'drawImage');
+    try {
+      const sealAnchor: PageSealAnchor = {
+        xFrac: 0.1,
+        yFrac: 0.8,
+        wFrac: 0.3,
+        hFrac: 0.1,
+        pageWidthMm: 297,
+        pageHeightMm: 210,
+        gapMm: 20,
+        fontSizePt: 9,
+        hasBottomName: false,
+        hasDirectorSig: false,
+        fitScale: 0.8,
+      };
+      const teacherAnchor: PageTeacherSignAnchor = {
+        xFrac: 0.6,
+        yFrac: 0.8,
+        wFrac: 0.3,
+        hFrac: 0.1,
+        pageWidthMm: 297,
+        pageHeightMm: 210,
+        gapMm: 20,
+        fontSizePt: 9,
+        fitScale: 0.8,
+      };
+      const teacher = { enabled: true, signature: SIG, scale: 1.4, offsetXMm: 3, offsetYMm: 1 };
+      await buildPdfFromPngs(
+        [PNG],
+        { orientation: 'landscape', pageSize: 'A4' },
+        {
+          anchors: [sealAnchor],
+          stamp: { enabled: true, stamp: { dataUrl: PNG, width: 1, height: 1 }, scale: 1, offsetXMm: 0, offsetYMm: 0 },
+        },
+        { anchors: [teacherAnchor], signature: teacher }
+      );
+      // page image, stamp, teacher signature
+      expect(drawSpy).toHaveBeenCalledTimes(3);
+      const [pw, ph] = getPageDimensionsPt('A4', 'landscape');
+      const expected = pageStampFracToPdfBox(
+        computePageTeacherSignRectFrac(teacherAnchor, SIG, teacher),
+        pw,
+        ph
+      );
+      const opts = drawSpy.mock.calls[2][1]!;
+      expect(opts.x).toBeCloseTo(expected.x, 6);
+      expect(opts.y).toBeCloseTo(expected.y, 6);
+      expect(opts.width).toBeCloseTo(expected.width, 6);
+      expect(opts.height).toBeCloseTo(expected.height, 6);
+      expect(opts.opacity).toBe(1);
+      expect(drawSpy.mock.calls[1][1]!.opacity).toBeLessThan(1);
+
+      // Disabled → not embedded.
+      drawSpy.mockClear();
+      await buildPdfFromPngs([PNG], { orientation: 'landscape' }, undefined, {
+        anchors: [teacherAnchor],
+        signature: { ...teacher, enabled: false },
+      });
+      expect(drawSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      drawSpy.mockRestore();
+    }
+  });
+
+  it('lets the user resize and move the teacher signature independently of the stamp, and persists it', async () => {
+    await setSetting('directorStamp', { dataUrl: PNG, width: 300, height: 300 });
+    await setSetting('teacherSignature', SIG);
+    render(<PdfPreviewModal />);
+
+    const pageEl = makeTeacherPage({ withSig: true });
+    const done = exportPrintNodesToPdf([pageEl], { fileName: 'signed.pdf', orientation: 'landscape' });
+
+    const box = await screen.findByTestId('pdf-teacher-box-0');
+    expect(screen.getByTestId('pdf-stamp-box-0')).toBeTruthy();
+    expect((screen.getByTestId('pdf-teacher-sign-toggle') as HTMLInputElement).checked).toBe(true);
+    // overlay images are presentation-only: only the page image counts
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+
+    // The DOM signature and stamp are left out of the page PNG (the overlay draws them).
+    const filterFn = toPngMock.mock.calls[0]?.[1]?.filter;
+    expect(filterFn!(pageEl.querySelector('[data-teacher-signature]')!)).toBe(false);
+    expect(filterFn!(pageEl.querySelector('[data-director-seal]')!)).toBe(false);
+    expect(filterFn!(pageEl)).toBe(true);
+
+    // Corner resize (no layout box in JSDOM → horizontal drag fallback).
+    const handle = screen.getByTestId('pdf-teacher-handle-0-se');
+    fireEvent.pointerDown(handle, { pointerId: 2, button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(handle, { pointerId: 2, clientX: 136, clientY: 100 });
+    fireEvent.pointerUp(handle, { pointerId: 2 });
+    expect(screen.getByTestId('pdf-teacher-scale-label').textContent).toContain('130%');
+    expect(screen.getByTestId('pdf-stamp-scale-label').textContent).toContain('100%');
+
+    fireEvent.click(screen.getByLabelText('ពង្រីកហត្ថលេខាគ្រូ'));
+    expect(screen.getByTestId('pdf-teacher-scale-label').textContent).toContain('140%');
+    fireEvent.change(screen.getByTestId('pdf-teacher-scale-slider'), { target: { value: '1.6' } });
+    expect(screen.getByTestId('pdf-teacher-scale-label').textContent).toContain('160%');
+
+    // Move: the modal page is 800 px wide in JSDOM fallback → 80 px = 29.7 mm.
+    const beforeLeft = parseFloat(box.style.left);
+    fireEvent.pointerDown(box, { pointerId: 3, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(box, { pointerId: 3, clientX: 90, clientY: 10 });
+    fireEvent.pointerUp(box, { pointerId: 3 });
+    expect(parseFloat(screen.getByTestId('pdf-teacher-box-0').style.left)).toBeCloseTo(
+      beforeLeft + 10,
+      4
+    );
+
+    fireEvent.click(screen.getByText('ទាញយក PDF'));
+    expect(await done).not.toBeNull();
+    expect(downloads).toEqual(['signed.pdf']);
+    expect(await getSetting<number>('teacherSignatureScale')).toBeCloseTo(1.6, 3);
+    expect(await getSetting<number>('teacherSignatureOffsetXMm')).toBeCloseTo(29.7, 2);
+    expect(await getSetting<number>('teacherSignatureOffsetYMm')).toBeCloseTo(0, 3);
+    expect(await getSetting<number>('directorStampScale')).toBeCloseTo(1, 3);
+  });
+
+  it('reset puts the teacher signature back, and without a stored signature offers an upload', async () => {
+    await setSetting('teacherSignature', SIG);
+    await setSetting('teacherSignatureScale', 1.8);
+    render(<PdfPreviewModal />);
+    const first = exportPrintNodesToPdf([makeTeacherPage({ withSig: true })], {
+      fileName: 'reset.pdf',
+      orientation: 'landscape',
+    });
+    await screen.findByTestId('pdf-teacher-box-0');
+    expect(screen.getByTestId('pdf-teacher-scale-label').textContent).toContain('180%');
+    fireEvent.click(screen.getByTestId('pdf-teacher-reset'));
+    expect(screen.getByTestId('pdf-teacher-scale-label').textContent).toContain('100%');
+    // Unticking removes the overlay; nothing is saved for a disabled signature.
+    fireEvent.click(screen.getByTestId('pdf-teacher-sign-toggle'));
+    expect(screen.queryByTestId('pdf-teacher-box-0')).toBeNull();
+    fireEvent.click(screen.getByText('បិទ'));
+    expect(await first).toBeNull();
+
+    await db.settings.clear();
+    const second = exportPrintNodesToPdf([makeTeacherPage({ withSig: false })], {
+      fileName: 'nosig.pdf',
+      orientation: 'landscape',
+    });
+    expect(await screen.findByText('បញ្ចូលហត្ថលេខាគ្រូ')).toBeTruthy();
+    expect(screen.queryByTestId('pdf-teacher-box-0')).toBeNull();
+    expect(screen.queryByTestId('pdf-teacher-sign-toggle')).toBeNull();
+    fireEvent.click(screen.getByText('បិទ'));
+    expect(await second).toBeNull();
+  });
+
+  it('keeps the teacher signature toggle and size across the Optimize toggle, drawn at fitScale', async () => {
+    await setSetting('teacherSignature', SIG);
+    // JSDOM has no layout: give every page / teacher space a size.
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        const r = this.hasAttribute('data-teacher-sign-anchor')
+          ? { left: 180, top: 170, width: 90, height: 20 }
+          : { left: 0, top: 0, width: 297, height: 210 };
+        return {
+          x: r.left,
+          y: r.top,
+          ...r,
+          right: r.left + r.width,
+          bottom: r.top + r.height,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
+    const teacherSpace = (
+      <div data-teacher-sign-anchor="" data-gap-mm="20" data-font-pt="9" data-has-teacher-sig="1">
+        <img data-teacher-signature="" src={PNG} alt="" />
+      </div>
+    );
+    const Stage: React.FC = () => {
+      const fit = usePrintLayoutStore((s) => s.fitOnePage);
+      return fit ? (
+        <div>
+          <div data-print-page data-fit-scale="0.5">
+            <div data-fit-body>all rows</div>
+            {teacherSpace}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div data-print-page data-can-fit-one-page="1">
+            <div data-fit-body>p1</div>
+          </div>
+          <div data-print-page data-can-fit-one-page="1">
+            <div data-fit-body>p2</div>
+            {teacherSpace}
+          </div>
+        </div>
+      );
+    };
+    fitOverride.scale = 0.5;
+    try {
+      const { container } = render(
+        <>
+          <Stage />
+          <PdfPreviewModal />
+        </>
+      );
+      const nodes = Array.from(container.querySelectorAll<HTMLElement>('[data-print-page]'));
+      const done = exportPrintNodesToPdf(nodes, { fileName: 'fit.pdf', orientation: 'portrait' });
+
+      await screen.findByTestId('pdf-teacher-box-1');
+      fireEvent.change(screen.getByTestId('pdf-teacher-scale-slider'), { target: { value: '1.2' } });
+      const fullWidth = parseFloat(screen.getByTestId('pdf-teacher-box-1').style.width);
+
+      fireEvent.click(screen.getByTestId('pdf-fit-one-page-toggle'));
+      const fitted = await screen.findByTestId('pdf-teacher-box-0');
+      expect(screen.getByTestId('pdf-teacher-scale-label').textContent).toContain('120%');
+      expect((screen.getByTestId('pdf-teacher-sign-toggle') as HTMLInputElement).checked).toBe(true);
+      // the fitted page draws the signature at fitScale 0.5
+      expect(parseFloat(fitted.style.width)).toBeCloseTo(fullWidth * 0.5, 4);
+
+      fireEvent.click(screen.getByText('ទាញយក PDF'));
+      expect(await done).not.toBeNull();
+      expect(await getSetting<number>('teacherSignatureScale')).toBeCloseTo(1.2, 3);
+    } finally {
+      fitOverride.scale = null;
+      rectSpy.mockRestore();
+    }
   });
 
   it('toggles «បង្រួមដាក់ក្នុង ១ ទំព័រ (Optimize)» live from 2 pages down to 1 page and resets store on close', async () => {

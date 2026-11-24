@@ -93,6 +93,58 @@ export function computeDirectorStampBox(input: StampPlacementInput): StampPlacem
   };
 }
 
+export interface SignaturePlacementInput {
+  gapMm: number;
+  /** Natural width / height of the signature image (default 2). */
+  aspectRatio?: number;
+  scale?: number;
+  offsetXMm?: number;
+  offsetYMm?: number;
+}
+
+export interface SignaturePlacementBox {
+  widthMm: number;
+  heightMm: number;
+  /** Top relative to SealSpace top (mm). */
+  topMm: number;
+  /** Horizontal offset from 50% of SealSpace width (mm). */
+  offsetXMm: number;
+  /** The signature is always centred on its anchor point. */
+  anchorXFraction: 0.5;
+  scale: number;
+  offsetYMm: number;
+}
+
+/**
+ * Single source of truth for the teacher's signature size & position inside `SealSpace`
+ * (centred in the signing gap), shared by DOM print rendering, the interactive PDF preview
+ * overlay and pdf-lib embedding.
+ */
+export function computeSignatureBox(input: SignaturePlacementInput): SignaturePlacementBox {
+  const baseHeightMm = Math.max(8, input.gapMm * 0.9);
+  const baseMaxWidthMm = 75;
+  const aspect =
+    typeof input.aspectRatio === 'number' && Number.isFinite(input.aspectRatio) && input.aspectRatio > 0
+      ? input.aspectRatio
+      : 2;
+  const unscaledWidthMm = Math.min(baseMaxWidthMm, baseHeightMm * aspect);
+  const unscaledHeightMm = unscaledWidthMm / aspect;
+  const scale = clampStampScale(input.scale);
+  const offsetXMm = clampStampOffsetMm(input.offsetXMm);
+  const offsetYMm = clampStampOffsetMm(input.offsetYMm);
+  const widthMm = unscaledWidthMm * scale;
+  const heightMm = unscaledHeightMm * scale;
+  return {
+    widthMm,
+    heightMm,
+    topMm: input.gapMm / 2 - heightMm / 2 + offsetYMm,
+    offsetXMm,
+    anchorXFraction: 0.5,
+    scale,
+    offsetYMm,
+  };
+}
+
 export function isSealImage(value: unknown): value is SealImage {
   if (!value || typeof value !== 'object') return false;
   const v = value as Partial<SealImage>;

@@ -5,6 +5,7 @@ import {
   Loader2,
   Minimize2,
   Move,
+  PenTool,
   RotateCcw,
   Stamp,
   Upload,
@@ -13,9 +14,9 @@ import {
 } from 'lucide-react';
 import { setSetting } from '../../db/database';
 import { MIN_READABLE_FIT_SCALE } from '../../print/fitOnePage';
-import { computePageStampRectFrac } from '../../services/pdfExport';
+import { computePageStampRectFrac, computePageTeacherSignRectFrac } from '../../services/pdfExport';
 import { useAppStore } from '../../store/useAppStore';
-import { usePdfPreviewStore, type PageSealAnchor } from '../../store/usePdfPreviewStore';
+import { usePdfPreviewStore } from '../../store/usePdfPreviewStore';
 import {
   DEFAULT_STAMP_SCALE,
   MAX_STAMP_SCALE,
@@ -30,9 +31,20 @@ import { toKhmerNumerals } from '../../utils/khmerNumerals';
 import { AppleButton } from './AppleButton';
 import { AppleModal } from './AppleModal';
 
+/** Which on-page overlay a drag belongs to: the director's stamp or the teacher's signature. */
+type OverlayTarget = 'stamp' | 'teacher';
+
+/** Page geometry a move drag needs (shared by seal and teacher anchors). */
+interface MoveAnchor {
+  pageWidthMm: number;
+  pageHeightMm: number;
+  fitScale?: number;
+}
+
 type DragState =
   | {
       kind: 'move';
+      target: OverlayTarget;
       pointerId: number;
       startX: number;
       startY: number;
@@ -46,6 +58,7 @@ type DragState =
     }
   | {
       kind: 'resize';
+      target: OverlayTarget;
       pointerId: number;
       startX: number;
       centerX: number;
@@ -71,7 +84,8 @@ const CORNERS: Array<{
  * plus:
  *  - «បង្រួមដាក់ក្នុង ១ ទំព័រ (Optimize)» toggle for multi-page class tables, and
  *  - an interactive director stamp («ត្រាសាលា») directly on the document that the user can
- *    freely resize (corner handles or slider) and nudge into place before downloading.
+ *    freely resize (corner handles or slider) and nudge into place before downloading, and
+ *  - the same for the teacher's signature («ហត្ថលេខាគ្រូ»), independently of the stamp.
  */
 export const PdfPreviewModal: React.FC = () => {
   const request = usePdfPreviewStore((s) => s.request);
@@ -85,11 +99,18 @@ export const PdfPreviewModal: React.FC = () => {
   const [scale, setScale] = useState(DEFAULT_STAMP_SCALE);
   const [offsetXMm, setOffsetXMm] = useState(0);
   const [offsetYMm, setOffsetYMm] = useState(0);
-  const [isInteracting, setIsInteracting] = useState(false);
+  const [teacherSigImage, setTeacherSigImage] = useState<SealImage | undefined>(undefined);
+  const [teacherSigEnabled, setTeacherSigEnabled] = useState(false);
+  const [teacherScale, setTeacherScale] = useState(DEFAULT_STAMP_SCALE);
+  const [teacherOffsetXMm, setTeacherOffsetXMm] = useState(0);
+  const [teacherOffsetYMm, setTeacherOffsetYMm] = useState(0);
+  const [interactingTarget, setInteractingTarget] = useState<OverlayTarget | null>(null);
   const [uploadingStamp, setUploadingStamp] = useState(false);
+  const [uploadingTeacherSig, setUploadingTeacherSig] = useState(false);
   const [togglingFit, setTogglingFit] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const teacherFileInputRef = useRef<HTMLInputElement>(null);
   const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
   const dragRef = useRef<DragState | null>(null);
   const openedFileRef = useRef<string | null>(null);
@@ -98,7 +119,7 @@ export const PdfPreviewModal: React.FC = () => {
     if (!request) {
       openedFileRef.current = null;
       dragRef.current = null;
-      setIsInteracting(false);
+      setInteractingTarget(null);
       setTogglingFit(false);
       return;
     }
@@ -111,7 +132,14 @@ export const PdfPreviewModal: React.FC = () => {
       setScale(clampStampScale(request.initialStampScale ?? DEFAULT_STAMP_SCALE));
       setOffsetXMm(clampStampOffsetMm(request.initialStampOffsetXMm ?? 0));
       setOffsetYMm(clampStampOffsetMm(request.initialStampOffsetYMm ?? 0));
-      setIsInteracting(false);
+      setTeacherSigImage(request.initialTeacherSignature);
+      setTeacherSigEnabled(
+        Boolean(request.initialTeacherSignatureEnabled && request.initialTeacherSignature)
+      );
+      setTeacherScale(clampStampScale(request.initialTeacherSignatureScale ?? DEFAULT_STAMP_SCALE));
+      setTeacherOffsetXMm(clampStampOffsetMm(request.initialTeacherSignatureOffsetXMm ?? 0));
+      setTeacherOffsetYMm(clampStampOffsetMm(request.initialTeacherSignatureOffsetYMm ?? 0));
+      setInteractingTarget(null);
       dragRef.current = null;
     }
   }, [request]);
@@ -122,6 +150,7 @@ export const PdfPreviewModal: React.FC = () => {
     fileName,
     orientation,
     sealAnchors,
+    teacherAnchors,
     canFitOnePage,
     fitOnePage = false,
     minFitScale = 1,
@@ -130,7 +159,10 @@ export const PdfPreviewModal: React.FC = () => {
   } = request;
   const total = pages.length;
   const hasAnchors = Boolean(sealAnchors && sealAnchors.some((a) => a !== null));
-  const showToolbar = Boolean(hasAnchors || (canFitOnePage && onToggleFitOnePage));
+  const hasTeacherAnchors = Boolean(teacherAnchors && teacherAnchors.some((a) => a !== null));
+  const showToolbar = Boolean(
+    hasAnchors || hasTeacherAnchors || (canFitOnePage && onToggleFitOnePage)
+  );
 
   const handleToggleOptimize = async (nextFit: boolean) => {
     if (!onToggleFitOnePage || togglingFit) return;
@@ -156,6 +188,38 @@ export const PdfPreviewModal: React.FC = () => {
 
   const stepScale = (delta: number) => {
     setScale((prev) => clampStampScale(Math.round((prev + delta) * 100) / 100));
+  };
+
+  const handleResetTeacher = () => {
+    setTeacherScale(DEFAULT_STAMP_SCALE);
+    setTeacherOffsetXMm(0);
+    setTeacherOffsetYMm(0);
+  };
+
+  const stepTeacherScale = (delta: number) => {
+    setTeacherScale((prev) => clampStampScale(Math.round((prev + delta) * 100) / 100));
+  };
+
+  const handleUploadTeacherFile = async (file: File) => {
+    setUploadingTeacherSig(true);
+    try {
+      const cleaned = await prepareSealImage(file);
+      // Saved as the default only when none was stored yet; a quick swap applies to this export only.
+      if (!teacherSigImage) {
+        await setSetting<SealImage>('teacherSignature', cleaned);
+      }
+      setTeacherSigImage(cleaned);
+      setTeacherSigEnabled(true);
+      addToast({ type: 'success', title: 'បានបញ្ចូលហត្ថលេខាគ្រូ — អូសជ្រុងលើឯកសារដើម្បីកែទំហំ' });
+    } catch (err) {
+      addToast({
+        type: 'error',
+        title: 'មិនអាចអានរូបហត្ថលេខាបានទេ',
+        message: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setUploadingTeacherSig(false);
+    }
   };
 
   const handleUploadStampFile = async (file: File) => {
@@ -192,11 +256,25 @@ export const PdfPreviewModal: React.FC = () => {
             offsetXMm: clampStampOffsetMm(offsetXMm),
             offsetYMm: clampStampOffsetMm(offsetYMm),
           }
+        : undefined,
+      hasTeacherAnchors
+        ? {
+            enabled: Boolean(teacherSigEnabled && teacherSigImage),
+            signature: teacherSigImage,
+            scale: clampStampScale(teacherScale),
+            offsetXMm: clampStampOffsetMm(teacherOffsetXMm),
+            offsetYMm: clampStampOffsetMm(teacherOffsetYMm),
+          }
         : undefined
     );
   };
 
-  const startMove = (e: React.PointerEvent<HTMLDivElement>, pageIdx: number, anchor: PageSealAnchor) => {
+  const startMove = (
+    e: React.PointerEvent<HTMLDivElement>,
+    pageIdx: number,
+    anchor: MoveAnchor,
+    target: OverlayTarget
+  ) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.preventDefault();
     e.stopPropagation();
@@ -213,21 +291,26 @@ export const PdfPreviewModal: React.FC = () => {
     }
     dragRef.current = {
       kind: 'move',
+      target,
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      startOffsetXMm: offsetXMm,
-      startOffsetYMm: offsetYMm,
+      startOffsetXMm: target === 'teacher' ? teacherOffsetXMm : offsetXMm,
+      startOffsetYMm: target === 'teacher' ? teacherOffsetYMm : offsetYMm,
       pageWidthPx: pr && pr.width > 0 ? pr.width : 800,
       pageHeightPx: pr && pr.height > 0 ? pr.height : 600,
       pageWidthMm: anchor.pageWidthMm,
       pageHeightMm: anchor.pageHeightMm,
       fitScale,
     };
-    setIsInteracting(true);
+    setInteractingTarget(target);
   };
 
-  const startResize = (e: React.PointerEvent<HTMLDivElement>, boxEl: HTMLDivElement | null) => {
+  const startResize = (
+    e: React.PointerEvent<HTMLDivElement>,
+    boxEl: HTMLDivElement | null,
+    target: OverlayTarget
+  ) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.preventDefault();
     e.stopPropagation();
@@ -243,31 +326,35 @@ export const PdfPreviewModal: React.FC = () => {
     }
     dragRef.current = {
       kind: 'resize',
+      target,
       pointerId: e.pointerId,
       startX: e.clientX,
       centerX,
       centerY,
       startDist,
       hasLayoutBox,
-      startScale: scale,
+      startScale: target === 'teacher' ? teacherScale : scale,
     };
-    setIsInteracting(true);
+    setInteractingTarget(target);
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const st = dragRef.current;
     if (!st || st.pointerId !== e.pointerId) return;
     e.preventDefault();
+    const isTeacher = st.target === 'teacher';
     if (st.kind === 'move') {
       const dxMm = ((e.clientX - st.startX) / st.pageWidthPx) * (st.pageWidthMm / st.fitScale);
       const dyMm = ((e.clientY - st.startY) / st.pageHeightPx) * (st.pageHeightMm / st.fitScale);
-      setOffsetXMm(clampStampOffsetMm(Math.round((st.startOffsetXMm + dxMm) * 100) / 100));
-      setOffsetYMm(clampStampOffsetMm(Math.round((st.startOffsetYMm + dyMm) * 100) / 100));
+      const nextX = clampStampOffsetMm(Math.round((st.startOffsetXMm + dxMm) * 100) / 100);
+      const nextY = clampStampOffsetMm(Math.round((st.startOffsetYMm + dyMm) * 100) / 100);
+      (isTeacher ? setTeacherOffsetXMm : setOffsetXMm)(nextX);
+      (isTeacher ? setTeacherOffsetYMm : setOffsetYMm)(nextY);
     } else {
       const next = st.hasLayoutBox
         ? st.startScale * (Math.hypot(e.clientX - st.centerX, e.clientY - st.centerY) / st.startDist)
         : st.startScale + (e.clientX - st.startX) / 120;
-      setScale(clampStampScale(Math.round(next * 1000) / 1000));
+      (isTeacher ? setTeacherScale : setScale)(clampStampScale(Math.round(next * 1000) / 1000));
     }
   };
 
@@ -275,7 +362,7 @@ export const PdfPreviewModal: React.FC = () => {
     const st = dragRef.current;
     if (!st || st.pointerId !== e.pointerId) return;
     dragRef.current = null;
-    setIsInteracting(false);
+    setInteractingTarget(null);
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
@@ -284,6 +371,7 @@ export const PdfPreviewModal: React.FC = () => {
   };
 
   const scalePct = Math.round(scale * 100);
+  const teacherScalePct = Math.round(teacherScale * 100);
   const fitPct = Math.round(minFitScale * 100);
   const effectiveFontPt = minPrintedFontPt ?? Math.round(8.5 * minFitScale * 10) / 10;
   const approxBodyPt = effectiveFontPt.toFixed(1).replace(/\.0$/, '');
@@ -478,6 +566,131 @@ export const PdfPreviewModal: React.FC = () => {
               )}
             </div>
           )}
+
+          {hasTeacherAnchors && (
+            <div
+              data-testid="pdf-teacher-toolbar"
+              className={`flex flex-wrap items-center justify-between gap-2.5 ${
+                hasAnchors ? 'pt-2 border-t border-black/[0.06] dark:border-white/[0.08]' : ''
+              }`}
+            >
+              <input
+                ref={teacherFileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                aria-label="បញ្ចូលរូបហត្ថលេខាគ្រូ"
+                onChange={(e) => {
+                  const picked = e.target.files?.[0];
+                  if (picked) void handleUploadTeacherFile(picked);
+                  e.target.value = '';
+                }}
+              />
+
+              {teacherSigImage ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex items-center gap-2 text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        data-testid="pdf-teacher-sign-toggle"
+                        checked={teacherSigEnabled}
+                        onChange={(e) => setTeacherSigEnabled(e.target.checked)}
+                        className="w-4 h-4 accent-[#0071e3]"
+                      />
+                      <PenTool size={14} className="text-[#0071e3]" />
+                      <span>ដាក់ហត្ថលេខាគ្រូលើឯកសារ</span>
+                    </label>
+
+                    {teacherSigEnabled && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          aria-label="បង្រួមហត្ថលេខាគ្រូ"
+                          onClick={() => stepTeacherScale(-0.1)}
+                          disabled={teacherScale <= MIN_STAMP_SCALE}
+                          className="p-1.5 rounded-lg bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] disabled:opacity-40 text-[#1d1d1f] dark:text-[#f5f5f7]"
+                        >
+                          <ZoomOut size={14} />
+                        </button>
+                        <input
+                          type="range"
+                          aria-label="ទំហំហត្ថលេខាគ្រូ"
+                          data-testid="pdf-teacher-scale-slider"
+                          min={MIN_STAMP_SCALE}
+                          max={MAX_STAMP_SCALE}
+                          step={0.02}
+                          value={teacherScale}
+                          onChange={(e) => setTeacherScale(clampStampScale(Number(e.target.value)))}
+                          className="w-28 sm:w-36 accent-[#0071e3] cursor-pointer"
+                        />
+                        <button
+                          type="button"
+                          aria-label="ពង្រីកហត្ថលេខាគ្រូ"
+                          onClick={() => stepTeacherScale(0.1)}
+                          disabled={teacherScale >= MAX_STAMP_SCALE}
+                          className="p-1.5 rounded-lg bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] disabled:opacity-40 text-[#1d1d1f] dark:text-[#f5f5f7]"
+                        >
+                          <ZoomIn size={14} />
+                        </button>
+                        <span
+                          data-testid="pdf-teacher-scale-label"
+                          className="min-w-[3rem] text-center text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded-md bg-[#0071e3]/10 text-[#0071e3]"
+                        >
+                          {fmt(teacherScalePct)}%
+                        </span>
+                        <button
+                          type="button"
+                          data-testid="pdf-teacher-reset"
+                          onClick={handleResetTeacher}
+                          title="កំណត់ទំហំ និងទីតាំងហត្ថលេខាគ្រូដើមវិញ"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] text-[#1d1d1f] dark:text-[#f5f5f7]"
+                        >
+                          <RotateCcw size={12} />
+                          <span>កំណត់ដើម</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[11px] text-[#6e6e73] dark:text-[#98989d]">
+                    {teacherSigEnabled && (
+                      <span className="hidden md:inline-flex items-center gap-1">
+                        <Move size={12} className="text-[#0071e3]" />
+                        អូសជ្រុងហត្ថលេខាដើម្បីពង្រីក/បង្រួម ឬអូសហត្ថលេខាដើម្បីរំកិល
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      disabled={uploadingTeacherSig}
+                      onClick={() => teacherFileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] text-[#1d1d1f] dark:text-[#f5f5f7]"
+                    >
+                      <Upload size={12} />
+                      <span>ប្ដូរហត្ថលេខាគ្រូ</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between w-full gap-2">
+                  <span className="text-xs text-[#6e6e73] dark:text-[#98989d] flex items-center gap-1.5">
+                    <PenTool size={14} className="text-[#0071e3]" />
+                    <span>ចង់ដាក់ហត្ថលេខាគ្រូ និងកែទំហំលើឯកសារនេះមែនទេ?</span>
+                  </span>
+                  <AppleButton
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    icon={<Upload size={13} />}
+                    disabled={uploadingTeacherSig}
+                    onClick={() => teacherFileInputRef.current?.click()}
+                  >
+                    {uploadingTeacherSig ? 'កំពុងរៀបចំ...' : 'បញ្ចូលហត្ថលេខាគ្រូ'}
+                  </AppleButton>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -490,6 +703,15 @@ export const PdfPreviewModal: React.FC = () => {
           const stampRect =
             stampEnabled && stampImage && anchor
               ? computePageStampRectFrac(anchor, stampImage, { scale, offsetXMm, offsetYMm })
+              : null;
+          const teacherAnchor = teacherAnchors?.[idx] ?? null;
+          const teacherRect =
+            teacherSigEnabled && teacherSigImage && teacherAnchor
+              ? computePageTeacherSignRectFrac(teacherAnchor, teacherSigImage, {
+                  scale: teacherScale,
+                  offsetXMm: teacherOffsetXMm,
+                  offsetYMm: teacherOffsetYMm,
+                })
               : null;
 
           return (
@@ -514,13 +736,13 @@ export const PdfPreviewModal: React.FC = () => {
                 {stampRect && stampImage && anchor && (
                   <div
                     data-testid={`pdf-stamp-box-${idx}`}
-                    onPointerDown={(e) => startMove(e, idx, anchor)}
+                    onPointerDown={(e) => startMove(e, idx, anchor, 'stamp')}
                     onPointerMove={onPointerMove}
                     onPointerUp={endDrag}
                     onPointerCancel={endDrag}
                     title="អូសដើម្បីរំកិលទីតាំងត្រា ឬអូសជ្រុងដើម្បីពង្រីក/បង្រួម"
                     className={`group absolute cursor-move rounded-sm transition-shadow ${
-                      isInteracting
+                      interactingTarget === 'stamp'
                         ? 'ring-2 ring-[#dc2626] bg-[#dc2626]/[0.03]'
                         : 'ring-1 ring-dashed ring-[#dc2626]/65 hover:ring-2 hover:ring-[#dc2626]'
                     }`}
@@ -546,7 +768,11 @@ export const PdfPreviewModal: React.FC = () => {
                         key={corner.id}
                         data-testid={`pdf-stamp-handle-${idx}-${corner.id}`}
                         onPointerDown={(e) =>
-                          startResize(e, e.currentTarget.parentElement as HTMLDivElement | null)
+                          startResize(
+                            e,
+                            e.currentTarget.parentElement as HTMLDivElement | null,
+                            'stamp'
+                          )
                         }
                         onPointerMove={onPointerMove}
                         onPointerUp={endDrag}
@@ -554,6 +780,58 @@ export const PdfPreviewModal: React.FC = () => {
                         className={`absolute ${corner.posClass} ${corner.cursorClass} w-5 h-5 flex items-center justify-center touch-none`}
                       >
                         <span className="w-2.5 h-2.5 rounded-full bg-white border-2 border-[#dc2626] shadow-sm" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {teacherRect && teacherSigImage && teacherAnchor && (
+                  <div
+                    data-testid={`pdf-teacher-box-${idx}`}
+                    onPointerDown={(e) => startMove(e, idx, teacherAnchor, 'teacher')}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={endDrag}
+                    onPointerCancel={endDrag}
+                    title="អូសដើម្បីរំកិលហត្ថលេខាគ្រូ ឬអូសជ្រុងដើម្បីពង្រីក/បង្រួម"
+                    className={`group absolute cursor-move rounded-sm transition-shadow ${
+                      interactingTarget === 'teacher'
+                        ? 'ring-2 ring-[#0071e3] bg-[#0071e3]/[0.03]'
+                        : 'ring-1 ring-dashed ring-[#0071e3]/65 hover:ring-2 hover:ring-[#0071e3]'
+                    }`}
+                    style={{
+                      left: `${teacherRect.leftFrac * 100}%`,
+                      top: `${teacherRect.topFrac * 100}%`,
+                      width: `${teacherRect.widthFrac * 100}%`,
+                      height: `${teacherRect.heightFrac * 100}%`,
+                      touchAction: 'none',
+                    }}
+                  >
+                    <img
+                      src={teacherSigImage.dataUrl}
+                      alt=""
+                      role="presentation"
+                      draggable={false}
+                      className="w-full h-full object-contain pointer-events-none select-none"
+                      style={{ opacity: 1 }}
+                    />
+
+                    {CORNERS.map((corner) => (
+                      <div
+                        key={corner.id}
+                        data-testid={`pdf-teacher-handle-${idx}-${corner.id}`}
+                        onPointerDown={(e) =>
+                          startResize(
+                            e,
+                            e.currentTarget.parentElement as HTMLDivElement | null,
+                            'teacher'
+                          )
+                        }
+                        onPointerMove={onPointerMove}
+                        onPointerUp={endDrag}
+                        onPointerCancel={endDrag}
+                        className={`absolute ${corner.posClass} ${corner.cursorClass} w-5 h-5 flex items-center justify-center touch-none`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full bg-white border-2 border-[#0071e3] shadow-sm" />
                       </div>
                     ))}
                   </div>

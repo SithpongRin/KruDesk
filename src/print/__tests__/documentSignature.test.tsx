@@ -161,4 +161,86 @@ describe('DocumentSignature (teacher layout 2026-11-20)', () => {
     const maxImg = clampedHigh.container.querySelector('[data-director-seal]') as HTMLImageElement;
     expect(parseFloat(maxImg.style.height)).toBeCloseTo(baseH * 2.2, 2);
   });
+
+  it('always marks the teacher signing space as an anchor, without an image when none is ticked', () => {
+    const base = { month: '2026-11', lunarDate: '', place: '', gregorianDate: '' };
+    const { container } = render(
+      <DocumentSignature profile={profile} signOptions={base} gapMm={16} fontSizePt={10} />
+    );
+    const anchors = container.querySelectorAll('[data-teacher-sign-anchor]');
+    expect(anchors).toHaveLength(1);
+    const anchor = anchors[0] as HTMLElement;
+    expect(anchor.dataset.gapMm).toBe('16');
+    expect(anchor.dataset.fontPt).toBe('10');
+    expect(anchor.dataset.hasTeacherSig).toBe('0');
+    expect(anchor.dataset.teacherScale).toBe('1');
+    expect(anchor.dataset.teacherOffsetX).toBe('0');
+    expect(anchor.dataset.teacherOffsetY).toBe('0');
+    expect(container.querySelector('[data-teacher-signature]')).toBeNull();
+    // The teacher's space is not the director's.
+    expect(anchor.hasAttribute('data-director-seal-anchor')).toBe(false);
+
+    // Director-only certificate block has no teacher space.
+    const certificate = render(
+      <DocumentSignature profile={profile} showTeacher={false} signOptions={base} />
+    );
+    expect(certificate.container.querySelector('[data-teacher-sign-anchor]')).toBeNull();
+  });
+
+  it('sizes, scales and nudges the teacher signature with computeSignatureBox', () => {
+    const sig = { dataUrl: 'data:image/png;base64,AAAA', width: 200, height: 100 };
+    const base = { month: '2026-11', lunarDate: '', place: '', gregorianDate: '' };
+    const plain = render(
+      <DocumentSignature profile={profile} signOptions={{ ...base, teacherSignature: sig }} gapMm={20} />
+    );
+    const img = plain.container.querySelector('[data-teacher-signature]') as HTMLImageElement;
+    expect(img).toBeTruthy();
+    expect(parseFloat(img.style.height)).toBeCloseTo(18, 4);
+    expect(parseFloat(img.style.width)).toBeCloseTo(36, 4);
+    expect(parseFloat(img.style.top)).toBeCloseTo(1, 4);
+    expect(img.style.left).toBe('50%');
+    expect(img.style.transform).toBe('translateX(-50%)');
+    expect(img.style.opacity).toBe('1');
+    const anchor = img.closest('[data-teacher-sign-anchor]') as HTMLElement;
+    expect(anchor.dataset.hasTeacherSig).toBe('1');
+
+    const moved = render(
+      <DocumentSignature
+        profile={profile}
+        signOptions={{
+          ...base,
+          teacherSignature: sig,
+          teacherSignatureScale: 1.5,
+          teacherSignatureOffsetXMm: 4,
+          teacherSignatureOffsetYMm: -3,
+        }}
+        gapMm={20}
+      />
+    );
+    const movedImg = moved.container.querySelector('[data-teacher-signature]') as HTMLImageElement;
+    expect(parseFloat(movedImg.style.height)).toBeCloseTo(27, 4);
+    // JSDOM normalises calc(50% + 4mm) to px: 4mm = 15.118px
+    expect(movedImg.style.left).toContain('calc(50% +');
+    expect(parseFloat(movedImg.style.left.replace('calc(50% + ', ''))).toBeCloseTo((4 * 96) / 25.4, 3);
+    // centre stays at gap/2, then 3 mm up
+    expect(parseFloat(movedImg.style.top)).toBeCloseTo(10 - 13.5 - 3, 4);
+    const movedAnchor = moved.container.querySelector('[data-teacher-sign-anchor]') as HTMLElement;
+    expect(movedAnchor.dataset.teacherScale).toBe('1.5');
+    expect(movedAnchor.dataset.teacherOffsetX).toBe('4');
+    expect(movedAnchor.dataset.teacherOffsetY).toBe('-3');
+  });
+
+  it('never marks the director signature as the teacher signature', () => {
+    const seal = { dataUrl: 'data:image/png;base64,AAAA', width: 10, height: 10 };
+    const base = { month: '2026-11', lunarDate: '', place: '', gregorianDate: '' };
+    const { container } = render(
+      <DocumentSignature
+        profile={profile}
+        signOptions={{ ...base, directorStamp: seal, directorSignature: seal }}
+      />
+    );
+    expect(container.querySelector('[data-teacher-signature]')).toBeNull();
+    const directorAnchor = container.querySelector('[data-director-seal-anchor]') as HTMLElement;
+    expect(directorAnchor.querySelectorAll('img')).toHaveLength(2);
+  });
 });
