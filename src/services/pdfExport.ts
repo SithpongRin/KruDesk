@@ -1,5 +1,6 @@
 import { getSetting, setSetting } from '../db/database';
 import type { PageSealAnchor, PdfStampResult } from '../store/usePdfPreviewStore';
+import { usePrintLayoutStore } from '../store/usePrintLayoutStore';
 import {
   DEFAULT_STAMP_SCALE,
   STAMP_OPACITY,
@@ -65,7 +66,8 @@ export interface PageStampRectFrac {
 
 /**
  * Computes the stamp's rectangle as fractions [0..1] of the full page width & height.
- * Used identically by PdfPreviewModal (CSS %) and buildPdfFromPngs (pdf-lib pt, bottom-left origin).
+ * Accounts for `anchor.fitScale` when a page was proportionally scaled via Fit-to-1-Page,
+ * keeping 0.00 mm parity between DOM, PdfPreviewModal CSS %, and pdf-lib coordinates.
  */
 export function computePageStampRectFrac(
   anchor: PageSealAnchor,
@@ -73,6 +75,10 @@ export function computePageStampRectFrac(
   params: { scale?: number; offsetXMm?: number; offsetYMm?: number }
 ): PageStampRectFrac {
   const aspectRatio = stamp.width > 0 && stamp.height > 0 ? stamp.width / stamp.height : 1;
+  const fitScale =
+    typeof anchor.fitScale === 'number' && Number.isFinite(anchor.fitScale) && anchor.fitScale > 0
+      ? anchor.fitScale
+      : 1;
   const box = computeDirectorStampBox({
     gapMm: anchor.gapMm,
     fontSizePt: anchor.fontSizePt,
@@ -83,14 +89,19 @@ export function computePageStampRectFrac(
     offsetXMm: params.offsetXMm,
     offsetYMm: params.offsetYMm,
   });
-  const anchorCenterXMm = (anchor.xFrac + anchor.wFrac * 0.5) * anchor.pageWidthMm + box.offsetXMm;
-  const stampLeftMm = anchorCenterXMm - box.anchorXFraction * box.widthMm;
-  const stampTopMm = anchor.yFrac * anchor.pageHeightMm + box.topMm;
+  const widthMm = box.widthMm * fitScale;
+  const heightMm = box.heightMm * fitScale;
+  const topMm = box.topMm * fitScale;
+  const offsetXMm = box.offsetXMm * fitScale;
+
+  const anchorCenterXMm = (anchor.xFrac + anchor.wFrac * 0.5) * anchor.pageWidthMm + offsetXMm;
+  const stampLeftMm = anchorCenterXMm - box.anchorXFraction * widthMm;
+  const stampTopMm = anchor.yFrac * anchor.pageHeightMm + topMm;
   return {
     leftFrac: stampLeftMm / anchor.pageWidthMm,
     topFrac: stampTopMm / anchor.pageHeightMm,
-    widthFrac: box.widthMm / anchor.pageWidthMm,
-    heightFrac: box.heightMm / anchor.pageHeightMm,
+    widthFrac: widthMm / anchor.pageWidthMm,
+    heightFrac: heightMm / anchor.pageHeightMm,
   };
 }
 
@@ -162,6 +173,10 @@ function captureSealMetadataFromDom(
       return null;
     }
 
+    const rawFitScale = Number(pageEl.dataset.fitScale);
+    const fitScale =
+      Number.isFinite(rawFitScale) && rawFitScale > 0 ? rawFitScale : 1;
+
     return {
       xFrac: (ar.left - pr.left) / pr.width,
       yFrac: (ar.top - pr.top) / pr.height,
@@ -173,10 +188,57 @@ function captureSealMetadataFromDom(
       fontSizePt: Number(anchorEl.dataset.fontPt) || 9,
       hasBottomName: anchorEl.dataset.hasBottomName === '1',
       hasDirectorSig: anchorEl.dataset.hasDirectorSig === '1',
+      fitScale,
     };
   });
 
   return { anchors, domStamp, domHasStamp, domScale, domOffsetXMm, domOffsetYMm };
+}
+
+/**
+ * Finds the mounted container element holding the current sheet's `[data-print-page]` nodes,
+ * so toggling `usePrintLayoutStore.fitOnePage` can re-query the re-rendered page nodes cleanly.
+ */
+function findPrintStageContainer(pageElements: HTMLElement[]): HTMLElement | null {
+  let cur: HTMLElement | null = pageElements[0]?.parentElement ?? null;
+  if (!cur) return null;
+  while (
+    cur.parentElement &&
+    cur.parentElement !== document.body &&
+    cur.parentElement.querySelectorAll('[data-print-page]').length === pageElements.length
+  ) {
+    cur = cur.parentElement;
+  }
+  return cur;
+}
+
+function detectCanFitOnePage(pageElements: HTMLElement[], stageRoot: HTMLElement | null): boolean {
+  if (!stageRoot || pageElements.length === 0) return false;
+  if (pageElements.some((el) => el.dataset.canFitOnePage === '1')) {
+    return true;
+  }
+  const hasExplicitFlag = pageElements.some((el) => el.dataset.canFitOnePage !== undefined);
+  if (hasExplicitFlag) return false;
+  return pageElements.length > 1 && pageElements.some((el) => el.querySelector('[data-fit-body]') !== null);
+}
+
+function measureMinPrintedFontPt(pageElements: HTMLElement[]): number | undefined {
+  let minPt = Infinity;
+  for (const pageEl of pageElements) {
+    const rawScale = Number(pageEl.dataset.fitScale);
+    const fitScale = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 1;
+    const cells = pageEl.querySelectorAll<HTMLElement>('td, th');
+    for (const cell of Array.from(cells)) {
+      if (!(cell.textContent || '').trim()) continue;
+      const target = cell.querySelector<HTMLElement>('span') ?? cell;
+      const px = parseFloat(getComputedStyle(target).fontSize);
+      if (Number.isFinite(px) && px > 0) {
+        const pt = px * 0.75 * fitScale;
+        if (pt < minPt) minPt = pt;
+      }
+    }
+  }
+  return Number.isFinite(minPt) ? Math.round(minPt * 10) / 10 : undefined;
 }
 
 const PRINT_PAGE_STYLE_ID = 'krudesk-dynamic-print-page-style';
@@ -319,8 +381,7 @@ export async function buildPdfFromPngs(
 /**
  * Shared PDF export pipeline for Khmer documents:
  * React print-layout DOM nodes -> fonts ready -> html-to-image (3x PNG) -> «មើលមុន» (with live
- * resizable/draggable director stamp directly on the document) -> pdf-lib pages.
- * Preview and PDF are therefore identical.
+ * Fit-to-1-Page Optimize toggle & resizable/draggable director stamp) -> pdf-lib pages.
  *
  * Returns the PDF bytes, or null when the teacher closed the preview without downloading.
  */
@@ -330,73 +391,158 @@ export async function exportPrintNodesToPdf(
 ): Promise<Uint8Array | null> {
   const orientation = options.orientation ?? 'landscape';
   const pageSize = options.pageSize ?? 'A4';
+  const basePixelRatio = options.pixelRatio ?? 3;
   const usePreview = options.preview !== false;
   const [pageWidthMm, pageHeightMm] = getPageDimensionsMm(pageSize, orientation);
 
-  await ensurePrintFontsReady();
-  const captured = usePreview
-    ? captureSealMetadataFromDom(pageElements, pageWidthMm, pageHeightMm)
-    : null;
-  const hasInteractiveAnchors = Boolean(captured && captured.anchors.some((a) => a !== null));
+  // Always start in normal multi-page mode unless explicitly set otherwise.
+  usePrintLayoutStore.getState().setFitOnePage(false);
 
-  const pages = await renderPrintNodesToPng(
-    pageElements,
-    options.pixelRatio ?? 3,
-    usePreview && hasInteractiveAnchors
-  );
+  try {
+    await ensurePrintFontsReady();
+    const stageRoot = usePreview ? findPrintStageContainer(pageElements) : null;
+    const canFitOnePage = usePreview && detectCanFitOnePage(pageElements, stageRoot);
 
-  let stampOutcome: PdfStampResult | undefined;
+    let activeCaptured = usePreview
+      ? captureSealMetadataFromDom(pageElements, pageWidthMm, pageHeightMm)
+      : null;
+    const hasInteractiveAnchors = (cap: CapturedSealMetadata | null) =>
+      Boolean(cap && cap.anchors.some((a) => a !== null));
 
-  if (usePreview) {
-    const [savedStampRaw, savedScale, savedOffsetX, savedOffsetY] = await Promise.all([
-      getSetting<unknown>('directorStamp').catch(() => undefined),
-      getSetting<number>('directorStampScale').catch(() => undefined),
-      getSetting<number>('directorStampOffsetXMm').catch(() => undefined),
-      getSetting<number>('directorStampOffsetYMm').catch(() => undefined),
-    ]);
-    const savedStamp = isSealImage(savedStampRaw) ? savedStampRaw : undefined;
-    const initialStamp = savedStamp ?? captured?.domStamp;
-    const initialScale = clampStampScale(savedScale ?? captured?.domScale ?? DEFAULT_STAMP_SCALE);
-    const initialOffsetXMm = clampStampOffsetMm(savedOffsetX ?? captured?.domOffsetXMm ?? 0);
-    const initialOffsetYMm = clampStampOffsetMm(savedOffsetY ?? captured?.domOffsetYMm ?? 0);
+    let activePages = await renderPrintNodesToPng(
+      pageElements,
+      basePixelRatio,
+      usePreview && hasInteractiveAnchors(activeCaptured)
+    );
 
-    const { usePdfPreviewStore } = await import('../store/usePdfPreviewStore');
-    const outcome = await usePdfPreviewStore.getState().open({
-      pages,
-      fileName: options.fileName,
-      orientation,
-      pageSize,
-      sealAnchors: captured?.anchors,
-      initialStamp,
-      initialStampEnabled: Boolean(captured?.domHasStamp && initialStamp),
-      initialStampScale: initialScale,
-      initialStampOffsetXMm: initialOffsetXMm,
-      initialStampOffsetYMm: initialOffsetYMm,
-    });
-    if (!outcome.download) return null;
-    stampOutcome = outcome.stamp;
+    let stampOutcome: PdfStampResult | undefined;
 
-    if (stampOutcome?.enabled) {
-      await Promise.all([
-        setSetting('directorStampScale', clampStampScale(stampOutcome.scale)).catch(() => {}),
-        setSetting('directorStampOffsetXMm', clampStampOffsetMm(stampOutcome.offsetXMm)).catch(
-          () => {}
-        ),
-        setSetting('directorStampOffsetYMm', clampStampOffsetMm(stampOutcome.offsetYMm)).catch(
-          () => {}
-        ),
+    if (usePreview) {
+      const [savedStampRaw, savedScale, savedOffsetX, savedOffsetY] = await Promise.all([
+        getSetting<unknown>('directorStamp').catch(() => undefined),
+        getSetting<number>('directorStampScale').catch(() => undefined),
+        getSetting<number>('directorStampOffsetXMm').catch(() => undefined),
+        getSetting<number>('directorStampOffsetYMm').catch(() => undefined),
       ]);
-    }
-  }
+      const savedStamp = isSealImage(savedStampRaw) ? savedStampRaw : undefined;
+      const initialStamp = savedStamp ?? activeCaptured?.domStamp;
+      const initialScale = clampStampScale(savedScale ?? activeCaptured?.domScale ?? DEFAULT_STAMP_SCALE);
+      const initialOffsetXMm = clampStampOffsetMm(savedOffsetX ?? activeCaptured?.domOffsetXMm ?? 0);
+      const initialOffsetYMm = clampStampOffsetMm(savedOffsetY ?? activeCaptured?.domOffsetYMm ?? 0);
 
-  const pdfBytes = await buildPdfFromPngs(
-    pages,
-    options,
-    captured && stampOutcome
-      ? { anchors: captured.anchors, stamp: stampOutcome }
-      : undefined
-  );
-  const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
-  triggerBlobDownload(blob, options.fileName);
-  return pdfBytes;
+      const { usePdfPreviewStore } = await import('../store/usePdfPreviewStore');
+
+      const handleToggleFitOnePage = canFitOnePage
+        ? async (nextFit: boolean) => {
+            const { fitPageToOnePage, resetPageFit } = await import('../print/fitOnePage');
+            if (!nextFit && stageRoot) {
+              for (const existing of Array.from(
+                stageRoot.querySelectorAll<HTMLElement>('[data-print-page]')
+              )) {
+                resetPageFit(existing);
+              }
+            }
+
+            usePrintLayoutStore.getState().setFitOnePage(nextFit);
+            await new Promise((r) => setTimeout(r, 40));
+            await nextPaint();
+            await nextPaint();
+            await ensurePrintFontsReady();
+
+            const nextNodes = stageRoot
+              ? Array.from(stageRoot.querySelectorAll<HTMLElement>('[data-print-page]'))
+              : pageElements;
+            if (nextNodes.length === 0) return;
+
+            let minFitScale = 1;
+            if (nextFit) {
+              for (const node of nextNodes) {
+                const { scale } = fitPageToOnePage(node);
+                if (scale < minFitScale) minFitScale = scale;
+              }
+            } else {
+              for (const node of nextNodes) {
+                resetPageFit(node);
+              }
+            }
+
+            const minPrintedFontPt = nextFit ? measureMinPrintedFontPt(nextNodes) : undefined;
+            const nextCaptured = captureSealMetadataFromDom(nextNodes, pageWidthMm, pageHeightMm);
+            // Boost raster DPI slightly when scaled down so small Khmer subscripts stay crisp.
+            const effectiveRatio =
+              nextFit && minFitScale < 0.85
+                ? Math.min(4, Math.round((basePixelRatio / Math.max(0.65, minFitScale)) * 10) / 10)
+                : basePixelRatio;
+            const nextPages = await renderPrintNodesToPng(
+              nextNodes,
+              effectiveRatio,
+              hasInteractiveAnchors(nextCaptured)
+            );
+
+            activeCaptured = nextCaptured;
+            activePages = nextPages;
+            usePdfPreviewStore.getState().updateRequest({
+              pages: nextPages,
+              sealAnchors: nextCaptured.anchors,
+              fitOnePage: nextFit,
+              minFitScale,
+              minPrintedFontPt,
+            });
+          }
+        : undefined;
+
+      const outcome = await usePdfPreviewStore.getState().open({
+        pages: activePages,
+        fileName: options.fileName,
+        orientation,
+        pageSize,
+        sealAnchors: activeCaptured?.anchors,
+        initialStamp,
+        initialStampEnabled: Boolean(activeCaptured?.domHasStamp && initialStamp),
+        initialStampScale: initialScale,
+        initialStampOffsetXMm: initialOffsetXMm,
+        initialStampOffsetYMm: initialOffsetYMm,
+        canFitOnePage,
+        fitOnePage: false,
+        minFitScale: 1,
+        onToggleFitOnePage: handleToggleFitOnePage,
+      });
+      if (!outcome.download) return null;
+      stampOutcome = outcome.stamp;
+
+      if (stampOutcome?.enabled) {
+        await Promise.all([
+          setSetting('directorStampScale', clampStampScale(stampOutcome.scale)).catch(() => {}),
+          setSetting('directorStampOffsetXMm', clampStampOffsetMm(stampOutcome.offsetXMm)).catch(
+            () => {}
+          ),
+          setSetting('directorStampOffsetYMm', clampStampOffsetMm(stampOutcome.offsetYMm)).catch(
+            () => {}
+          ),
+        ]);
+      }
+    }
+
+    const pdfBytes = await buildPdfFromPngs(
+      activePages,
+      options,
+      activeCaptured && stampOutcome
+        ? { anchors: activeCaptured.anchors, stamp: stampOutcome }
+        : undefined
+    );
+    const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
+    triggerBlobDownload(blob, options.fileName);
+    return pdfBytes;
+  } finally {
+    if (usePreview) {
+      const stageRoot = findPrintStageContainer(pageElements);
+      if (stageRoot) {
+        const { resetPageFit } = await import('../print/fitOnePage');
+        for (const node of Array.from(stageRoot.querySelectorAll<HTMLElement>('[data-print-page]'))) {
+          resetPageFit(node);
+        }
+      }
+    }
+    usePrintLayoutStore.getState().setFitOnePage(false);
+  }
 }

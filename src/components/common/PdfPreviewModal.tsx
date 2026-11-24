@@ -1,6 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, Move, RotateCcw, Stamp, Upload, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  AlertTriangle,
+  Download,
+  Loader2,
+  Minimize2,
+  Move,
+  RotateCcw,
+  Stamp,
+  Upload,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { setSetting } from '../../db/database';
+import { MIN_READABLE_FIT_SCALE } from '../../print/fitOnePage';
 import { computePageStampRectFrac } from '../../services/pdfExport';
 import { useAppStore } from '../../store/useAppStore';
 import { usePdfPreviewStore, type PageSealAnchor } from '../../store/usePdfPreviewStore';
@@ -30,6 +42,7 @@ type DragState =
       pageHeightPx: number;
       pageWidthMm: number;
       pageHeightMm: number;
+      fitScale: number;
     }
   | {
       kind: 'resize';
@@ -55,15 +68,17 @@ const CORNERS: Array<{
 
 /**
  * «មើលមុន» before every PDF download. Shows the exact page images the PDF is built from,
- * plus an interactive director stamp («ត្រាសាលា») directly on the document that the user can
- * freely resize (corner handles or slider) and nudge into place before downloading.
+ * plus:
+ *  - «បង្រួមដាក់ក្នុង ១ ទំព័រ (Optimize)» toggle for multi-page class tables, and
+ *  - an interactive director stamp («ត្រាសាលា») directly on the document that the user can
+ *    freely resize (corner handles or slider) and nudge into place before downloading.
  */
 export const PdfPreviewModal: React.FC = () => {
   const request = usePdfPreviewStore((s) => s.request);
   const close = usePdfPreviewStore((s) => s.close);
   const useKhmerNumerals = useAppStore((s) => s.useKhmerNumerals);
   const addToast = useAppStore((s) => s.addToast);
-  const fmt = (n: number) => (useKhmerNumerals ? toKhmerNumerals(n) : String(n));
+  const fmt = (n: number | string) => (useKhmerNumerals ? toKhmerNumerals(n) : String(n));
 
   const [stampImage, setStampImage] = useState<SealImage | undefined>(undefined);
   const [stampEnabled, setStampEnabled] = useState(false);
@@ -72,30 +87,66 @@ export const PdfPreviewModal: React.FC = () => {
   const [offsetYMm, setOffsetYMm] = useState(0);
   const [isInteracting, setIsInteracting] = useState(false);
   const [uploadingStamp, setUploadingStamp] = useState(false);
+  const [togglingFit, setTogglingFit] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pageRefs = useRef<Array<HTMLDivElement | null>>([]);
   const dragRef = useRef<DragState | null>(null);
+  const openedFileRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!request) {
+      openedFileRef.current = null;
       dragRef.current = null;
       setIsInteracting(false);
+      setTogglingFit(false);
       return;
     }
-    setStampImage(request.initialStamp);
-    setStampEnabled(Boolean(request.initialStampEnabled && request.initialStamp));
-    setScale(clampStampScale(request.initialStampScale ?? DEFAULT_STAMP_SCALE));
-    setOffsetXMm(clampStampOffsetMm(request.initialStampOffsetXMm ?? 0));
-    setOffsetYMm(clampStampOffsetMm(request.initialStampOffsetYMm ?? 0));
-    setIsInteracting(false);
-    dragRef.current = null;
+    // Only reset stamp state when a brand-new preview opens, NOT when updateRequest swaps pages
+    // for Fit-to-1-Page (so the user's chosen stamp toggle, size, and nudge are preserved!).
+    if (openedFileRef.current !== request.fileName) {
+      openedFileRef.current = request.fileName;
+      setStampImage(request.initialStamp);
+      setStampEnabled(Boolean(request.initialStampEnabled && request.initialStamp));
+      setScale(clampStampScale(request.initialStampScale ?? DEFAULT_STAMP_SCALE));
+      setOffsetXMm(clampStampOffsetMm(request.initialStampOffsetXMm ?? 0));
+      setOffsetYMm(clampStampOffsetMm(request.initialStampOffsetYMm ?? 0));
+      setIsInteracting(false);
+      dragRef.current = null;
+    }
   }, [request]);
 
   if (!request) return null;
-  const { pages, fileName, orientation, sealAnchors } = request;
+  const {
+    pages,
+    fileName,
+    orientation,
+    sealAnchors,
+    canFitOnePage,
+    fitOnePage = false,
+    minFitScale = 1,
+    minPrintedFontPt,
+    onToggleFitOnePage,
+  } = request;
   const total = pages.length;
   const hasAnchors = Boolean(sealAnchors && sealAnchors.some((a) => a !== null));
+  const showToolbar = Boolean(hasAnchors || (canFitOnePage && onToggleFitOnePage));
+
+  const handleToggleOptimize = async (nextFit: boolean) => {
+    if (!onToggleFitOnePage || togglingFit) return;
+    setTogglingFit(true);
+    try {
+      await onToggleFitOnePage(nextFit);
+    } catch (err) {
+      addToast({
+        type: 'error',
+        title: 'មិនអាចបង្រួមទំព័របានទេ',
+        message: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setTogglingFit(false);
+    }
+  };
 
   const handleResetStamp = () => {
     setScale(DEFAULT_STAMP_SCALE);
@@ -151,6 +202,10 @@ export const PdfPreviewModal: React.FC = () => {
     e.stopPropagation();
     const pageEl = pageRefs.current[pageIdx];
     const pr = pageEl?.getBoundingClientRect();
+    const fitScale =
+      typeof anchor.fitScale === 'number' && Number.isFinite(anchor.fitScale) && anchor.fitScale > 0
+        ? anchor.fitScale
+        : 1;
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -167,6 +222,7 @@ export const PdfPreviewModal: React.FC = () => {
       pageHeightPx: pr && pr.height > 0 ? pr.height : 600,
       pageWidthMm: anchor.pageWidthMm,
       pageHeightMm: anchor.pageHeightMm,
+      fitScale,
     };
     setIsInteracting(true);
   };
@@ -203,8 +259,8 @@ export const PdfPreviewModal: React.FC = () => {
     if (!st || st.pointerId !== e.pointerId) return;
     e.preventDefault();
     if (st.kind === 'move') {
-      const dxMm = ((e.clientX - st.startX) / st.pageWidthPx) * st.pageWidthMm;
-      const dyMm = ((e.clientY - st.startY) / st.pageHeightPx) * st.pageHeightMm;
+      const dxMm = ((e.clientX - st.startX) / st.pageWidthPx) * (st.pageWidthMm / st.fitScale);
+      const dyMm = ((e.clientY - st.startY) / st.pageHeightPx) * (st.pageHeightMm / st.fitScale);
       setOffsetXMm(clampStampOffsetMm(Math.round((st.startOffsetXMm + dxMm) * 100) / 100));
       setOffsetYMm(clampStampOffsetMm(Math.round((st.startOffsetYMm + dyMm) * 100) / 100));
     } else {
@@ -228,6 +284,10 @@ export const PdfPreviewModal: React.FC = () => {
   };
 
   const scalePct = Math.round(scale * 100);
+  const fitPct = Math.round(minFitScale * 100);
+  const effectiveFontPt = minPrintedFontPt ?? Math.round(8.5 * minFitScale * 10) / 10;
+  const approxBodyPt = effectiveFontPt.toFixed(1).replace(/\.0$/, '');
+  const isVerySmallFit = fitOnePage && minFitScale < MIN_READABLE_FIT_SCALE;
 
   return (
     <AppleModal
@@ -238,7 +298,7 @@ export const PdfPreviewModal: React.FC = () => {
       maxWidth={orientation === 'landscape' ? '6xl' : '4xl'}
       footer={
         <>
-          <AppleButton variant="secondary" size="sm" onClick={() => close(false)}>
+          <AppleButton variant="secondary" size="sm" onClick={() => close(false)} disabled={togglingFit}>
             បិទ
           </AppleButton>
           <AppleButton
@@ -246,129 +306,176 @@ export const PdfPreviewModal: React.FC = () => {
             size="sm"
             icon={<Download size={15} />}
             onClick={handleDownload}
+            disabled={togglingFit}
           >
             ទាញយក PDF
           </AppleButton>
         </>
       }
     >
-      {hasAnchors && (
+      {showToolbar && (
         <div
-          className="sticky -top-6 z-20 -mx-6 -mt-6 mb-4 px-4 py-2.5 bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur border-b border-black/[0.08] dark:border-white/[0.1] flex flex-wrap items-center justify-between gap-2.5"
+          className="sticky -top-6 z-20 -mx-6 -mt-6 mb-4 px-4 py-2.5 bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur border-b border-black/[0.08] dark:border-white/[0.1] flex flex-col gap-2"
           data-testid="pdf-stamp-toolbar"
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            aria-label="បញ្ចូលរូបត្រាសាលា"
-            onChange={(e) => {
-              const picked = e.target.files?.[0];
-              if (picked) void handleUploadStampFile(picked);
-              e.target.value = '';
-            }}
-          />
-
-          {stampImage ? (
-            <>
-              <div className="flex flex-wrap items-center gap-3">
+          {canFitOnePage && onToggleFitOnePage && (
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-black/[0.06] dark:border-white/[0.08]">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <label className="inline-flex items-center gap-2 text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] cursor-pointer select-none">
                   <input
                     type="checkbox"
-                    data-testid="pdf-stamp-toggle"
-                    checked={stampEnabled}
-                    onChange={(e) => setStampEnabled(e.target.checked)}
-                    className="w-4 h-4 accent-[#dc2626]"
+                    data-testid="pdf-fit-one-page-toggle"
+                    checked={fitOnePage}
+                    disabled={togglingFit}
+                    onChange={(e) => void handleToggleOptimize(e.target.checked)}
+                    className="w-4 h-4 accent-[#0071e3]"
                   />
-                  <Stamp size={14} className="text-[#dc2626]" />
-                  <span>ដាក់ត្រាសាលាលើឯកសារ</span>
+                  {togglingFit ? (
+                    <Loader2 size={14} className="text-[#0071e3] animate-spin" />
+                  ) : (
+                    <Minimize2 size={14} className="text-[#0071e3]" />
+                  )}
+                  <span>បង្រួមដាក់ក្នុង ១ ទំព័រ (Optimize)</span>
                 </label>
 
-                {stampEnabled && (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      aria-label="បង្រួមត្រា"
-                      onClick={() => stepScale(-0.1)}
-                      disabled={scale <= MIN_STAMP_SCALE}
-                      className="p-1.5 rounded-lg bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] disabled:opacity-40 text-[#1d1d1f] dark:text-[#f5f5f7]"
-                    >
-                      <ZoomOut size={14} />
-                    </button>
-                    <input
-                      type="range"
-                      aria-label="ទំហំត្រា"
-                      data-testid="pdf-stamp-scale-slider"
-                      min={MIN_STAMP_SCALE}
-                      max={MAX_STAMP_SCALE}
-                      step={0.02}
-                      value={scale}
-                      onChange={(e) => setScale(clampStampScale(Number(e.target.value)))}
-                      className="w-28 sm:w-36 accent-[#dc2626] cursor-pointer"
-                    />
-                    <button
-                      type="button"
-                      aria-label="ពង្រីកត្រា"
-                      onClick={() => stepScale(0.1)}
-                      disabled={scale >= MAX_STAMP_SCALE}
-                      className="p-1.5 rounded-lg bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] disabled:opacity-40 text-[#1d1d1f] dark:text-[#f5f5f7]"
-                    >
-                      <ZoomIn size={14} />
-                    </button>
-                    <span
-                      data-testid="pdf-stamp-scale-label"
-                      className="min-w-[3rem] text-center text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded-md bg-[#dc2626]/10 text-[#dc2626]"
-                    >
-                      {fmt(scalePct)}%
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleResetStamp}
-                      title="កំណត់ទំហំ និងទីតាំងត្រាដើមវិញ"
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] text-[#1d1d1f] dark:text-[#f5f5f7]"
-                    >
-                      <RotateCcw size={12} />
-                      <span>កំណត់ដើម</span>
-                    </button>
-                  </div>
+                {fitOnePage && !togglingFit && (
+                  <span
+                    data-testid="pdf-fit-scale-badge"
+                    className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[#0071e3]/10 text-[#0071e3]"
+                  >
+                    មាត្រដ្ឋាន {fmt(fitPct)}% · អក្សរ ≈ {fmt(approxBodyPt)}pt
+                  </span>
                 )}
               </div>
 
-              <div className="flex items-center gap-2 text-[11px] text-[#6e6e73] dark:text-[#98989d]">
-                {stampEnabled && (
-                  <span className="hidden md:inline-flex items-center gap-1">
-                    <Move size={12} className="text-[#dc2626]" />
-                    អូសជ្រុងត្រាលើឯកសារដើម្បីពង្រីក/បង្រួម ឬអូសត្រាដើម្បីរំកិល
-                  </span>
-                )}
-                <button
-                  type="button"
-                  disabled={uploadingStamp}
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] text-[#1d1d1f] dark:text-[#f5f5f7]"
+              {isVerySmallFit && !togglingFit && (
+                <div
+                  data-testid="pdf-fit-small-warning"
+                  className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg"
                 >
-                  <Upload size={12} />
-                  <span>ប្ដូររូបត្រា</span>
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-wrap items-center justify-between w-full gap-2">
-              <span className="text-xs text-[#6e6e73] dark:text-[#98989d] flex items-center gap-1.5">
-                <Stamp size={14} className="text-[#dc2626]" />
-                <span>ចង់ដាក់ត្រាសាលា និងកែទំហំលើឯកសារនេះមែនទេ?</span>
-              </span>
-              <AppleButton
-                type="button"
-                variant="secondary"
-                size="sm"
-                icon={<Upload size={13} />}
-                disabled={uploadingStamp}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {uploadingStamp ? 'កំពុងរៀបចំ...' : 'បញ្ចូលរូបត្រាសាលា'}
-              </AppleButton>
+                  <AlertTriangle size={13} className="shrink-0" />
+                  <span>តូចពេក អាចពិបាកអាន (ចន្លោះហត្ថលេខាក៏រួមតូចតាមមាត្រដ្ឋានដែរ)</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {hasAnchors && (
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                aria-label="បញ្ចូលរូបត្រាសាលា"
+                onChange={(e) => {
+                  const picked = e.target.files?.[0];
+                  if (picked) void handleUploadStampFile(picked);
+                  e.target.value = '';
+                }}
+              />
+
+              {stampImage ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex items-center gap-2 text-xs font-semibold text-[#1d1d1f] dark:text-[#f5f5f7] cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        data-testid="pdf-stamp-toggle"
+                        checked={stampEnabled}
+                        onChange={(e) => setStampEnabled(e.target.checked)}
+                        className="w-4 h-4 accent-[#dc2626]"
+                      />
+                      <Stamp size={14} className="text-[#dc2626]" />
+                      <span>ដាក់ត្រាសាលាលើឯកសារ</span>
+                    </label>
+
+                    {stampEnabled && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          aria-label="បង្រួមត្រា"
+                          onClick={() => stepScale(-0.1)}
+                          disabled={scale <= MIN_STAMP_SCALE}
+                          className="p-1.5 rounded-lg bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] disabled:opacity-40 text-[#1d1d1f] dark:text-[#f5f5f7]"
+                        >
+                          <ZoomOut size={14} />
+                        </button>
+                        <input
+                          type="range"
+                          aria-label="ទំហំត្រា"
+                          data-testid="pdf-stamp-scale-slider"
+                          min={MIN_STAMP_SCALE}
+                          max={MAX_STAMP_SCALE}
+                          step={0.02}
+                          value={scale}
+                          onChange={(e) => setScale(clampStampScale(Number(e.target.value)))}
+                          className="w-28 sm:w-36 accent-[#dc2626] cursor-pointer"
+                        />
+                        <button
+                          type="button"
+                          aria-label="ពង្រីកត្រា"
+                          onClick={() => stepScale(0.1)}
+                          disabled={scale >= MAX_STAMP_SCALE}
+                          className="p-1.5 rounded-lg bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] disabled:opacity-40 text-[#1d1d1f] dark:text-[#f5f5f7]"
+                        >
+                          <ZoomIn size={14} />
+                        </button>
+                        <span
+                          data-testid="pdf-stamp-scale-label"
+                          className="min-w-[3rem] text-center text-xs font-semibold tabular-nums px-1.5 py-0.5 rounded-md bg-[#dc2626]/10 text-[#dc2626]"
+                        >
+                          {fmt(scalePct)}%
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleResetStamp}
+                          title="កំណត់ទំហំ និងទីតាំងត្រាដើមវិញ"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] text-[#1d1d1f] dark:text-[#f5f5f7]"
+                        >
+                          <RotateCcw size={12} />
+                          <span>កំណត់ដើម</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[11px] text-[#6e6e73] dark:text-[#98989d]">
+                    {stampEnabled && (
+                      <span className="hidden md:inline-flex items-center gap-1">
+                        <Move size={12} className="text-[#dc2626]" />
+                        អូសជ្រុងត្រាលើឯកសារដើម្បីពង្រីក/បង្រួម ឬអូសត្រាដើម្បីរំកិល
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      disabled={uploadingStamp}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-[#f5f5f7] dark:bg-white/[0.08] hover:bg-black/[0.08] text-[#1d1d1f] dark:text-[#f5f5f7]"
+                    >
+                      <Upload size={12} />
+                      <span>ប្ដូររូបត្រា</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between w-full gap-2">
+                  <span className="text-xs text-[#6e6e73] dark:text-[#98989d] flex items-center gap-1.5">
+                    <Stamp size={14} className="text-[#dc2626]" />
+                    <span>ចង់ដាក់ត្រាសាលា និងកែទំហំលើឯកសារនេះមែនទេ?</span>
+                  </span>
+                  <AppleButton
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    icon={<Upload size={13} />}
+                    disabled={uploadingStamp}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {uploadingStamp ? 'កំពុងរៀបចំ...' : 'បញ្ចូលរូបត្រាសាលា'}
+                  </AppleButton>
+                </div>
+              )}
             </div>
           )}
         </div>

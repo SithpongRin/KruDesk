@@ -11,6 +11,7 @@ import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { RotatedHeaderText } from './RotatedHeaderText';
 import { DocumentSignature, estimateSignatureBlockHeightMm } from './DocumentSignature';
 import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
+import { usePrintLayoutStore } from '../store/usePrintLayoutStore';
 
 interface SemesterSheetProps {
   cls: SchoolClass;
@@ -95,7 +96,9 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
       : summaries.length > COMPACT_ROWS
         ? 3.35
         : 3.9;
-  const chunks = paginateByRowHeight({
+  // «បង្រួមដាក់ក្នុង ១ ទំព័រ»: every row in one chunk, each page scaled to fit by fitPageToOnePage.
+  const fitOnePage = usePrintLayoutStore((s) => s.fitOnePage);
+  const splitChunks = paginateByRowHeight({
     items: summaries,
     maxRowsPerPage: MAX_ROWS_PER_PAGE,
     nonLastPageBudgetMm: isA3Paper ? 245 : 172,
@@ -117,6 +120,8 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
       return nameLines > 1 ? Math.max(singleH, nameLines * (dense ? 2.5 : 3.35)) : singleH;
     },
   });
+  const chunks = fitOnePage ? [{ items: summaries, startIndex: 0 }] : splitChunks;
+  const canFitOnePage = !fitOnePage && chunks.length > 1 ? '1' : undefined;
 
   const renderHeader = (subtitle: string, compact = false) => (
     <div className={`flex items-center justify-between ${compact ? 'mb-0.5' : 'mb-1'} gap-2`}>
@@ -199,7 +204,8 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
 
           return (
             <div
-              key={`a3-${chunkIdx}`}
+              // Mode in the key: switching «១ ទំព័រ» remounts the page, dropping fit styles/data-fit-scale.
+              key={`${fitOnePage ? 'fit' : 'flow'}-a3-${chunkIdx}`}
               data-print-page
               style={{
                 width: '420mm',
@@ -213,7 +219,9 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
               }}
+              data-can-fit-one-page={canFitOnePage}
             >
+              <div data-fit-body className={fitOnePage ? 'flex flex-col' : 'flex flex-col flex-1'}>
               <div>
                 {renderHeader('តារាងស្រង់ពិន្ទុប្រចាំឆមាស និងប្រចាំឆ្នាំ')}
 
@@ -400,12 +408,16 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
               </div>
 
               {isVeryLast
-                ? renderSignature(A3_SIGN, `ទំព័រ ${fmt(chunkIdx + 1)} / ${fmt(chunks.length)}`)
+                ? renderSignature(
+                    A3_SIGN,
+                    chunks.length > 1 ? `ទំព័រ ${fmt(chunkIdx + 1)} / ${fmt(chunks.length)}` : ''
+                  )
                 : (
                   <div className="mt-auto text-center text-[8.5pt] text-slate-500 pt-1">
                     ទំព័រ {fmt(chunkIdx + 1)} / {fmt(chunks.length)}
                   </div>
                 )}
+              </div>
             </div>
           );
         })}
@@ -436,7 +448,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
         const a4PadVMm = tierRows > DENSE_ROWS ? 1.8 : 2.5;
 
         return (
-          <React.Fragment key={`a4-${chunkIdx}`}>
+          <React.Fragment key={`${fitOnePage ? 'fit' : 'flow'}-a4-${chunkIdx}`}>
             {/* Page 1: Semester 1 */}
             <div
               data-print-page
@@ -452,7 +464,9 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
               }}
+              data-can-fit-one-page={canFitOnePage}
             >
+              <div data-fit-body className={fitOnePage ? 'flex flex-col' : 'flex flex-col flex-1'}>
               <div>
                 {renderHeader(`តារាងស្រង់ពិន្ទុប្រចាំឆមាសទី ${fmt(1)}`, tierRows > DENSE_ROWS)}
 
@@ -582,6 +596,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
               <div className="mt-auto text-center text-[8.5pt] text-slate-500 pt-1">
                 ទំព័រ {fmt(chunkIdx * 2 + 1)} / {fmt(chunks.length * 2)} (ឆមាសទី {fmt(1)})
               </div>
+              </div>
             </div>
 
             {/* Page 2: Semester 2 + Annual Result + Signature */}
@@ -599,7 +614,9 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
               }}
+              data-can-fit-one-page={canFitOnePage}
             >
+              <div data-fit-body className={fitOnePage ? 'flex flex-col' : 'flex flex-col flex-1'}>
               <div>
                 {renderHeader(`តារាងស្រង់ពិន្ទុប្រចាំឆមាសទី ${fmt(2)} និងប្រចាំឆ្នាំ`, tierRows > DENSE_ROWS)}
 
@@ -761,6 +778,7 @@ export const SemesterSheet: React.FC<SemesterSheetProps> = ({
                     ទំព័រ {fmt(chunkIdx * 2 + 2)} / {fmt(chunks.length * 2)}
                   </div>
                 )}
+              </div>
             </div>
           </React.Fragment>
         );

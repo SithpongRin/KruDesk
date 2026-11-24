@@ -3,6 +3,7 @@ import type { Profile, SchoolClass, Student } from '../types/domain';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { DocumentSignature } from './DocumentSignature';
 import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
+import { usePrintLayoutStore } from '../store/usePrintLayoutStore';
 
 interface StudentListSheetProps {
   cls: SchoolClass;
@@ -23,7 +24,9 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
   const maleCount = sorted.filter((s) => s.gender === 'ប្រុស').length;
   const femaleCount = sorted.filter((s) => s.gender === 'ស្រី').length;
 
-  const pages = paginateByRowHeight<Student>({
+  // «បង្រួមដាក់ក្នុង ១ ទំព័រ»: every row on one page, scaled to fit by fitPageToOnePage.
+  const fitOnePage = usePrintLayoutStore((s) => s.fitOnePage);
+  const splitPages = paginateByRowHeight<Student>({
     items: sorted,
     maxRowsPerPage: 24,
     nonLastPageBudgetMm: 164,
@@ -40,6 +43,7 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
       return lines <= 1 ? 5.6 : lines * 4.2 + 1.2;
     },
   });
+  const pages = fitOnePage ? [{ items: sorted, startIndex: 0 }] : splitPages;
 
   return (
     <div className="bg-white text-black font-battambang">
@@ -48,7 +52,8 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
         const isLastPage = pageIdx === pages.length - 1;
         return (
           <div
-            key={pageIdx}
+            // Mode in the key: switching «១ ទំព័រ» remounts the page, dropping fit styles/data-fit-scale.
+            key={`${fitOnePage ? 'fit' : 'flow'}-${pageIdx}`}
             data-print-page
             style={{
               width: '297mm',
@@ -62,7 +67,9 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
               display: 'flex',
               flexDirection: 'column',
             }}
+            data-can-fit-one-page={!fitOnePage && pages.length > 1 ? '1' : undefined}
           >
+            <div data-fit-body className={fitOnePage ? 'flex flex-col' : 'flex flex-col flex-1'}>
             <div>
               {/* Institutional Header */}
               <div className="flex items-start justify-between mb-2">
@@ -209,9 +216,11 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
                   fontSizePt={10}
                   gapMm={20}
                   middle={
-                    <div className="text-[8.5pt] text-slate-500">
-                      ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}
-                    </div>
+                    pages.length > 1 && (
+                      <div className="text-[8.5pt] text-slate-500">
+                        ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}
+                      </div>
+                    )
                   }
                 />
               </div>
@@ -220,6 +229,7 @@ export const StudentListSheet: React.FC<StudentListSheetProps> = ({
                 ទំព័រ {fmt(pageIdx + 1)} / {fmt(pages.length)}
               </div>
             )}
+            </div>
           </div>
         );
       })}

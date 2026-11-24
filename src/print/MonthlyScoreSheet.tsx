@@ -16,6 +16,7 @@ import type { PageOrientation } from '../services/pdfExport';
 import { RotatedHeaderText } from './RotatedHeaderText';
 import { DocumentSignature, estimateSignatureBlockHeightMm } from './DocumentSignature';
 import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
+import { usePrintLayoutStore } from '../store/usePrintLayoutStore';
 
 export interface MonthlyScoreSheetPageData {
   id: string;
@@ -86,6 +87,8 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
 }) => {
   const fmt = (val: number | string) =>
     useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
+  // «បង្រួមដាក់ក្នុង ១ ទំព័រ»: every row on one page, scaled to fit by fitPageToOnePage.
+  const fitOnePage = usePrintLayoutStore((s) => s.fitOnePage);
 
   const sortedSubjects = sortSubjects(cls.subjects).filter(isSubjectActive);
   const headerSpans = buildSubjectHeaderSpans(sortedSubjects);
@@ -154,7 +157,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
             : activeStudents.length > compactRows
               ? 3.3
               : 3.9;
-        const studentPages = paginateByRowHeight({
+        const splitPages = paginateByRowHeight({
           items: activeStudents,
           maxRowsPerPage: MAX_ROWS_PER_PAGE,
           // Landscape middle page: measured 166.8 mm for rows above the page-number line.
@@ -192,6 +195,9 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
             return Math.max(singleH, lines * lineH);
           },
         });
+        const studentPages = fitOnePage
+          ? [{ items: activeStudents, startIndex: 0 }]
+          : splitPages;
 
         // Calculate available width per subject column
         const subjectCount = Math.max(1, sortedSubjects.length);
@@ -269,7 +275,8 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
 
           return (
             <div
-              key={`${sheet.id}-${pageIdx}`}
+              // Mode in the key: switching «១ ទំព័រ» remounts the page, dropping fit styles/data-fit-scale.
+              key={`${fitOnePage ? 'fit' : 'flow'}-${sheet.id}-${pageIdx}`}
               data-print-page
               style={{
                 width: `${pageWidthMm}mm`,
@@ -283,7 +290,9 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
               }}
+              data-can-fit-one-page={!fitOnePage && studentPages.length > 1 ? '1' : undefined}
             >
+              <div data-fit-body className={fitOnePage ? 'flex flex-col' : 'flex flex-col flex-1'}>
               <div>
                 {/* Header */}
                 <div className={`flex items-center justify-between ${tierRows > denseRows ? 'mb-0.5' : 'mb-1'} gap-2`}>
@@ -606,6 +615,7 @@ export const MonthlyScoreSheet: React.FC<MonthlyScoreSheetProps> = ({
                   ទំព័រ {fmt(pageIdx + 1)} / {fmt(studentPages.length)}
                 </div>
               )}
+              </div>
             </div>
           );
         });

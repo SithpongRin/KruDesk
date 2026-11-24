@@ -12,6 +12,7 @@ import { AcademicYearLine, DocumentHeader } from './DocumentHeader';
 import { DocumentSignature, type DocumentSignOptions } from './DocumentSignature';
 import { RotatedHeaderText } from './RotatedHeaderText';
 import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
+import { usePrintLayoutStore } from '../store/usePrintLayoutStore';
 
 interface AnnualResultsSheetProps {
   cls: SchoolClass;
@@ -34,7 +35,9 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
     useKhmerDigits ? toKhmerNumerals(val) : toArabicNumerals(String(val));
   const fmtHdr = (val: number | string) => toKhmerNumerals(val);
 
-  const pages = paginateByRowHeight<AnnualResultRow>({
+  // «បង្រួមដាក់ក្នុង ១ ទំព័រ»: every row on one page, scaled to fit by fitPageToOnePage.
+  const fitOnePage = usePrintLayoutStore((s) => s.fitOnePage);
+  const splitPages = paginateByRowHeight<AnnualResultRow>({
     items: summary.rows,
     // Page 1 fills to the bottom: measured 213 mm for rows under the title (2026-11-24).
     maxRowsPerPage: 37,
@@ -49,6 +52,7 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
       return lines > 1 ? Math.max(6.0, lines * 3.8 + 1.2) : 6.0;
     },
   });
+  const pages = fitOnePage ? [{ items: summary.rows, startIndex: 0 }] : splitPages;
 
   return (
     <div className="bg-white text-black font-battambang">
@@ -56,7 +60,8 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
         const isLastPage = pageIdx === pages.length - 1;
         return (
           <div
-            key={pageIdx}
+            // Mode in the key: switching «១ ទំព័រ» remounts the page, dropping fit styles/data-fit-scale.
+            key={`${fitOnePage ? 'fit' : 'flow'}-${pageIdx}`}
             data-print-page
             style={{
               width: '210mm',
@@ -70,7 +75,9 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
               display: 'flex',
               flexDirection: 'column',
             }}
+            data-can-fit-one-page={!fitOnePage && pages.length > 1 ? '1' : undefined}
           >
+            <div data-fit-body className={fitOnePage ? 'flex flex-col' : 'flex flex-col flex-1'}>
             <div>
               {pageIdx === 0 && (
                 <>
@@ -238,8 +245,11 @@ export const AnnualResultsSheet: React.FC<AnnualResultsSheetProps> = ({
               )}
             </div>
 
-            <div className="mt-auto text-center text-[8pt] text-slate-500 pt-1">
-              ទំព័រ {fmtHdr(pageIdx + 1)} / {fmtHdr(pages.length)}
+            {pages.length > 1 && (
+              <div className="mt-auto text-center text-[8pt] text-slate-500 pt-1">
+                ទំព័រ {fmtHdr(pageIdx + 1)} / {fmtHdr(pages.length)}
+              </div>
+            )}
             </div>
           </div>
         );

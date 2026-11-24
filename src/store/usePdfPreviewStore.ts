@@ -13,6 +13,8 @@ export interface PageSealAnchor {
   fontSizePt: number;
   hasBottomName: boolean;
   hasDirectorSig: boolean;
+  /** Proportional fit-to-1-page scale applied to [data-fit-body] on this page (default 1). */
+  fitScale?: number;
 }
 
 export interface PdfStampResult {
@@ -43,6 +45,16 @@ export interface PdfPreviewRequest {
   initialStampScale?: number;
   initialStampOffsetXMm?: number;
   initialStampOffsetYMm?: number;
+  /** True when this class table spilled onto >1 page and can be optimized onto 1 page per sheet. */
+  canFitOnePage?: boolean;
+  /** Whether Fit-to-1-Page (Optimize) is currently active. */
+  fitOnePage?: boolean;
+  /** Smallest fit scale across the rendered pages when `fitOnePage` is active (1 = unscaled). */
+  minFitScale?: number;
+  /** Smallest effective printed font size (pt × fitScale) across the fitted page(s). */
+  minPrintedFontPt?: number;
+  /** Live toggle handler invoked from PdfPreviewModal to switch between normal and 1-page mode. */
+  onToggleFitOnePage?: (nextFitOnePage: boolean) => Promise<void>;
 }
 
 interface PdfPreviewState {
@@ -50,6 +62,8 @@ interface PdfPreviewState {
   resolve: ((outcome: PdfPreviewOutcome) => void) | null;
   /** Shows the preview; resolves with download decision and interactive stamp settings. */
   open: (request: PdfPreviewRequest) => Promise<PdfPreviewOutcome>;
+  /** Updates the open preview request in place (e.g. after toggling Fit-to-1-Page). */
+  updateRequest: (patch: Partial<PdfPreviewRequest>) => void;
   close: (download: boolean, stamp?: PdfStampResult) => void;
 }
 
@@ -62,6 +76,11 @@ export const usePdfPreviewStore = create<PdfPreviewState>((set, get) => ({
       get().resolve?.({ download: false });
       set({ request, resolve });
     }),
+  updateRequest: (patch) => {
+    const current = get().request;
+    if (!current) return;
+    set({ request: { ...current, ...patch } });
+  },
   close: (download, stamp) => {
     const { resolve } = get();
     set({ request: null, resolve: null });

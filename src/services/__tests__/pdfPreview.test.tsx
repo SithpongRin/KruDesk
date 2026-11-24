@@ -4,6 +4,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { db, getSetting, setSetting } from '../../db/database';
+import { usePrintLayoutStore } from '../../store/usePrintLayoutStore';
 
 // 1×1 white PNG
 const PNG =
@@ -71,11 +72,35 @@ function makeAnchoredPage(): HTMLElement {
   return page;
 }
 
-describe('PDF preview («មើលមុន») & interactive resizable stamp', { timeout: 15000 }, () => {
+const MockClassTableStage: React.FC = () => {
+  const fitOnePage = usePrintLayoutStore((s) => s.fitOnePage);
+  if (fitOnePage) {
+    return (
+      <div data-testid="mock-stage">
+        <div data-print-page data-fit-scale="0.5">
+          <div data-fit-body>All 60 rows on 1 page</div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div data-testid="mock-stage">
+      <div data-print-page data-can-fit-one-page="1">
+        <div data-fit-body>Page 1</div>
+      </div>
+      <div data-print-page data-can-fit-one-page="1">
+        <div data-fit-body>Page 2</div>
+      </div>
+    </div>
+  );
+};
+
+describe('PDF preview («មើលមុន»), resizable stamp & Fit-to-1-Page (Optimize)', { timeout: 15000 }, () => {
   beforeEach(async () => {
     downloads.length = 0;
     toPngMock.mockClear();
     await db.settings.clear();
+    usePrintLayoutStore.setState({ fitOnePage: false });
     usePdfPreviewStore.setState({ request: null, resolve: null });
   });
   afterEach(() => cleanup());
@@ -85,6 +110,7 @@ describe('PDF preview («មើលមុន») & interactive resizable stamp', {
     const done = exportPrintNodesToPdf(pages(), { fileName: 'a.pdf', orientation: 'portrait' });
 
     await waitFor(() => expect(screen.getByTestId('pdf-preview-pages')).toBeTruthy());
+    expect(screen.queryByTestId('pdf-fit-one-page-toggle')).toBeNull();
     const imgs = screen.getAllByRole('img') as HTMLImageElement[];
     expect(imgs).toHaveLength(2);
     expect(imgs.every((i) => i.src === PNG)).toBe(true);
@@ -113,7 +139,7 @@ describe('PDF preview («មើលមុន») & interactive resizable stamp', {
     expect(downloads).toEqual(['c.pdf']);
   });
 
-  it('computes matching overlay fractions and bottom-left PDF coordinates across A4/A3 portrait/landscape', () => {
+  it('computes matching overlay fractions (including fitScale) and bottom-left PDF coordinates across A4/A3', () => {
     const anchor: PageSealAnchor = {
       xFrac: 0.1,
       yFrac: 0.75,
@@ -130,8 +156,16 @@ describe('PDF preview («មើលមុន») & interactive resizable stamp', {
     const bigger = computePageStampRectFrac(anchor, { width: 300, height: 300 }, { scale: 1.5 });
     expect(bigger.widthFrac).toBeCloseTo(base.widthFrac * 1.5, 4);
     expect(bigger.heightFrac).toBeCloseTo(base.heightFrac * 1.5, 4);
-    // Scaling zooms around the vertical center of the stamp
     expect(bigger.topFrac + bigger.heightFrac / 2).toBeCloseTo(base.topFrac + base.heightFrac / 2, 4);
+
+    // fitScale shrinks the stamp box & top offset proportionally around the scaled anchor
+    const fitted = computePageStampRectFrac(
+      { ...anchor, fitScale: 0.65 },
+      { width: 300, height: 300 },
+      { scale: 1 }
+    );
+    expect(fitted.widthFrac).toBeCloseTo(base.widthFrac * 0.65, 4);
+    expect(fitted.heightFrac).toBeCloseTo(base.heightFrac * 0.65, 4);
 
     // Nudging moves by exact mm fractions
     const nudged = computePageStampRectFrac(
@@ -142,7 +176,6 @@ describe('PDF preview («មើលមុន») & interactive resizable stamp', {
     expect(nudged.leftFrac - base.leftFrac).toBeCloseTo(0.1, 4);
     expect(nudged.topFrac - base.topFrac).toBeCloseTo(-0.1, 4);
 
-    // Bottom-left origin conversion for pdf-lib on A4 landscape & A3 portrait
     for (const [size, orient] of [
       ['A4', 'landscape'],
       ['A4', 'portrait'],
@@ -154,7 +187,6 @@ describe('PDF preview («មើលមុន») & interactive resizable stamp', {
       expect(pdfBox.x).toBeCloseTo(bigger.leftFrac * pw, 3);
       expect(pdfBox.width).toBeCloseTo(bigger.widthFrac * pw, 3);
       expect(pdfBox.height).toBeCloseTo(bigger.heightFrac * ph, 3);
-      // Top edge in PDF (y + height) equals (1 - topFrac) * ph
       expect(pdfBox.y + pdfBox.height).toBeCloseTo((1 - bigger.topFrac) * ph, 3);
     }
   });
@@ -168,20 +200,17 @@ describe('PDF preview («មើលមុន») & interactive resizable stamp', {
 
     await waitFor(() => expect(screen.getByTestId('pdf-stamp-box-0')).toBeTruthy());
 
-    // html-to-image filter omits [data-director-seal] so the stamp is not baked twice
     const filterFn = toPngMock.mock.calls[0]?.[1]?.filter;
     expect(typeof filterFn).toBe('function');
     const sealImg = pageEl.querySelector('[data-director-seal]')!;
     expect(filterFn!(sealImg)).toBe(false);
     expect(filterFn!(pageEl)).toBe(true);
 
-    // Drag corner handle to enlarge stamp directly on the document
     const handle = screen.getByTestId('pdf-stamp-handle-0-se');
     fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: 160, clientY: 160 });
     fireEvent.pointerUp(handle, { pointerId: 1 });
 
-    // Also test slider fine-tuning to 1.4x (140%)
     const slider = screen.getByTestId('pdf-stamp-scale-slider');
     fireEvent.change(slider, { target: { value: '1.4' } });
     expect(screen.getByTestId('pdf-stamp-scale-label').textContent).toContain('140%');
@@ -191,5 +220,36 @@ describe('PDF preview («មើលមុន») & interactive resizable stamp', {
     expect(bytes).not.toBeNull();
     expect(downloads).toEqual(['stamped.pdf']);
     expect(await getSetting<number>('directorStampScale')).toBeCloseTo(1.4, 3);
+  });
+
+  it('toggles «បង្រួមដាក់ក្នុង ១ ទំព័រ (Optimize)» live from 2 pages down to 1 page and resets store on close', async () => {
+    const { container } = render(
+      <>
+        <MockClassTableStage />
+        <PdfPreviewModal />
+      </>
+    );
+    const initialNodes = Array.from(container.querySelectorAll<HTMLElement>('[data-print-page]'));
+    expect(initialNodes).toHaveLength(2);
+
+    const done = exportPrintNodesToPdf(initialNodes, {
+      fileName: 'optimized.pdf',
+      orientation: 'portrait',
+    });
+
+    const toggle = (await screen.findByTestId('pdf-fit-one-page-toggle')) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(screen.getAllByRole('img')).toHaveLength(2);
+
+    fireEvent.click(toggle);
+    await waitFor(() => expect(screen.getAllByRole('img')).toHaveLength(1));
+    expect(usePrintLayoutStore.getState().fitOnePage).toBe(true);
+    expect(screen.getByTestId('pdf-fit-scale-badge')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('ទាញយក PDF'));
+    const bytes = await done;
+    expect(bytes).not.toBeNull();
+    expect(downloads).toEqual(['optimized.pdf']);
+    expect(usePrintLayoutStore.getState().fitOnePage).toBe(false);
   });
 });

@@ -11,6 +11,7 @@ import { getKhmerMonthName, parseYearMonth } from '../lib/khmerDate';
 import { toArabicNumerals, toKhmerNumerals } from '../utils/khmerNumerals';
 import { DocumentSignature, estimateSignatureBlockHeightMm } from './DocumentSignature';
 import { FitText, estimateWrappedLines, paginateByRowHeight } from './FitText';
+import { usePrintLayoutStore } from '../store/usePrintLayoutStore';
 
 export interface AttendanceMonthRenderData {
   month: string; // YYYY-MM
@@ -84,7 +85,9 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
   const nameColWidthMm = hasLongStudentId ? 41 : 44;
   const noteColWidthMm = hasLongStudentId ? 12.5 : 16.5;
 
-  const studentPages = paginateByRowHeight({
+  // «បង្រួមដាក់ក្នុង ១ ទំព័រ»: every row on one page, scaled to fit by fitPageToOnePage.
+  const fitOnePage = usePrintLayoutStore((s) => s.fitOnePage);
+  const splitPages = paginateByRowHeight({
     items: activeStudents,
     maxRowsPerPage: MAX_ROWS_PER_PAGE,
     nonLastPageBudgetMm: 176,
@@ -107,6 +110,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
       return lines > 1 ? Math.max(singleH, lines * (dense ? 2.5 : 3.35)) : singleH;
     },
   });
+  const studentPages = fitOnePage ? [{ items: activeStudents, startIndex: 0 }] : splitPages;
 
   return (
     <div className="bg-white text-black font-battambang">
@@ -145,7 +149,8 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
 
           return (
             <div
-              key={`${mData.month}-${pageIdx}`}
+              // Mode in the key: switching «១ ទំព័រ» remounts the page, dropping fit styles/data-fit-scale.
+              key={`${fitOnePage ? 'fit' : 'flow'}-${mData.month}-${pageIdx}`}
               data-print-page
               style={{
                 width: '297mm',
@@ -159,7 +164,9 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
               }}
+              data-can-fit-one-page={!fitOnePage && studentPages.length > 1 ? '1' : undefined}
             >
+              <div data-fit-body className={fitOnePage ? 'flex flex-col' : 'flex flex-col flex-1'}>
               <div>
                 {/* Header */}
                 <div className="flex items-center justify-between mb-1 gap-2">
@@ -453,6 +460,7 @@ export const AttendanceSheet: React.FC<AttendanceSheetProps> = ({
                   ទំព័រ {fmt(pageIdx + 1)} / {fmt(studentPages.length)}
                 </div>
               )}
+              </div>
             </div>
           );
         });
