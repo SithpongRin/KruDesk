@@ -1,0 +1,194 @@
+name: KruDesk Security & Health Guard
+
+on:
+  schedule:
+    # Runs every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: 'security-guard'
+  cancel-in-progress: true
+
+env:
+  SITE_URL: 'https://krudesk.vercel.app'
+
+jobs:
+  security-and-health-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check live website uptime & security headers
+        id: site_check
+        continue-on-error: true
+        run: |
+          set -u
+          ERRORS=""
+          HEADERS_FILE=$(mktemp)
+          HTTP_CODE=$(curl -sS -L --max-time 20 -D "$HEADERS_FILE" -o /dev/null -w "%{http_code}" "$SITE_URL" || echo "000")
+          echo "HTTP status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            ERRORS="${ERRORS}- Live website ($SITE_URL) returned HTTP $HTTP_CODE instead of 200.\n"
+          fi
+
+          for HDR in "strict-transport-security" "x-content-type-options" "x-frame-options" "referrer-policy"; do
+            if ! grep -qi "^${HDR}:" "$HEADERS_FILE"; then
+              ERRORS="${ERRORS}- Missing recommended security header on $SITE_URL: \`${HDR}\`\n"
+            fi
+          done
+
+          if [ -n "$ERRORS" ]; then
+            echo -e "$ERRORS" > site_check_errors.txt
+            cat site_check_errors.txt
+            exit 1
+          fi
+
+      - name: Run unit tests
+        id: unit_tests
+        continue-on-error: true
+        run: |
+          if ! npm test > test_output.txt 2>&1; then
+            tail -n 60 test_output.txt
+            exit 1
+          fi
+
+      - name: Run production build check
+        id: build_check
+        continue-on-error: true
+        run: |
+          if ! npm run build > build_output.txt 2>&1; then
+            tail -n 60 build_output.txt
+            exit 1
+          fi
+
+      - name: Audit production dependencies (high & critical)
+        id: npm_audit
+        continue-on-error: true
+        run: |
+          if ! npm audit --omit=dev --audit-level=high > audit_output.txt 2>&1; then
+            tail -n 80 audit_output.txt
+            exit 1
+          fi
+
+      - name: Scan source files for accidental secret leaks
+        id: secret_scan
+        continue-on-error: true
+        run: |
+          LEAKS=$(git grep -nE -- "(-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|AIzaSy[0-9A-Za-z_-]{33}.*PRIVATE|\"type\"\\s*:\\s*\"service_account\")" -- src/ public/ index.html || true)
+          if [ -n "$LEAKS" ]; then
+            echo "$LEAKS" > secret_scan_errors.txt
+            cat secret_scan_errors.txt
+            exit 1
+          fi
+
+      - name: Create or update GitHub Issue if any check failed
+        if: >-
+          steps.site_check.outcome == 'failure' ||
+          steps.unit_tests.outcome == 'failure' ||
+          steps.build_check.outcome == 'failure' ||
+          steps.npm_audit.outcome == 'failure' ||
+          steps.secret_scan.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const readSnippet = (file, maxLines = 40) => {
+              if (!fs.existsSync(file)) return '';
+              const lines = fs.readFileSync(file, 'utf8').trim().split('\n');
+              return lines.slice(-maxLines).join('\n');
+            };
+
+            const failures = [];
+            if ('${{ steps.site_check.outcome }}' === 'failure') {
+              failures.push(`### Live Website & Security Headers\n${readSnippet('site_check_errors.txt')}`);
+            }
+            if ('${{ steps.unit_tests.outcome }}' === 'failure') {
+              failures.push(`### Unit Tests Failed\n\`\`\`\n${readSnippet('test_output.txt')}\n\`\`\``);
+            }
+            if ('${{ steps.build_check.outcome }}' === 'failure') {
+              failures.push(`### Production Build Failed\n\`\`\`\n${readSnippet('build_output.txt')}\n\`\`\``);
+            }
+            if ('${{ steps.npm_audit.outcome }}' === 'failure') {
+              failures.push(`### High/Critical Dependency Vulnerabilities (\`npm audit\`)\n\`\`\`\n${readSnippet('audit_output.txt')}\n\`\`\``);
+            }
+            if ('${{ steps.secret_scan.outcome }}' === 'failure') {
+              failures.push(`### Potential Secret Leak Detected\n\`\`\`\n${readSnippet('secret_scan_errors.txt')}\n\`\`\``);
+            }
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `Automated scan detected issues on **KruDesk** (${new Date().toISOString()}).`,
+              `Workflow run: ${runUrl}`,
+              '',
+              ...failures,
+              '',
+              '---',
+              '_Labeled `security-guard` for Antigravity automated investigation and PR creation._'
+            ].join('\n');
+
+            const labelName = 'security-guard';
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+              });
+            } catch {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: labelName,
+                color: 'd93f0b',
+                description: 'Automated security & health alerts from KruDesk Security Guard',
+              });
+            }
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: labelName,
+              per_page: 5,
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '[Security Guard] Automated scan detected issues on KruDesk',
+                body,
+                labels: [labelName],
+              });
+            }
+
+      - name: Fail job when alerts were raised
+        if: >-
+          steps.site_check.outcome == 'failure' ||
+          steps.unit_tests.outcome == 'failure' ||
+          steps.build_check.outcome == 'failure' ||
+          steps.npm_audit.outcome == 'failure' ||
+          steps.secret_scan.outcome == 'failure'
+        run: exit 1
